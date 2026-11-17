@@ -1,12 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
-import { blueprintText, type Blueprint } from '@knowledge/contracts';
+import { blueprintText, ownedAgentKey, type Blueprint } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { TemplatesService } from '../templates/templates.service.js';
 import { WorkflowsService } from '../workflows/workflows.service.js';
 import { AiSkillsService } from '../ai/ai-skills.service.js';
 import { normalizeAliases, readAliases } from '../glossary/glossary.service.js';
 import { currentLocale } from '../i18n/t.js';
+import { AgentRegistryService } from '../agents/agent-registry.service.js';
 
 /** jsonb stores keys in its own order, so compare a key-sorted form. */
 export const canonical = (value: unknown) =>
@@ -43,6 +44,7 @@ export class MethodologyMaterializerService {
     private readonly templates: TemplatesService,
     private readonly workflows: WorkflowsService,
     private readonly skills: AiSkillsService,
+    private readonly registry: AgentRegistryService,
   ) {}
 
   /** Returns how many rows it wrote. */
@@ -53,7 +55,10 @@ export class MethodologyMaterializerService {
       writes += await this.writeWorkflows(workspaceId, blueprintId, blueprint, actorId);
       writes += await this.writeStyleguide(workspaceId, blueprintId, blueprint, actorId);
       writes += await this.writeGlossary(workspaceId, blueprintId, blueprint, actorId);
-      return writes;
+      const agents = await this.writeAgents(workspaceId, blueprintId, blueprint, actorId);
+      // The registry caches override rows for 30 s: the next turn must see the new instructions.
+      if (agents) this.prisma.onCommit(async () => this.registry.invalidate(workspaceId));
+      return writes + agents;
     });
   }
 
@@ -147,6 +152,41 @@ export class MethodologyMaterializerService {
     }
     if (row && !row.enabled) {
       await this.prisma.aiSkill.update({ where: { id: row.id }, data: { enabled: true } });
+      writes += 1;
+    }
+    return writes;
+  }
+
+  /**
+   * Custom agents the methodology owns (#1127), keyed by `ownedAgentKey`. Its
+   * text is the methodology's; `enabled` and `modelId` are the admin's, so a
+   * re-save never touches them — except to switch off one it no longer declares.
+   */
+  private async writeAgents(workspaceId: string, blueprintId: string, blueprint: Blueprint, actorId?: string): Promise<number> {
+    const rows = await this.prisma.aiAgent.findMany({ where: { workspaceId, blueprintId } });
+    let writes = 0;
+    const declared = new Set<string>();
+    for (const a of blueprint.agents ?? []) {
+      const key = ownedAgentKey(a.key, blueprintId);
+      declared.add(key);
+      const data = { name: a.name, description: a.description ?? null, instructions: a.instructions, tools: a.tools ?? [], minTier: a.minTier ?? null };
+      const row = rows.find((r) => r.key === key);
+      if (!row) {
+        await this.prisma.aiAgent.create({ data: { workspaceId, key, builtIn: false, blueprintId, ...data, createdBy: actorId ?? null } });
+        writes += 1;
+      } else if (
+        row.name !== data.name ||
+        row.description !== data.description ||
+        row.instructions !== data.instructions ||
+        row.minTier !== data.minTier ||
+        !same(row.tools, data.tools)
+      ) {
+        await this.prisma.aiAgent.update({ where: { id: row.id }, data });
+        writes += 1;
+      }
+    }
+    for (const row of rows.filter((r) => r.enabled && !declared.has(r.key))) {
+      await this.prisma.aiAgent.update({ where: { id: row.id }, data: { enabled: false } });
       writes += 1;
     }
     return writes;

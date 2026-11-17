@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, type AiModel } from '@prisma/client';
-import type { AiModelSource, AiModelSummary, AiProvider, CostCurrency } from '@knowledge/contracts';
+import { isModelTier, type AiModelSource, type AiModelSummary, type AiProvider, type CostCurrency } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { readCapabilityOverride } from '../agents/model-capabilities.js';
 import { t } from '../i18n/t.js';
@@ -20,6 +20,7 @@ export interface UpdateModelInput {
   priceCachedPerMTok?: number | null;
   priceCurrency?: CostCurrency | null;
   capabilities?: string[] | null;
+  tier?: string | null;
 }
 
 /**
@@ -89,6 +90,7 @@ export class AiModelsService {
         ...(input.priceCachedPerMTok === undefined ? {} : { priceCachedPerMTok: input.priceCachedPerMTok }),
         ...(input.priceCurrency === undefined ? {} : { priceCurrency: input.priceCurrency }),
         ...(input.capabilities === undefined ? {} : { capabilities: input.capabilities ?? Prisma.DbNull }),
+        ...(input.tier === undefined ? {} : { tier: input.tier }),
       },
       include: WITH_PROVIDER,
     });
@@ -155,6 +157,7 @@ export function toModelSummary(row: AiModelRow, defaultKind: string): AiModelSum
     available: modelAvailable(row, defaultKind),
     kind: (row.provider?.provider ?? defaultKind) as AiProvider,
     capabilities: readCapabilityOverride(row.capabilities),
+    tier: isModelTier(row.tier) ? row.tier : null,
     ...modelPrices(row),
   };
 }

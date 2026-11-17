@@ -1680,6 +1680,18 @@
       "builtIn": {
         "type": "boolean"
       },
+      "blueprintId": {
+        "type": "string",
+        "nullable": true
+      },
+      "minTier": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/ModelTier"
+          }
+        ],
+        "nullable": true
+      },
       "name": {
         "type": "string"
       },
@@ -1811,6 +1823,8 @@
       "id",
       "key",
       "builtIn",
+      "blueprintId",
+      "minTier",
       "name",
       "description",
       "instructions",
@@ -1991,6 +2005,14 @@
           }
         ],
         "nullable": true
+      },
+      "tier": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/ModelTier"
+          }
+        ],
+        "nullable": true
       }
     },
     "required": [
@@ -2003,7 +2025,8 @@
       "inChat",
       "available",
       "kind",
-      "capabilities"
+      "capabilities",
+      "tier"
     ]
   },
   "AiMyUsageResponse": {

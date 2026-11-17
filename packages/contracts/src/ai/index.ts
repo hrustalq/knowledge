@@ -1058,6 +1058,8 @@ export interface AiModelSummary extends Required<ConfiguredPrice> {
   kind: AiProvider;
   /** Admin-declared capabilities, overriding the model table. Null = use the table. */
   capabilities: AgentCapability[] | null;
+  /** Its class (#1121), set by an admin; null = unknown, never picked for an agent's minimum tier. */
+  tier: ModelTier | null;
 }
 // GET /v1/ai/models?workspaceId=
 export interface ListAiModelsResponse {
@@ -1624,6 +1626,15 @@ export type BuiltInAgentKey = (typeof BUILT_IN_AGENT_KEYS)[number];
 export const MODEL_TIERS = ['small', 'medium', 'large'] as const;
 export type ModelTier = (typeof MODEL_TIERS)[number];
 
+export function isModelTier(value: unknown): value is ModelTier {
+  return (MODEL_TIERS as readonly unknown[]).includes(value);
+}
+
+/** Whether `tier` is at least `min`. An unknown tier meets no minimum. */
+export function meetsTier(tier: unknown, min: ModelTier): boolean {
+  return isModelTier(tier) && MODEL_TIERS.indexOf(tier) >= MODEL_TIERS.indexOf(min);
+}
+
 /**
  * Agents whose run is scoped to one repository connector (docs/features/31).
  *
@@ -2053,6 +2064,13 @@ export interface AiAgentSummary {
   id: string | null;
   key: string;
   builtIn: boolean;
+  /**
+   * The methodology that owns it (#1121): its text comes from there and an admin
+   * may only switch it and pin a model. Null for every other agent.
+   */
+  blueprintId: string | null;
+  /** The weakest model class it asks for; with no model pinned it runs on one at least this strong. */
+  minTier: ModelTier | null;
   name: string;
   description: string;
   instructions: string;

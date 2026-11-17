@@ -1,6 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import type { AiAgent } from '@prisma/client';
-import { resolveAgentMemoryPolicy, type AgentCapability, type AgentMemoryPolicy, type AgentSurface, type AiPurpose } from '@knowledge/contracts';
+import {
+  isModelTier,
+  resolveAgentMemoryPolicy,
+  type AgentCapability,
+  type AgentMemoryPolicy,
+  type AgentSurface,
+  type AiPurpose,
+  type ModelTier,
+} from '@knowledge/contracts';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AiConfigService, type ResolvedAiConfig } from '../ai/ai-config.service.js';
@@ -32,6 +40,15 @@ export interface ResolvedAgent {
    * answers confidently instead of failing.
    */
   missing: AgentCapability[];
+  /** The methodology that owns this agent (#1121); null for every other agent. */
+  blueprintId: string | null;
+  /** The weakest model class the agent asks for; null = none asked. */
+  minTier: ModelTier | null;
+  /**
+   * True when it asked for a tier and no available model meets it, so it fell
+   * back to the ordinary chain. A run records this as a warning.
+   */
+  tierUnmet: boolean;
 }
 
 /** How long the override rows are reused before PG is consulted again. */
@@ -111,7 +128,11 @@ export class AgentRegistryService {
     pinnedModelId?: string | null,
   ): Promise<ResolvedAgent> {
     const purpose: AiPurpose = base?.purpose ?? 'chat';
-    const config = await this.aiConfig.resolveFor(workspaceId, purpose, pinnedModelId, row?.modelId);
+    // A minimum tier (#1127) stands in for the purpose route when nothing is
+    // pinned: a thread's or the agent's own pin is still a person's choice.
+    const minTier = isModelTier(row?.minTier) ? row.minTier : null;
+    const tiered = minTier && !pinnedModelId && !row?.modelId ? await this.aiConfig.resolveAtLeast(workspaceId, purpose, minTier) : null;
+    const config = tiered ?? (await this.aiConfig.resolveFor(workspaceId, purpose, pinnedModelId, row?.modelId));
 
     // The agent's harness overrides sit on top of whatever provider served it —
     // an agent that needs a longer leash than the workspace default says so
@@ -141,6 +162,9 @@ export class AgentRegistryService {
       enabled: row?.enabled ?? true,
       config: tuned,
       missing: tuned.enabled ? missingCapabilities(requires, tuned.model, tuned.capabilities) : [],
+      blueprintId: row?.blueprintId ?? null,
+      minTier,
+      tierUnmet: !!minTier && !tiered && !pinnedModelId && !row?.modelId,
     };
   }
 }

@@ -48725,6 +48725,16 @@
                 "json"
               ]
             }
+          },
+          "tier": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "small",
+              "medium",
+              "large"
+            ],
+            "description": "The class of model it is (#1121). An agent asking for a minimum tier only runs on a model at or above it; null = unknown."
           }
         }
       },
@@ -55175,6 +55185,18 @@
           "builtIn": {
             "type": "boolean"
           },
+          "blueprintId": {
+            "type": "string",
+            "nullable": true
+          },
+          "minTier": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelTier"
+              }
+            ],
+            "nullable": true
+          },
           "name": {
             "type": "string"
           },
@@ -55306,6 +55328,8 @@
           "id",
           "key",
           "builtIn",
+          "blueprintId",
+          "minTier",
           "name",
           "description",
           "instructions",
@@ -55486,6 +55510,14 @@
               }
             ],
             "nullable": true
+          },
+          "tier": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelTier"
+              }
+            ],
+            "nullable": true
           }
         },
         "required": [
@@ -55498,7 +55530,8 @@
           "inChat",
           "available",
           "kind",
-          "capabilities"
+          "capabilities",
+          "tier"
         ]
       },
       "AiMyUsageResponse": {

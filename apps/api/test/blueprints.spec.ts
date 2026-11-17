@@ -410,7 +410,7 @@ describe('methodology shape (#1122)', () => {
       { key: 'l1-rules', name: { en: 'Rules' }, templateRefs: [], agentKey: 'researcher' },
     ],
     workflows: [{ name: 'Draft rules', graph: { steps: [step('check')] }, trigger: { manual: true, autoStart: false, events: [], categories: [] } }],
-    agents: [{ key: 'modeller', name: 'Modeller', instructions: 'Model the domain.', tools: ['search'], minTier: 'large' }],
+    agents: [{ key: 'modeller', name: 'Modeller', instructions: 'Model the domain.', tools: ['search_knowledge'], minTier: 'large' }],
   };
   const issue = (raw: unknown) => {
     try {
@@ -433,5 +433,7 @@ describe('methodology shape (#1122)', () => {
     expect(issue({ ...methodology, levels: [{ ...methodology.levels[1], guidance: { en: 'x'.repeat(4_001) } }] })).toContain('levels.0.guidance.en');
     expect(issue({ ...methodology, agents: [{ ...methodology.agents[0], key: 'reviewer' }] })).toContain('agents.0.key');
     expect(issue({ ...methodology, agents: [{ ...methodology.agents[0], minTier: 'huge' }] })).toContain('agents.0.minTier');
+    // Built-in tools only (#1127): a methodology cannot know a workspace's plugins.
+    expect(issue({ ...methodology, agents: [{ ...methodology.agents[0], tools: ['web_search_pro'] }] })).toContain('agents.0.tools.0');
   });
 });

@@ -1,7 +1,7 @@
 import type { Locale } from '@knowledge/contracts/core';
 import type { DocumentCategory } from '@knowledge/contracts/documents';
 import type { TemplateRef } from '@knowledge/contracts/templates';
-import { INTERVIEW_MAX_OPTIONS, INTERVIEW_MAX_QUESTIONS, INTERVIEW_MAX_ROUNDS } from '@knowledge/contracts/ai';
+import { BUILT_IN_AGENT_KEYS, INTERVIEW_MAX_OPTIONS, INTERVIEW_MAX_QUESTIONS, INTERVIEW_MAX_ROUNDS } from '@knowledge/contracts/ai';
 import type { InterviewAnswer, InterviewRound, ModelTier, StyleRule } from '@knowledge/contracts/ai';
 import type { WorkflowGraph, WorkflowTrigger } from '@knowledge/contracts/workflows';
 import type { ProjectSummary } from '@knowledge/contracts/identity';
@@ -117,6 +117,15 @@ export interface Blueprint {
   levels?: BlueprintLevel[];
   workflows?: BlueprintWorkflow[];
   agents?: BlueprintAgent[];
+}
+
+/**
+ * The stored key of a methodology's own agent (#1127): the declared key plus
+ * the blueprint's short id, so it never collides with a workspace agent of
+ * the same key. A built-in key is itself — a level may name one directly.
+ */
+export function ownedAgentKey(key: string, blueprintId: string): string {
+  return (BUILT_IN_AGENT_KEYS as readonly string[]).includes(key) ? key : `${key}-${blueprintId.slice(0, 8)}`;
 }
 
 /** A blueprint that declares levels, workflows or agents: what the UI calls a methodology (#1121). */

@@ -43,6 +43,8 @@ function setup() {
       findFirst: async ({ where: w }: { where: Record<string, unknown> }) => where(db.skills, w)[0] ?? null,
       update: vi.fn(async ({ where: w, data }: { where: { id: string }; data: object }) => Object.assign(db.skills.find((r) => r.id === w.id)!, data)),
     },
+    aiAgent: { findMany: async () => [] },
+    onCommit: (fn: () => Promise<unknown>) => void fn(),
     glossaryTerm: {
       findMany: async ({ where: w }: { where: Record<string, unknown> }) => where(db.terms, w),
       create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => db.terms.push({ id: id(), enabled: true, ...data })),
@@ -84,7 +86,7 @@ function setup() {
       else db.skills.push({ id: id(), workspaceId: WS, kind: 'styleguide', projectId: null, enabled: true, ...input });
     }),
   };
-  const service = new MethodologyMaterializerService(prisma as never, templates as never, workflows as never, skills as never);
+  const service = new MethodologyMaterializerService(prisma as never, templates as never, workflows as never, skills as never, { invalidate: vi.fn() } as never);
   return { service, db, templates, workflows };
 }
 

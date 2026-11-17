@@ -333,6 +333,7 @@
     "baseUrlPrivate": "The provider base URL resolves to a private address ({address}). Set AI_PROVIDERS_ALLOW_PRIVATE_URLS=true for a self-hosted model server.",
     "providerNone": "Provider is set to none for this workspace",
     "decisionNeedsGenApi": "The decision route needs a gen-api profile of this workspace: Jev is reached only through gen-api.",
+    "agentFromMethodology": "Agent \"{key}\" comes from a methodology: change it there. Here you can only switch it and pin a model.",
     "agentNotFound": "Unknown agent \"{key}\"",
     "agentScheduleNeedsOwner": "A scheduled agent needs an owner to run as.",
     "agentScheduleNeedsInterval": "A scheduled agent needs an interval in minutes.",

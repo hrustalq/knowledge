@@ -109,6 +109,7 @@ export class AgentProcessor extends WorkerHost {
 
         const agent = await this.registry.resolve(row.workspaceId, row.agentKey);
         if (!agent.enabled) throw new Error(t('error.agent.disabled', { key: row.agentKey }));
+        if (agent.tierUnmet) await report({ warning: t('agent.warning.tierUnmet', { tier: agent.minTier! }) });
 
         await this.events.publish({
           type: 'agent.run.started',

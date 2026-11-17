@@ -59,6 +59,9 @@ in the pull request that introduces them — see
   **Business rule** (one invariant with a stable id and Given/When/Then examples), **Quality scenario** (stimulus,
   response, measure, threshold) and **Unit of work** (objective, invariants, contracts, acceptance checks,
   obligations, out of scope). (#1129)
+- Methodologies are documented in `docs/features/82-methodologies.md`: how a project's templates, workflows,
+  styleguide, glossary and agents resolve through its methodology, how levels are derived, model tiers, the chat
+  level picker and the two built-ins. Docs 63, 73 and 76 and the glossary now describe linked blueprints. (#1130)
 
 ### Changed
 

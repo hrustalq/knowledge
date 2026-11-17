@@ -9367,7 +9367,7 @@ export interface components {
             projectIds?: string[];
             /** @description Page, term or memory ids an earlier call already showed */
             exclude?: string[];
-            /** @description Tokens for the answer; 600 when omitted, clamped to 200–2000 */
+            /** @description Tokens for the answer; 1200 when omitted, clamped to 600–4000 */
             budget?: number;
         };
         GraphQueryDto: {

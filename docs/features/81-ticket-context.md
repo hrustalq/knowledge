@@ -74,10 +74,15 @@ The answer is measured as the MCP tool renders it — the facts line plus the un
 `pageText` — with `estimateTokens`. That includes the wrapper's fixed preamble (about 75 tokens), so the number is what
 the agent pays.
 
-- `budget` defaults to 600 and is clamped to 200–2000 (`CONTEXT_BUDGET`).
+- `budget` defaults to 1200 and is clamped to 600–4000 (`CONTEXT_BUDGET`, #1211). The minimum fits the wrapper and
+  all four pages with full excerpts (about 500 tokens with 80-character titles); the default fits a full answer
+  (4 pages, 3 memories, 3 terms: about 900 tokens on prod, about 1070 with every field at its longest), so on today's
+  limits the budget never drops an item that passed its floor. The tool is called
+  once per ticket: a few hundred extra tokens there cost less than an agent searching again for what was dropped.
+  `context.spec.ts` pins both claims with worst-case items.
 - `packContext` fills pages, then memories, then terms. An item that would push the answer over the budget is dropped
-  whole and the next one is tried; nothing is cut mid-item. One page costs about 100 tokens, so the default fits all
-  four pages and room for terms.
+  whole and the next one is tried; nothing is cut mid-item. One page costs about 100 tokens. A caller that passes a
+  smaller budget still gets this order.
 - **Floors on every section.** A page whose best chunk the vector leg found needs a cosine of at least
   `MEMORY_RUNTIME_MIN_SEMANTIC` (0.4 on bge-m3; one env value for both, the same embedder). A page only BM25 found
   already matched a share of the query's terms (#400). A memory must have passed the semantic floor: the memory

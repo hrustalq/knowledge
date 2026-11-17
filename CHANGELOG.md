@@ -17,6 +17,10 @@ in the pull request that introduces them — see
 
 ### Changed
 
+- `knowledge_context` (and `POST /v1/context`) now answers within a larger token budget: 1200 by default, clamped to
+  600–4000 (was 600, 200–2000). At the old minimum no page fit at all, and the old default dropped memories or terms
+  that had passed every relevance floor; the new minimum always fits all four pages and the default fits a full answer
+  of 4 pages, 3 memories and 3 terms. An agent's answer can be up to twice as long as before. (#1211)
 - A glossary term now matches its inflected forms, so it is linked in Russian prose without listing every case form
   as an alias: `заморозка выкладок` links `заморозкой выкладок` and `заморозки выкладок`, `Вега` links `Веги` and
   `Вегой` (but never `Вегас`), English words take plural and possessive endings (`deploy freezes`, `Orion's`), and the

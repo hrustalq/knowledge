@@ -2192,7 +2192,7 @@ exports[`the offered tool set (#822) > a capture key 1`] = `
         "readOnlyHint": true,
       },
       "name": "knowledge_context",
-      "schema": "28a2bc24dee344bd",
+      "schema": "9f99a7899c9c135e",
     },
     {
       "annotations": {
@@ -2645,7 +2645,7 @@ exports[`the offered tool set (#822) > a read key 1`] = `
         "readOnlyHint": true,
       },
       "name": "knowledge_context",
-      "schema": "28a2bc24dee344bd",
+      "schema": "9f99a7899c9c135e",
     },
     {
       "annotations": {
@@ -3116,7 +3116,7 @@ exports[`the offered tool set (#822) > a write key 1`] = `
         "readOnlyHint": true,
       },
       "name": "knowledge_context",
-      "schema": "28a2bc24dee344bd",
+      "schema": "9f99a7899c9c135e",
     },
     {
       "annotations": {
@@ -3804,7 +3804,7 @@ exports[`the offered tool set (#822) > the stdio principal 1`] = `
         "readOnlyHint": true,
       },
       "name": "knowledge_context",
-      "schema": "28a2bc24dee344bd",
+      "schema": "9f99a7899c9c135e",
     },
     {
       "annotations": {

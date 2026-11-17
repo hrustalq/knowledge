@@ -46,6 +46,29 @@ describe('packContext', () => {
     expect(out.tokens).toBeLessThanOrEqual(CONTEXT_BUDGET.default);
   });
 
+  // #1211: worst-case items under today's caps — long titles, full 200-character excerpts, ids and dates on everything.
+  const UUID = (n: number) => `${String(n).repeat(8)}-aaaa-4aaa-8aaa-aaaaaaaaaaaa`;
+  const fullPage = (i: number): ContextPage => ({ documentId: UUID(i), title: `${'T'.repeat(78)} ${i}`, status: 'outdated', excerpt: 'x'.repeat(200) });
+  const fullMemory = (i: number) => ({
+    id: UUID(i + 4),
+    status: 'unverified' as const,
+    bankId: `project:${OPEN}`,
+    occurredAt: '2026-11-16T12:00:00.000Z',
+    text: 'y'.repeat(200),
+  });
+  const fullTerm = (i: number) => ({ termId: UUID(i + 7), term: `Term ${i}`.padEnd(40, 't'), definition: 'z'.repeat(200), documentId: UUID(i) });
+
+  it('the minimum budget holds the wrapper and all four pages with full excerpts', () => {
+    const pages = [1, 2, 3, 4].map(fullPage);
+    const out = packContext({ pages, memories: [], terms: [] }, [OPEN], clampBudget(200));
+    expect(out.pages).toEqual(pages);
+  });
+
+  it('the default budget holds a full answer', () => {
+    const candidates = { pages: [1, 2, 3, 4].map(fullPage), memories: [1, 2, 3].map(fullMemory), terms: [1, 2, 3].map(fullTerm) };
+    expect(packContext(candidates, [OPEN], clampBudget(undefined))).toMatchObject(candidates);
+  });
+
   it('nothing relevant is one plain line', () => {
     const out = packContext({ pages: [], memories: [], terms: [] }, [], CONTEXT_BUDGET.default);
     expect(out).toMatchObject({ empty: true, reason: 'nothing-relevant' });
@@ -55,9 +78,9 @@ describe('packContext', () => {
 
 describe('helpers', () => {
   it('clamps the budget', () => {
-    expect(clampBudget(undefined)).toBe(600);
-    expect(clampBudget(5)).toBe(200);
-    expect(clampBudget(99_999)).toBe(2000);
+    expect(clampBudget(undefined)).toBe(1200);
+    expect(clampBudget(200)).toBe(600);
+    expect(clampBudget(5000)).toBe(4000);
   });
 
   it('clips to 200 characters', () => {

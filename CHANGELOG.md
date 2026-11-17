@@ -117,6 +117,9 @@ in the pull request that introduces them — see
   while you scroll to the row's actions, so Disable or Revoke admin is never tapped on an unnamed row. (#1070)
 - Editing in phone landscape (or with the keyboard up): the top bar and breadcrumb row step aside, leaving the
   editor's own bar and the formatting toolbar, so about 100px more of the page is on screen. (#1062)
+- Language and theme moved from the top bar to Profile settings, and both follow your device unless you choose:
+  Language has Automatic (your browser's language), Theme has System, Light and Dark, and System switches with the
+  device. The top bar keeps every control on screen at large text sizes. (#1040)
 
 ## [0.56.0] — 2026-11-16
 

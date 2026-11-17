@@ -1,13 +1,11 @@
 <script setup lang="ts">
-// Top bar: nav toggle, global search ("/" or Cmd/Ctrl+K), theme toggle, user.
+// Top bar: nav toggle, global search ("/" or Cmd/Ctrl+K), notifications, user.
 import { onBeforeUnmount, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Moon, PanelLeft, Search, Sun } from 'lucide-vue-next'
+import { PanelLeft, Search } from 'lucide-vue-next'
 import { useSearchUiStore } from '@/modules/documents'
 import { isSearchShortcut } from '@/shared/utils/search-shortcut'
-import { toggleTheme } from '@/shared/utils/theme'
 import { Button } from '@knowledge/ui/button'
-import LocaleSwitcher from './LocaleSwitcher.vue'
 import { NotificationBell } from '@/modules/notifications'
 import UserMenu from './UserMenu.vue'
 
@@ -53,12 +51,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
     </button>
 
     <div class="ml-auto flex items-center gap-1.5">
+      <!-- Language and theme are settings that follow the device (#1040), in
+           Profile settings: the bar keeps room for its own controls at 200% text. -->
       <NotificationBell />
-      <LocaleSwitcher />
-      <Button variant="ghost" size="icon-sm" :aria-label="t('nav.toggleTheme')" @click="toggleTheme">
-        <Sun class="hidden size-4 dark:block" />
-        <Moon class="size-4 dark:hidden" />
-      </Button>
       <UserMenu />
     </div>
   </header>

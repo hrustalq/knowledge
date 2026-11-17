@@ -23,14 +23,15 @@
  * Everything here acts on the caller and takes no user id; renaming somebody
  * else is a platform-admin act and lives in /settings/users.
  */
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 import { toast } from 'vue-sonner'
 import { KeyRound } from 'lucide-vue-next'
 import { SUPPORTED_LOCALES, type Locale } from '@knowledge/contracts'
 import { api } from '@/shared/api/queries'
-import { getLocale, setLocale } from '@/shared/api/api'
+import { clearLocale, getLocale, hasLocaleChoice, setLocale } from '@/shared/api/api'
+import { getThemePreference, setThemePreference, type ThemePreference } from '@/shared/utils/theme'
 import { ensureLocaleMessages } from '@/shared/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { Button } from '@knowledge/ui/button'
@@ -73,19 +74,55 @@ async function saveName() {
 }
 
 // --- language ------------------------------------------------------------
-// Same three writes the topbar switcher makes (cookie, live i18n, users.locale)
-// so the two controls cannot leave the app in different states.
+// The one place to change it (#1040: the top-bar switcher is gone). Three
+// writes: the cookie (or its removal), live i18n, users.locale. Automatic
+// stores no choice, so the server renders by Accept-Language and this browser
+// by its device language; users.locale still gets the resolved language,
+// since mail and chat bots have no browser to ask.
 
 const activeLocale = computed(() => (locale.value as Locale) ?? getLocale())
+// Storage only exists in the browser: until mount, draw no language as
+// automatic, so the server's frame and the first client frame agree.
+const localeAutomatic = ref(false)
 
-async function chooseLocale(next: Locale) {
-  if (next === activeLocale.value) return
-  await ensureLocaleMessages(i18n, next)
-  setLocale(next)
-  locale.value = next
-  if (typeof document !== 'undefined') document.documentElement.lang = next
+async function applyLocale(next: Locale) {
+  if (next !== activeLocale.value) {
+    await ensureLocaleMessages(i18n, next)
+    locale.value = next
+    if (typeof document !== 'undefined') document.documentElement.lang = next
+  }
   await auth.saveLocale(next)
 }
+
+async function chooseLocale(next: Locale) {
+  if (next === activeLocale.value && !localeAutomatic.value) return
+  setLocale(next)
+  localeAutomatic.value = false
+  await applyLocale(next)
+}
+
+async function chooseAutomaticLocale() {
+  if (localeAutomatic.value) return
+  localeAutomatic.value = true
+  await applyLocale(clearLocale())
+}
+
+// --- theme ---------------------------------------------------------------
+// #1040: System follows the device (and changes with it); Light and Dark are
+// stored in this browser. Read after mount, for the same reason as above.
+
+const THEMES: ThemePreference[] = ['system', 'light', 'dark']
+const theme = ref<ThemePreference | null>(null)
+
+function chooseTheme(pref: ThemePreference) {
+  theme.value = pref
+  setThemePreference(pref)
+}
+
+onMounted(() => {
+  localeAutomatic.value = !hasLocaleChoice()
+  theme.value = getThemePreference()
+})
 
 // --- password ------------------------------------------------------------
 
@@ -213,15 +250,38 @@ async function savePassword() {
               <p class="mt-0.5 text-xs text-muted-foreground">{{ t('profileSettings.language.hint') }}</p>
             </div>
             <div class="mt-3 flex flex-wrap gap-2">
+              <Button
+                :variant="localeAutomatic ? 'default' : 'outline'"
+                size="sm"
+                :aria-pressed="localeAutomatic"
+                @click="chooseAutomaticLocale"
+              >{{ t('profileSettings.language.automatic') }}</Button>
               <!-- A language is named in itself, never translated. -->
               <Button
                 v-for="code in SUPPORTED_LOCALES"
                 :key="code"
-                :variant="code === activeLocale ? 'default' : 'outline'"
+                :variant="!localeAutomatic && code === activeLocale ? 'default' : 'outline'"
                 size="sm"
-                :aria-pressed="code === activeLocale"
+                :aria-pressed="!localeAutomatic && code === activeLocale"
                 @click="chooseLocale(code)"
               >{{ LOCALE_LABELS[code] }}</Button>
+            </div>
+          </li>
+
+          <li class="px-5 py-4">
+            <div class="min-w-0">
+              <h3 class="text-sm font-medium">{{ t('profileSettings.theme.title') }}</h3>
+              <p class="mt-0.5 text-xs text-muted-foreground">{{ t('profileSettings.theme.hint') }}</p>
+            </div>
+            <div class="mt-3 flex flex-wrap gap-2">
+              <Button
+                v-for="pref in THEMES"
+                :key="pref"
+                :variant="pref === theme ? 'default' : 'outline'"
+                size="sm"
+                :aria-pressed="pref === theme"
+                @click="chooseTheme(pref)"
+              >{{ t(`profileSettings.theme.${pref}`) }}</Button>
             </div>
           </li>
         </ul>

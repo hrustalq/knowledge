@@ -88,6 +88,7 @@
     "analytics": "Analytics",
     "assistant": "Assistant",
     "settings": "Settings",
+    "general": "General",
     "activity": "Activity",
     "glossary": "Glossary",
     "access": "Access",
@@ -323,6 +324,7 @@
     }
   },
   "settings": {
+    "generalHint": "Workspace name and deletion",
     "projectsHint": "Organize documents",
     "glossaryHint": "Shared vocabulary",
     "accessHint": "Members, roles and accounts",

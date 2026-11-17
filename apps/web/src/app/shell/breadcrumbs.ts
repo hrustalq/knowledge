@@ -61,6 +61,7 @@ const STATIC: Record<string, string> = {
 }
 
 const SETTINGS: Record<string, string> = {
+  '/settings/general': 'nav.general',
   '/settings/profile': 'nav.profile',
   '/settings/projects': 'nav.projects',
   '/settings/users': 'nav.users',

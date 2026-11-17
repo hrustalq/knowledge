@@ -3,12 +3,23 @@ export { LazyPageAccessDialog } from './components/lazy'
 export { default as PageAccessDialog } from './components/PageAccessDialog.vue'
 export { default as RequestAccessCard } from './components/RequestAccessCard.vue'
 export {
-  captureKitFileRole,
   captureKitInstallCommand,
   KEY_ENV,
   mcpClients,
   SKILL_NAME,
   skillInstallCommand,
   skillStackInstallCommand,
+  type McpClientGuide,
 } from './model/mcp-clients'
+export {
+  CONNECT_ROLES,
+  CONNECT_WORKFLOWS,
+  scopeFor,
+  stepsFor,
+  toolsetsFor,
+  workflowsFor,
+  type ConnectRole,
+  type ConnectStep,
+  type ConnectWorkflow,
+} from './model/connect-plan'
 export { warnMentionedWithoutAccess } from './model/mention-access'

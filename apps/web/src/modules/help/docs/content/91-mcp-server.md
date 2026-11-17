@@ -19,10 +19,12 @@ platform's own vocabulary: `knowledge_search` is `knowledge.search`.
 
 ## Connecting a client
 
-Use [**Settings → AI → Connect AI**](/settings/ai/connect). It creates a key and gives you the
+Use [**Connect a client**](/setup/connect) (also on **Settings → AI → Connect AI**). It asks
+which tool you use and what the agent will do, creates a key that fits, and gives you the
 exact command and config file for Claude Code, Codex, Gemini CLI, Cursor, VS Code, Claude
 Desktop, Windsurf, opencode and Zed — with the key already filled in, the one time it is
-on screen. The shape every one of them boils down to:
+on screen. Its last step waits for the client's first call and, if none comes, tells you
+what the server's reply means. The shape every one of them boils down to:
 
 ```json
 {

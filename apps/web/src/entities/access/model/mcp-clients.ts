@@ -20,7 +20,7 @@
  * Pure: the page decides which key to show, this decides where it goes.
  */
 
-import type { CaptureKitClient, CaptureKitFile } from '@knowledge/contracts'
+import type { CaptureKitClient } from '@knowledge/contracts'
 import { SKILL_DIRS, SKILL_DIR_KEYS } from '@knowledge/contracts'
 
 export const KEY_ENV = 'KNOWLEDGE_API_KEY'
@@ -244,7 +244,7 @@ export function mcpClients(input: McpClientInput): McpClientGuide[] {
         // The raw shape, for a client this list does not name and for checking
         // a key works before blaming the client.
         code: [
-          `curl -s ${url} \\`,
+          `curl -sS ${url} \\`,
           ...(auth ? [`  -H "Authorization: Bearer $${KEY_ENV}" \\`] : []),
           `  -H "Content-Type: application/json" \\`,
           `  -H "Accept: application/json, text/event-stream" \\`,
@@ -292,10 +292,4 @@ export function skillStackInstallCommand(mcpUrl: string, dir: string, auth: bool
  */
 export function captureKitInstallCommand(kitUrl: string, client: CaptureKitClient, auth: boolean): string {
   return `curl -fsSL${auth ? ` -H "Authorization: Bearer $${KEY_ENV}"` : ''} \\\n  "${kitUrl}/install?client=${client}" | sh`
-}
-
-/** What a kit file is for — an i18n key under connect.capture.files. */
-export function captureKitFileRole(file: CaptureKitFile): 'instructions' | 'script' | 'entries' {
-  if (file.mode === 'merge') return 'entries'
-  return file.executable ? 'script' : 'instructions'
 }

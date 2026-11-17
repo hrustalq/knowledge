@@ -4713,21 +4713,334 @@
     }
   },
   "connect": {
+    "wizard": {
+      "title": "Connect an AI client",
+      "close": "Close",
+      "back": "Back",
+      "continue": "Continue",
+      "done": "Done",
+      "stepOf": "Step {n} of {m}",
+      "stepsLabel": "Setup steps",
+      "steps": {
+        "role": "You",
+        "client": "Tool",
+        "workflow": "Work",
+        "key": "API key",
+        "preferences": "Install",
+        "configure": "Configure",
+        "skill": "Skill",
+        "verify": "Check"
+      },
+      "role": {
+        "title": "What do you mostly do?",
+        "hint": "Your answer picks sensible defaults for the next questions. You can change each of them.",
+        "options": {
+          "developer": {
+            "label": "I build software",
+            "hint": "The agent looks things up while coding, starts from tickets and remembers what a session settled."
+          },
+          "writer": {
+            "label": "I write documentation",
+            "hint": "The agent drafts and edits pages, always through a merge request."
+          },
+          "reviewer": {
+            "label": "I review and maintain",
+            "hint": "The agent reads merge requests, comments and finds contradictions."
+          },
+          "qa": {
+            "label": "I test APIs",
+            "hint": "The agent reads API specs and runs test suites."
+          },
+          "explorer": {
+            "label": "I'm just looking",
+            "hint": "Read-only: the agent searches and answers with citations."
+          }
+        }
+      },
+      "client": {
+        "title": "Which tool will connect?",
+        "hint": "The tool decides the config format, where the skill goes and whether a capture hook is available."
+      },
+      "workflow": {
+        "title": "What should the agent do?",
+        "hint": "Pick everything you expect to use. The key gets the least access that covers it.",
+        "options": {
+          "ask": {
+            "label": "Answer questions",
+            "hint": "Search, read pages and trace relations; answers cite the pages they used."
+          },
+          "code": {
+            "label": "Work on code",
+            "hint": "Pull context when a ticket starts, find where code is used, read API specs."
+          },
+          "author": {
+            "label": "Write and edit pages",
+            "hint": "Create pages and propose edits as merge requests."
+          },
+          "review": {
+            "label": "Review merge requests",
+            "hint": "Read, comment on and approve merge requests; resolve contradictions."
+          },
+          "capture": {
+            "label": "Remember what it learns",
+            "hint": "Propose decisions and gotchas from a session, as merge requests a person reviews."
+          },
+          "qa": {
+            "label": "Run API tests",
+            "hint": "Generate and run test suites against your API specs."
+          }
+        },
+        "needs": "That needs a key with access: {scope}.",
+        "none": "Pick at least one."
+      },
+      "key": {
+        "title": "Create its API key",
+        "hint": "One key per tool and machine, so revoking one never breaks another. A key never reaches further than your own account.",
+        "new": "Create a new key",
+        "have": "I already have a key",
+        "haveHint": "The snippets show <your-api-key> for you to replace. The check at the end watches all your keys.",
+        "defaultName": "{client} on this machine",
+        "suggested": "suggested by your answers",
+        "limit": "Limit the key to the toolsets these answers use",
+        "limitHint": "Smaller tool list, less context spent. A limited key works over MCP only.",
+        "unlimited": "Every toolset your account can reach.",
+        "reload": "The key is shown on this page only. Leave or reload it and only its hash remains.",
+        "created": "“{name}” is ready — it is already in every snippet that follows.",
+        "createFirst": "Create the key to continue, or say you already have one."
+      },
+      "preferences": {
+        "title": "How should it be installed?",
+        "skill": {
+          "legend": "The skill",
+          "single": {
+            "label": "One SKILL.md",
+            "hint": "Everything in one file. Simplest; the model loads it whole."
+          },
+          "stack": {
+            "label": "A stack of skills",
+            "hint": "A core skill plus one per toolset; the model loads only what the task needs."
+          }
+        },
+        "kit": {
+          "legend": "Capture hook",
+          "yes": {
+            "label": "Install the capture hook",
+            "hint": "Once per session that changed files, the agent is reminded to propose what it learned."
+          },
+          "no": {
+            "label": "Skip it",
+            "hint": "The skill still explains capturing; there is just no reminder."
+          }
+        }
+      },
+      "configure": {
+        "title": "Add the server to {client}",
+        "hint": "Run these where you use {client}. “Your config” holds the same thing, written to its file."
+      },
+      "skill": {
+        "title": "Teach {client} how to use it",
+        "kitTitle": "Capture hook — run inside the repository"
+      },
+      "verify": {
+        "title": "Check the connection",
+        "waiting": "Waiting for the first call from {client}…",
+        "waitingHint": "Start {client} (restart it if it was open) and ask: “Who am I in Knowledge?”",
+        "connected": "Connected",
+        "connectedHint": "{client} reached the server with “{name}” {when}. It is offered {n} tools.",
+        "devMode": "This server runs with AUTH_MODE=none, so there is no key to watch. Run the check below to confirm the server answers.",
+        "slow": "No call yet. Run this from the same terminal, with the same variable, and read the reply.",
+        "showCheck": "Check from a terminal",
+        "check": "Terminal — calls knowledge_whoami as your key",
+        "statusTitle": "What the reply means",
+        "statuses": {
+          "refused": {
+            "code": "No reply / could not connect",
+            "fix": "The URL is unreachable from that machine. Check the address, a VPN or proxy, and that it ends in /v1/mcp."
+          },
+          "s401": {
+            "code": "401 Unauthorized",
+            "fix": "No key arrived, or not this one. Export the variable in the shell that starts the tool, check for a stray space or quote, and that the key is not revoked or expired."
+          },
+          "s403": {
+            "code": "403 Forbidden",
+            "fix": "The key works but may not do this: it is pinned to another workspace, read-only, or limited to other toolsets. Create one that matches."
+          },
+          "s404": {
+            "code": "404 Not Found",
+            "fix": "Wrong path. The URL must be exactly the endpoint shown here, ending in /v1/mcp."
+          },
+          "s405": {
+            "code": "405 Method Not Allowed",
+            "fix": "The tool tried the old SSE transport (GET). Use its Streamable HTTP setting — the config on this page does."
+          },
+          "ok": {
+            "code": "A JSON reply naming you",
+            "fix": "The server and key are fine; the tool's config is the problem. Restart the tool, check it read the file you edited, and look below."
+          }
+        }
+      },
+      "pane": {
+        "title": "Your config",
+        "empty": "Pick a tool and its config appears here, filled in as you answer.",
+        "endpoint": "MCP endpoint"
+      },
+      "help": {
+        "title": "Something not working?",
+        "role": [
+          {
+            "q": "None of these fit",
+            "a": "Pick “I'm just looking”. It makes a read-only key, and you can run this setup again for a stronger one later."
+          }
+        ],
+        "client": [
+          {
+            "q": "My tool isn't listed",
+            "a": "Pick “Any client · curl”. Any tool that speaks MCP over Streamable HTTP works with a URL and an Authorization: Bearer header."
+          },
+          {
+            "q": "I use two tools",
+            "a": "Finish this one, then run the setup again. One key per tool means revoking one never breaks the other."
+          }
+        ],
+        "workflow": [
+          {
+            "q": "Why not just give it full access?",
+            "a": "A tool is offered only what its key allows, so a read-only key never even sees the write tools. Less to go wrong, less context spent."
+          }
+        ],
+        "key": [
+          {
+            "q": "I lost the key",
+            "a": "It cannot be shown again; only its hash is stored. Revoke it under Settings → AI → Connect AI and create a new one."
+          },
+          {
+            "q": "Which workspace should I pin?",
+            "a": "Pin one when the tool should only ever see that workspace, for a client project for example. Otherwise leave it on all."
+          }
+        ],
+        "preferences": [
+          {
+            "q": "Which skill format?",
+            "a": "One file is simplest. Pick the stack when you use many toolsets; the model then reads only the playbook a task needs."
+          }
+        ],
+        "configure": [
+          {
+            "q": "The tool says the server failed or shows no tools",
+            "a": "Restart the tool after editing its config, and after exporting the variable: an open app keeps the environment it started with."
+          },
+          {
+            "q": "It worked in the terminal but not in the app",
+            "a": "Apps started from the Dock or Start menu do not read ~/.zshrc. Start the app from that terminal, or put the key in the config directly."
+          }
+        ],
+        "skill": [
+          {
+            "q": "curl prints 401",
+            "a": "The command reads the key from the variable. Run export first in the same terminal."
+          },
+          {
+            "q": "The model ignores the skill",
+            "a": "Start a new session after installing; skills load when a session begins. Then ask a question that names Knowledge."
+          }
+        ],
+        "verify": [
+          {
+            "q": "It never turns to Connected",
+            "a": "Only a call with this key counts. Check the tool is using the key from this setup, then run the terminal check below."
+          }
+        ]
+      },
+      "clientHelp": {
+        "claudeCode": [
+          {
+            "q": "/mcp shows the server as failed",
+            "a": "An entry without \"type\": \"http\" is read as a local command. Re-run the claude mcp add line; it sets the type."
+          },
+          {
+            "q": "The key ended up in the file",
+            "a": "Double quotes let the shell expand the variable. Use single quotes, as the command here does."
+          }
+        ],
+        "codex": [
+          {
+            "q": "401 although the key is exported",
+            "a": "Codex reads the variable named in bearer_token_env_var — just its name, no $ and no braces."
+          }
+        ],
+        "gemini": [
+          {
+            "q": "It connects but never lists tools",
+            "a": "Plain url means SSE. Streamable HTTP needs httpUrl, as in the config here."
+          },
+          {
+            "q": "It works in one folder only",
+            "a": "The CLI defaults to project scope. Add the server with --scope user."
+          }
+        ],
+        "cursor": [
+          {
+            "q": "The server stays red",
+            "a": "Quit and reopen Cursor after exporting the variable, then turn the server on under Settings → MCP."
+          }
+        ],
+        "vscode": [
+          {
+            "q": "401 although the key is set",
+            "a": "VS Code currently sends env references in headers literally. The config here asks for the key once instead — enter it when prompted."
+          }
+        ],
+        "claudeDesktop": [
+          {
+            "q": "The server never starts",
+            "a": "mcp-remote runs with npx, so Node.js must be installed. Fully quit Claude (not just close the window) after saving."
+          },
+          {
+            "q": "Is the key safe in that file?",
+            "a": "Desktop cannot read environment variables there, so the key is written in. Keep the file private, and revoke the key if it leaks."
+          }
+        ],
+        "windsurf": [
+          {
+            "q": "The server does not appear",
+            "a": "Newer builds read ~/.config/devin/mcp_config.json, older ones ~/.codeium/windsurf/mcp_config.json. Refresh the MCP list in Cascade."
+          }
+        ],
+        "opencode": [
+          {
+            "q": "It opens a browser to sign in",
+            "a": "Keep \"oauth\": false in the entry; otherwise opencode tries OAuth against a server that takes keys."
+          }
+        ],
+        "zed": [
+          {
+            "q": "401 with the variable set",
+            "a": "Zed does not expand variables in headers, so the key is written into settings.json. Paste the real key there."
+          }
+        ],
+        "http": [
+          {
+            "q": "What should the test call print?",
+            "a": "A JSON reply that names you and your workspaces. Anything else: match it against the table in the last step."
+          }
+        ]
+      },
+      "manage": {
+        "start": "Connect a client",
+        "startHint": "A guided setup: tell it your tool and how you work, get a key and the exact config, then check that it connects."
+      }
+    },
     "title": "Connect AI",
-    "subtitle": "Give Claude, Codex, Gemini CLI, Cursor or any MCP client access to this knowledge base — as you, and never more than you. Create a key, add the server to your client, then install the skill that teaches its model how to use it.",
+    "subtitle": "Give Claude, Codex, Gemini CLI, Cursor or any MCP client access to this knowledge base — as you, and never more than you. Set a client up with the guided setup; this page keeps your keys and shows what they reach.",
     "loadFailed": "The connection details could not be loaded.",
     "copyFailed": "Copy failed",
     "endpoint": {
       "title": "MCP endpoint",
-      "hint": "Streamable HTTP. Every client below points here; the key decides what it may do.",
+      "hint": "Streamable HTTP. Every client connects here; the key decides what it may do.",
       "meta": "server v{version} · {tools} tools"
     },
     "keys": {
-      "title": "Create an API key",
-      "hint": "One key per client and machine, so revoking one never breaks the others. A key only ever narrows what your account can do.",
-      "devMode": "This server runs with AUTH_MODE=none: every caller has full access and no key is needed. Skip to step 2.",
       "name": "Name",
-      "namePlaceholder": "Claude Code on my laptop",
       "scope": "Access",
       "scopes": {
         "read": "Read-only",
@@ -4747,8 +5060,6 @@
       "create": "Create key",
       "creating": "Creating…",
       "createFailed": "The key could not be created.",
-      "onceOnly": "“{name}” is ready. Copy it now — only its hash is stored, so it cannot be shown again. The snippets below already include it.",
-      "shellProfile": "~/.zshrc or ~/.bashrc",
       "active": "Active keys ({n})",
       "empty": "No keys yet. Create one for each client you connect.",
       "lastUsed": "used {when}",
@@ -4767,19 +5078,13 @@
       "reviewCaptures": "Review its captures",
       "toolsetPicker": {
         "legend": "Toolsets",
-        "all": "Every toolset. Pick some to limit the key.",
-        "limit": "Limit to toolsets",
-        "always": "always included",
-        "mcpOnly": "A key limited to toolsets works over MCP only. REST routes, git and plain-markdown URLs refuse it.",
-        "chosen": "Limited to {n} toolset besides Core. | Limited to {n} toolsets besides Core."
+        "always": "always included"
       },
       "mcpOnly": "MCP only",
       "toolsets": "Toolsets: {list}"
     },
     "clients": {
-      "title": "Add the server to your client",
       "docs": "Client docs",
-      "orEdit": "…or add it to the config file by hand:",
       "placeholder": "This client cannot read the key from an environment variable. Replace <your-api-key>, or create a key above and it is filled in.",
       "step": {
         "env": "Shell profile — the variable the config reads",
@@ -4799,11 +5104,8 @@
       }
     },
     "skill": {
-      "title": "Install the skill",
       "hint": "A SKILL.md that teaches the model how to use this knowledge base: your workspaces and project ids, the tools this key is offered, and the playbooks — answer with citations, propose edits as merge requests, trace impact. Generated for you; re-run the command after you join a workspace.",
       "download": "Download SKILL.md",
-      "preview": "Preview ({n} lines)",
-      "hide": "Hide preview",
       "installFor": "{client} → {path}",
       "noSkillDir": "{client} has no skills directory. Use the server's “guide” prompt instead, or paste the skill into the conversation or a project's instructions.",
       "alsoServed": "The same skill is served by the MCP server itself — as the resource knowledge://skill and the prompt “guide” — so any client can load it without installing a file.",
@@ -4813,19 +5115,8 @@
     "capture": {
       "title": "Capture what sessions learn",
       "hint": "A hook for {client} that, once per session that changed files, asks the agent to propose the decisions, gotchas and conventions it settled — as merge requests a person reviews. Nothing reaches a page until someone merges it. The hook holds no key and calls nothing; the agent captures through the tools it is already connected with.",
-      "noKit": "{client} has no hooks the kit can use. Its skill’s “Capture memory” section covers the same ground without a reminder.",
-      "installLabel": "Terminal — inside the repository the agent works in",
-      "filesTitle": "What it installs ({n})",
-      "merged": "merged in",
-      "files": {
-        "instructions": "Tells the agent what is worth capturing and how, and which projects it can capture into.",
-        "script": "The reminder: silent until the session edits a file, then once per session.",
-        "entries": "Hook entries. Merged into your existing file with jq, or printed for you to merge — never written over it."
-      },
-      "footnote": "Kit v{version}. Run the command again to update it, or after you join a workspace.",
       "review": "Review captures",
       "refused": "This key is offered no capture tools, so there is no kit to install with it. Create a “Read and propose” or read-write key in step 1.",
-      "loadFailed": "Could not load the capture kit.",
       "ticket": {
         "title": "Context when a ticket starts",
         "hint": "With the kit installed, {client} is nudged once per ticket it reads to call knowledge_context: a few pages, glossary terms and project memory as pointers inside a small token budget. The hook still holds no key. Clients without hooks, Codex and Kimi among them, follow the same step from the skill.",

@@ -22,9 +22,21 @@ in the pull request that introduces them — see
   chat lists `/new`, `/unlink`, `/capture`, `/forget` and `/help`; a group lists `/ask`, `/new`, `/capture`, `/forget`
   and `/help`, and group admins also see `/bind` and `/unbind`. Before, the commands were only discoverable through
   `/help`. (#1223)
+- Connecting an AI client is now a full-screen guided setup at `/setup/connect` (**Settings → AI → Connect AI →
+  Connect a client**). It asks what you do, which tool connects (Claude Code, Codex, Gemini CLI, Cursor, VS Code,
+  Claude Desktop, Windsurf, opencode, Zed or any MCP client) and what the agent will do, then suggests the narrowest key
+  that covers it. The tool's exact command and config file stay on screen and update as you answer, with the new key
+  already in them. The setup installs the skill (and the capture hook for Claude Code and Cursor) and ends by waiting
+  for the client's first call, showing **Connected** when it arrives. If no call arrives, it gives a terminal check
+  and explains what each reply means (no reply, 401, 403, 404, 405). Every step has a "Something not working?" panel
+  with fixes for that step and for the chosen tool, in English and Russian. (#1225)
 
 ### Changed
 
+- **Settings → AI → Connect AI** is now where you manage keys: the endpoint, your keys (revoke, last used), what a
+  connected client is offered and the llms.txt URLs. Creating a key and copying client configs moved into the guided
+  setup. Links that open the page with `?client=<tool>`, including those in a `SKILL.md` already installed, now open
+  the setup on that tool. (#1225)
 - `knowledge_context` (and `POST /v1/context`) now answers within a larger token budget: 1200 by default, clamped to
   600–4000 (was 600, 200–2000). At the old minimum no page fit at all, and the old default dropped memories or terms
   that had passed every relevance floor; the new minimum always fits all four pages and the default fits a full answer

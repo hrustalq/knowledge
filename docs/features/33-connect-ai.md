@@ -21,13 +21,18 @@ and work in its knowledge base **as the person who connected it**:
   **capture** ("Read & propose"), reads like a read-only key and may only
   propose agent-session captures, optionally pinned to projects
   ([50](50-agent-memory.md)).
-- **Settings → AI → Connect AI** (`/settings/ai/connect`; it was its own
-  settings row at `/settings/connect` until issue #182, and that URL — printed
-  in every SKILL.md already handed out — redirects): create a key, pick a client,
-  copy its CLI one-liner and config file (with the key already in it, the one
-  time it is on screen), then install the skill. For Claude Code and Cursor,
-  step 4 **Capture memory** installs the capture kit with one command run
-  inside the repository (below).
+- **Connect a client** (`/setup/connect`, #1225): a full-screen question-and-answer
+  wizard. It asks who you are, which tool connects and what the agent will do, then
+  derives the key (scope, suggested toolsets), shows that client's command and config
+  file live beside the questions with the fresh key in them, installs the skill (and,
+  for Claude Code and Cursor, the capture kit, below), and ends by **waiting for the
+  key's first call**. Every step carries a "Something not working?" panel: symptom →
+  fix, for the step and for the chosen client.
+- **Settings → AI → Connect AI** (`/settings/ai/connect`; it was its own settings row
+  at `/settings/connect` until issue #182, and that URL — printed in every SKILL.md
+  already handed out — redirects) is the manage side: the endpoint, your keys (revoke,
+  last used, captures), the offered tools and the llms.txt URLs. `?client=` on either
+  URL opens the wizard on that client.
 - **The skill.** A `SKILL.md` generated per caller at `GET /v1/mcp/skill`: the
   workspaces and project ids that credential reaches, the tools it is offered,
   and the playbooks — answer with citations, change a page only through a merge
@@ -143,7 +148,7 @@ workspace and project ids saves an agent its first three calls, and a read-only
 key's skill must not describe an edit flow it cannot perform. It fetches with a
 bearer header, so the install command can be re-run to pick up new workspaces.
 
-**The capture kit is a reminder, not an agent.** Step 4 runs
+**The capture kit is a reminder, not an agent.** The wizard's skill step runs
 `curl -H "Authorization: Bearer …" $API_PUBLIC_URL/v1/mcp/capture-kit/install?client=… | sh`.
 `GET /v1/mcp/capture-kit?client=` returns the same files as JSON
 (`CaptureKitResponse`). The kit is a skill (Claude Code) or an agent-requested
@@ -160,8 +165,8 @@ capture tool gets 403 `capture-not-offered`. The installer never overwrites
 
 **Ticket context** ([81](81-ticket-context.md)). Since kit v3 the same hook
 also nudges the model to call `knowledge_context` once per ticket it reads,
-and the skill carries a "Starting a ticket" step for every other client. Step
-4 shows that step, cut from the SKILL.md the page fetched, under the kit.
+and the skill carries a "Starting a ticket" step for every other client. The
+wizard shows that step, cut from the SKILL.md it fetched, when "Work on code" was chosen.
 
 **Per-client snippets, not one JSON blob.** `apps/web/src/entities/access/model/mcp-clients.ts`
 has a generator per client because the differences break connections, silently:
@@ -171,6 +176,23 @@ Claude Code reads a `url` without `type` as stdio; Gemini reads `url` as SSE;
 opencode tries OAuth unless told not to; Claude Desktop's config runs only local
 servers (hence `mcp-remote`); VS Code currently sends `${env:}` in headers
 literally (hence a prompted input); Zed has no env expansion at all.
+
+**The wizard asks, the plan decides** (#1225). Role → default workflows → the
+narrowest key scope that does them all, and the toolsets they use: that mapping and
+which steps apply (`key` only under `api-key`, `preferences` only when the client has a
+skill directory or a capture kit was wanted) are pure functions in
+`apps/web/src/entities/access/model/connect-plan.ts`, pinned by its spec. A derived
+value is a default; a pick on a later step is an override that an earlier answer never
+undoes. Limiting the key to the suggested toolsets stays opt-in, because a limited key
+is MCP-only.
+
+**Verify reads what the server already writes.** A key's `last_used_at` is set on its
+first call (only later calls are throttled), so the last step polls the caller's own
+`GET /v1/me/api-keys` every 3 s and says **Connected** the moment the client calls —
+no new route, no recorded failures. With a key from before the wizard, it watches for
+any key used after the wizard opened. After 90 s without a call (or on request) it
+shows a `knowledge_whoami` curl and what each reply means (no reply, 401, 403, 404,
+405, 200). Help text is static and translated; no model is asked.
 
 **Single-key column kept, not read.** `users.api_key_hash` is superseded by
 `api_keys` and the migration copies every value across. It is left in place so
@@ -192,7 +214,9 @@ drops it in a later release.
 | Key resolution + `last_used_at`                        | `apps/api/src/auth/token-auth.service.ts`                                   |
 | Key CRUD                                               | `apps/api/src/auth/api-keys.service.ts`, `MeController`                     |
 | Client snippets                                        | `apps/web/src/entities/access/model/mcp-clients.ts`                                          |
-| Page                                                   | `apps/web/src/modules/access/pages/ConnectAiPage.vue`                                      |
+| Manage page                                            | `apps/web/src/modules/access/pages/ConnectAiPage.vue`                                      |
+| Setup wizard + its steps                               | `apps/web/src/modules/access/pages/ConnectWizardPage.vue`, `components/connect/`           |
+| What the answers mean                                  | `apps/web/src/entities/access/model/connect-plan.ts`                                       |
 | Tests                                                  | `apps/api/test/mcp-http.spec.ts`                                            |
 
 ## Configuration

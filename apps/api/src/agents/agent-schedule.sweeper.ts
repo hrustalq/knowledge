@@ -159,7 +159,9 @@ export class AgentScheduleSweeper implements OnModuleInit, OnModuleDestroy {
         // run while one is in flight, even one a click queued mid-tick.
         const queued = await withSubjectLock(this.prisma, agentRunLockKey(agent.workspaceId, agent.key), async () => {
           const inFlight = await this.prisma.agentRun.count({
-            where: { workspaceId: agent.workspaceId, agentKey: agent.key, status: { in: ['pending', 'running'] } },
+            // Unscoped runs only, as the manual start counts (#1248): a page run
+            // a trigger started does not skip the workspace-wide pass.
+            where: { workspaceId: agent.workspaceId, agentKey: agent.key, subjectKey: null, status: { in: ['pending', 'running'] } },
           });
           if (inFlight > 0) return false;
           const run = await this.prisma.agentRun.create({

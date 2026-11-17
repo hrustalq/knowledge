@@ -1073,6 +1073,7 @@ export type I18nTranslations = {
             "agentNoExecutor": string;
             "findingNotFound": string;
             "findingAlreadyProposed": string;
+            "agentMergeRequestOpen": string;
             "findingInFlight": string;
             "findingNoDocument": string;
             "findingOrphan": string;

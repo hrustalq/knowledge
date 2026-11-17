@@ -395,6 +395,11 @@ const severityClass = (f: AgentFinding) =>
             <span class="text-muted-foreground mt-0.5 block text-xs">
               {{ run.summary || run.error || t('ai.runs.noSummary') }}
             </span>
+            <!-- Why it has not started (#1248): another run is working on the
+                 same page, and this one starts when that one settles. -->
+            <span v-if="run.status === 'pending' && run.queuedBehind" class="text-muted-foreground text-caption mt-1.5 block">
+              {{ t('ai.runs.queuedBehind', { agent: run.queuedBehind.agentName }) }}
+            </span>
             <!-- What it is doing, while it is doing it (docs/features/29).
                  Only while it runs: a finished run's last stage is noise next to
                  the summary, which says what it actually did. The stage is free

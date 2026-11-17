@@ -310,6 +310,41 @@ in flight per subject, a cooldown, a per-workspace cap). Triggers, recipes,
 learnings and imported repository guidance are written up in
 [49](49-agent-triggers.md).
 
+## One run per page at a time
+
+Issue #1248. A run about one subject — `doc:<id>`, `mr:<id>`,
+`connector:<id>`, anything in `agent_runs.subject_key` — never runs beside
+another run on the same subject, whichever agents they are. A sentinel and a
+cartographer triggered by one merge both get `doc:<id>`; the second is
+accepted and stays `pending` until the first settles. It is never refused.
+
+- **Where it is enforced.** The processor's guarded claim. Under
+  `withSubjectLock(agentSubjectLockKey(ws, subject))` it counts other
+  `running` rows on the subject and claims only at zero, so two workers cannot
+  both count zero. A refused claim leaves the row `pending` and the job ends.
+- **How the waiter starts.** When a run settles, success or failure, the
+  processor re-enqueues every `pending` run on its subject, oldest first, under
+  a fresh jobId (`AgentProducer.enqueueWake`). One wins the claim and the rest
+  wait again. If that enqueue is lost, `relayPending` re-enqueues the row after
+  10 minutes. There is no new timer.
+- **Which runs have a subject.** Triggers, webhooks, mentions, memos, drift and
+  test-suite runs always had one. A manual run on exactly one page now gets
+  `doc:<id>`. A manual run over several pages, and every scheduled run, stays
+  unscoped.
+- **Unscoped runs keep the per-agent lock.** A manual start and the schedule
+  sweeper count only this agent's unscoped runs (`subject_key IS NULL`), and a
+  manual page run counts only this agent's runs on that page. So a curator pass
+  over the workspace and a page run never block each other, and a second click
+  on the same page and agent still answers 409 `in-flight`.
+- **Why a run is waiting.** `AgentRunSummary.queuedBehind` names the run that
+  is `running` on the subject and its agent. It is derived on read from the
+  same rows the claim counts, and it is null when the reader may not see that
+  run. The runs list shows it under a pending row.
+
+Proposals from those runs are limited too. A page has at most one open agent
+merge request; see
+[05](../architecture/05-merge-review.md#one-open-agent-merge-request-per-page).
+
 ## Data model
 
 | Table                       | Notes                                                                                                                                                                                                                                                                          |

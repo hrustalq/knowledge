@@ -2536,6 +2536,7 @@
       "emptyTitle": "No runs yet",
       "emptyBody": "Start one from the Agents tab, or give an agent a schedule.",
       "noSummary": "No summary.",
+      "queuedBehind": "Waiting for {agent} to finish working on the same item.",
       "findings": "no findings | {count} finding | {count} findings",
       "status": {
         "pending": "Pending",

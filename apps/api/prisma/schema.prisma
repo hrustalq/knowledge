@@ -769,6 +769,10 @@ model Project {
   /// the workspace's ai_settings.capture_parent_document_id. No FK: a page
   /// that is deleted or leaves the project is skipped at read time.
   captureParentDocumentId String? @map("capture_parent_document_id") @db.Uuid
+  /// The project's methodology (#1121): a project_blueprints id, live. Null =
+  /// none, which behaves exactly as before. No FK (house style). Read only
+  /// through ProjectsService.scopeOf.
+  blueprintId     String?   @map("blueprint_id") @db.Uuid
   createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
   documents     Document[]
@@ -2098,6 +2102,8 @@ model WorkflowDefinition {
   /// definition the way glossary terms are scoped — the same chain means
   /// different things in two products.
   projectId   String? @map("project_id") @db.Uuid
+  /// Owned by a methodology (#1121): offered only in projects linked to it. Project id is then null.
+  blueprintId String? @map("blueprint_id") @db.Uuid
 
   name        String
   description String?
@@ -2122,6 +2128,7 @@ model WorkflowDefinition {
 
   @@unique([workspaceId, name])
   @@index([workspaceId, projectId])
+  @@index([workspaceId, blueprintId])
   @@map("workflow_definitions")
 }
 
@@ -3240,6 +3247,8 @@ model PageTemplate {
   workspaceId    String    @map("workspace_id") @db.Uuid
   /// Null = offered in every project of the workspace (WorkflowDefinition precedent).
   projectId      String?   @map("project_id") @db.Uuid
+  /// Owned by a methodology (#1121): offered only in projects linked to it. Project id is then null.
+  blueprintId    String?   @map("blueprint_id") @db.Uuid
   /// BUILT_IN_TEMPLATE_KEYS value when this row overrides a built-in; null for a custom template.
   builtInKey     String?   @map("built_in_key")
   name           String
@@ -3265,6 +3274,7 @@ model PageTemplate {
   // project ids are distinct to a unique index, and a partial one is not
   // expressible in Prisma.
   @@index([workspaceId, projectId])
+  @@index([workspaceId, blueprintId])
   @@index([workspaceId, builtInKey])
   @@map("page_templates")
 }

@@ -38,6 +38,7 @@ import { canSeeProject, visibilityWhere, type AccessScope } from '../permissions
 import { BUILT_IN_TEMPLATES, type BuiltInTemplate } from './built-in/index.js';
 import { parseStoredTemplateSource, parseTemplateSource, TemplateSourceError, type ParsedTemplateSource } from './template-source.js';
 import { TEMPLATE_MAX_VALUE_CHARS, TEMPLATES_MAX_PER_WORKSPACE } from './templates.constants.js';
+import { projectScope, scopeWhere, shadowByScope } from '../projects/methodology-scope.js';
 
 /** A template pinned to one version, parsed — what rendering and provenance need. */
 export interface ResolvedTemplate {
@@ -146,7 +147,9 @@ export class TemplatesService {
   /**
    * The gallery: rows (project ones first, then workspace-wide), then the
    * built-ins in their fixed order with any override applied. A project
-   * filter returns workspace-wide rows plus that project's. Archived rows
+   * filter returns workspace-wide rows plus that project's and its
+   * methodology's (`scopeWhere`, #1121); without one, a methodology's rows
+   * are left out. Archived rows
    * and hidden built-ins only with `includeArchived` — the settings page needs
    * them to bring one back.
    */
@@ -155,14 +158,13 @@ export class TemplatesService {
     const rows: RowWithCount[] = await this.prisma.pageTemplate.findMany({
       where: {
         workspaceId: query.workspaceId,
-        ...(query.projectId ? { OR: [{ projectId: query.projectId }, { projectId: null }] } : {}),
+        ...scopeWhere(query.projectId ? await projectScope(this.prisma, query.projectId) : null),
       },
       include: { _count: { select: { versions: true } } },
       orderBy: [{ name: 'asc' }],
     });
 
-    const custom = rows
-      .filter((row) => !row.builtInKey && (query.includeArchived || !row.archivedAt))
+    const custom = shadowByScope(rows.filter((row) => !row.builtInKey && (query.includeArchived || !row.archivedAt)))
       .map((row) => this.customSummary(row))
       .sort((a, b) => Number(b.scope === 'project') - Number(a.scope === 'project'));
 

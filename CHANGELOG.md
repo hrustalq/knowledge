@@ -15,6 +15,14 @@ in the pull request that introduces them — see
 
 ## [Unreleased]
 
+### Added
+
+- The Telegram bot now shows its commands: typing `/` (or tapping the menu button) lists them with a one-line
+  description, in Russian or English to match the person's Telegram app, otherwise in the bot's language. A private
+  chat lists `/new`, `/unlink`, `/capture`, `/forget` and `/help`; a group lists `/ask`, `/new`, `/capture`, `/forget`
+  and `/help`, and group admins also see `/bind` and `/unbind`. Before, the commands were only discoverable through
+  `/help`. (#1223)
+
 ### Changed
 
 - `knowledge_context` (and `POST /v1/context`) now answers within a larger token budget: 1200 by default, clamped to
@@ -160,6 +168,8 @@ in the pull request that introduces them — see
 - Signed image URLs use a key derived from `SETTINGS_ENCRYPTION_KEY`. Without that key, each API process signs with
   its own random key: after a restart, or across several API replicas, a cached published-site render shows broken
   external images until the page is re-rendered. No new env var, no migration. (#1146)
+- Press **Test** on each Telegram bot in Settings → Chat after deploying, so a bot saved before this release
+  registers its command menu. Bots saved or re-enabled later register it on their own. (#1223)
 
 ## [0.56.0] — 2026-11-16
 

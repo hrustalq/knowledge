@@ -1,5 +1,8 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
+import { Logger } from '@nestjs/common';
+import { SUPPORTED_LOCALES, type Locale } from '@knowledge/contracts';
 import { CITE_MARKER_RE } from '../../assistant/citations.js';
+import { t } from '../../i18n/t.js';
 import {
   ChatPlatformError,
   type ChatAdapter,
@@ -28,6 +31,19 @@ const ANSWER_HEADROOM = 200;
 const CALL_TIMEOUT_MS = 15_000;
 /** The header Telegram echoes `secret_token` in on every delivery. */
 const SECRET_HEADER = 'x-telegram-bot-api-secret-token';
+
+/**
+ * What Telegram lists when a person types `/` (#1223), by `BotCommandScope`.
+ * Every name must be a command `ChatAnswersService.dispatch` handles, and every
+ * command it handles is listed somewhere (`start` aside: Telegram sends it on
+ * its own) — `chat-telegram.spec.ts` holds the two together. `bind`/`unbind`
+ * need a workspace admin, so only group admins see them.
+ */
+export const TELEGRAM_COMMANDS = {
+  all_private_chats: ['new', 'unlink', 'capture', 'forget', 'help'],
+  all_group_chats: ['ask', 'new', 'capture', 'forget', 'help'],
+  all_chat_administrators: ['ask', 'new', 'capture', 'forget', 'bind', 'unbind', 'help'],
+} as const;
 
 /** The SHA-256 a stored inbound secret is compared through. */
 export function hashInboundSecret(secret: string): string {
@@ -159,6 +175,7 @@ export class TelegramAdapter implements ChatAdapter {
   readonly kind = 'telegram' as const;
   readonly limits = { maxChars: MAX_CHARS, maxActionBytes: MAX_ACTION_BYTES };
   readonly inbound = 'webhook' as const;
+  private readonly logger = new Logger(TelegramAdapter.name);
 
   constructor(private readonly apiBase: string) {}
 
@@ -320,6 +337,11 @@ export class TelegramAdapter implements ChatAdapter {
   }
 
   async registerWebhook(ctx: ChatAdapterContext, url: string, secret: string): Promise<void> {
+    await this.registerCommands(ctx).catch((err: unknown) =>
+      // The menu is a convenience: the bot answers without it, so a refusal
+      // must not read as a deaf webhook.
+      this.logger.warn({ msg: 'telegram setMyCommands refused', error: err instanceof Error ? err.message : String(err) }),
+    );
     await this.call(ctx, 'setWebhook', {
       url,
       secret_token: secret,
@@ -330,6 +352,26 @@ export class TelegramAdapter implements ChatAdapter {
       allowed_updates: ['message', 'edited_message', 'callback_query', 'message_reaction'],
       drop_pending_updates: true,
     });
+  }
+
+  /**
+   * The `/` menu and autocomplete (#1223), per chat kind, in every language we
+   * speak plus a fallback in the bot's own. Re-sent on every registration, so
+   * Test in settings refreshes it for a bot saved before the menu existed.
+   */
+  private async registerCommands(ctx: ChatAdapterContext): Promise<void> {
+    const languages: (Locale | null)[] = [...SUPPORTED_LOCALES, null];
+    await Promise.all(
+      Object.entries(TELEGRAM_COMMANDS).flatMap(([scope, names]) =>
+        languages.map((lang) =>
+          this.call(ctx, 'setMyCommands', {
+            scope: { type: scope },
+            commands: names.map((command) => ({ command, description: t(`chat.commands.${command}`, undefined, lang ?? ctx.locale ?? 'en') })),
+            ...(lang ? { language_code: lang } : {}),
+          }),
+        ),
+      ),
+    );
   }
 
   /**

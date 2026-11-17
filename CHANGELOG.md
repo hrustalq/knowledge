@@ -28,6 +28,11 @@ in the pull request that introduces them — see
   maintainer. (#1121)
 - Scaffolding a project from a methodology (a blueprint that declares levels, workflows or agents) links the new
   project to it instead of copying its conventions. (#1125)
+- Pages in a project that follows a methodology carry their **level**: the level whose templates include the one
+  the page was made from. It is derived on read and never stored, so switching the project's methodology re-levels
+  its pages without touching them. The level appears on the page (`GET /v1/documents/:id`) and on search results.
+  `GET /v1/projects/:id/levels` lists the project's levels in order with the pages at each. A search may name a
+  `level` to rank pages at that level higher; nothing is filtered out. (#1126)
 
 ### Changed
 

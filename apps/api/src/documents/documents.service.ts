@@ -67,7 +67,8 @@ import {
 import { ProvenanceService } from '../feedback/provenance.service.js';
 import { expiryFor, VerificationPolicyService } from '../verification/verification-policy.service.js';
 import { TemplatesService } from '../templates/templates.service.js';
-import { t } from '../i18n/t.js';
+import { currentLocale, t } from '../i18n/t.js';
+import { pageLevel, projectLevels } from '../projects/methodology-scope.js';
 import { ApiSpecsService } from '../api-specs/api-specs.service.js';
 import { ApiFixturesService } from '../api-specs/api-fixtures.service.js';
 import {
@@ -972,12 +973,15 @@ export class DocumentsService {
     const headId = document.branches.find((b) => b.name === document.defaultBranch)?.headRevisionId ?? null;
     // An open report flags the page (docs/features/38, phase 3) — the same
     // predicate ProvenanceService applies to a cited source.
-    const [issues, settings, sources] = await Promise.all([
+    const [issues, settings, sources, levels] = await Promise.all([
       this.provenance.openIssueCounts([documentId]),
       this.policy.effectiveFor(document.workspaceId, document.projectId),
       sourceSyncOf(this.prisma, [documentId]),
+      projectLevels(this.prisma, [document.projectId]),
     ]);
     const source = sources.get(documentId);
+    // Derived (#1126), and inside the head the ETag is computed over, so a methodology switch is not a 304.
+    const level = pageLevel(document.templateRef, levels.get(document.projectId), currentLocale());
     return {
       document: {
         documentId: document.id,
@@ -996,6 +1000,7 @@ export class DocumentsService {
         // The stamp, the flag and their reading against the head and the
         // clock (docs/features/38 + 39). Writes live in VerificationService.
         ...this.trustFields(document, headId, issues.get(documentId) ?? 0, settings.inactiveAfterDays, source),
+        ...(level ? { level } : {}),
       },
       revision: toRevisionInfo(revision),
     };

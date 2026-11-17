@@ -5,6 +5,7 @@ import {
   type BlueprintLevel,
   type Locale,
   type MethodologyPreviewResponse,
+  type ProjectLevelsResponse,
   type ProjectMethodologyResponse,
 } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -15,7 +16,7 @@ import { visibilityWhere, type AccessScope } from '../permissions/access-scope.j
 import { LISTED_PAGE } from '../common/listed-page.js';
 import type { Principal } from '../auth/principal.js';
 import { currentLocale, t } from '../i18n/t.js';
-import { projectScope } from './methodology-scope.js';
+import { projectLevels, projectScope } from './methodology-scope.js';
 import { missingSections } from './methodology-preview.js';
 import { ProjectScaffoldService } from './project-scaffold.service.js';
 
@@ -43,6 +44,24 @@ export class ProjectMethodologyService {
     return {
       projectId,
       methodology: { key: entry.key, name: b.name, icon: b.icon ?? null, builtIn: entry.builtIn, enabled: entry.enabled, levels: b.levels ?? [] },
+    };
+  }
+
+  /** The project's levels in order, each with the pages the caller can see at it (#1126). */
+  async levels(projectId: string, principal: Principal, locale: Locale = currentLocale()): Promise<ProjectLevelsResponse> {
+    const { workspaceId } = await this.requireProject(projectId);
+    const levels = (await projectLevels(this.prisma, [projectId])).get(projectId) ?? [];
+    if (!levels.length) return { projectId, levels: [] };
+    const counts = await this.levelCounts(projectId, await this.permissions.scopeFor(principal, workspaceId), levels, locale);
+    return {
+      projectId,
+      levels: levels.map((l, i) => ({
+        key: l.key,
+        name: counts[i]!.name,
+        description: blueprintText(l.description, locale) || null,
+        agentKey: l.agentKey ?? null,
+        pages: counts[i]!.pages,
+      })),
     };
   }
 

@@ -1,4 +1,6 @@
+import { blueprintText, isBuiltInBlueprintKey, levelOf, type Blueprint, type BlueprintLevel, type Locale, type PageLevel } from '@knowledge/contracts';
 import type { PrismaService } from '../prisma/prisma.service.js';
+import { BUILT_IN_BLUEPRINTS } from '../blueprints/built-in/index.js';
 
 /**
  * What a project sees through its methodology (#1121).
@@ -52,4 +54,40 @@ export function shadowByScope<T extends { name: string; projectId: string | null
     if (row.projectId) return true;
     return row.blueprintId ? !project.has(name) : !owned.has(name);
   });
+}
+
+/**
+ * Each project's methodology levels (#1126), in order; a project without a
+ * methodology maps to none. One read for any number of projects: what a
+ * search or a page read resolves once per request. A built-in override with
+ * no version of its own serves the code's levels, as `BlueprintsService` does.
+ */
+export async function projectLevels(prisma: PrismaService, projectIds: readonly string[]): Promise<Map<string, BlueprintLevel[]>> {
+  const out = new Map<string, BlueprintLevel[]>();
+  const ids = [...new Set(projectIds)];
+  if (!ids.length) return out;
+  const projects = await prisma.project.findMany({ where: { id: { in: ids }, blueprintId: { not: null } }, select: { id: true, blueprintId: true } });
+  if (!projects.length) return out;
+  const rows = await prisma.projectBlueprint.findMany({
+    where: { id: { in: [...new Set(projects.map((p) => p.blueprintId!))] } },
+    select: { id: true, builtInKey: true, versions: { orderBy: { version: 'desc' }, take: 1, select: { blueprint: true } } },
+  });
+  const levels = new Map(
+    rows.map((r) => {
+      const own = r.versions[0]?.blueprint as unknown as Blueprint | undefined;
+      const builtIn = r.builtInKey && isBuiltInBlueprintKey(r.builtInKey) ? BUILT_IN_BLUEPRINTS[r.builtInKey] : undefined;
+      return [r.id, (own ?? builtIn)?.levels ?? []];
+    }),
+  );
+  for (const p of projects) {
+    const found = levels.get(p.blueprintId!);
+    if (found?.length) out.set(p.id, found);
+  }
+  return out;
+}
+
+/** A page's level as responses carry it, or undefined. */
+export function pageLevel(templateRef: string | null | undefined, levels: readonly BlueprintLevel[] | undefined, locale: Locale): PageLevel | undefined {
+  const level = levelOf(templateRef, levels);
+  return level ? { key: level.key, name: blueprintText(level.name, locale) } : undefined;
 }

@@ -962,6 +962,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/projects/{id}/levels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The project's methodology levels in order (#1121), each with how many pages the caller can see at it. A page's level is derived from the template it was made from, never stored. Empty when the project has no methodology. */
+        get: operations["ProjectsController_levels"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/projects/{id}/methodology/preview": {
         parameters: {
             query?: never;
@@ -9399,6 +9416,8 @@ export interface components {
             groupBy?: "page";
             /** @description Read as of a point in time (#81): an ISO date, `rev:<revisionId>` (that revision’s finalize time) or `tag:<name>` (a release tag). A future date reads as now. Omitted: the current graph. */
             asOf?: string;
+            /** @description Boost pages at this level of their project's methodology (#1121), a level key as GET /v1/projects/{id}/levels lists it. A prior, never a filter: pages elsewhere stay in the results. */
+            level?: string;
             /** @description What was believed at this ISO date (system time): facts retracted later still show, facts written later do not. Omitted: now. */
             knownAt?: string;
             expandGraph?: components["schemas"]["ExpandGraphDto"];
@@ -14292,6 +14311,7 @@ export interface components {
             restricted?: boolean;
             draftOwnerId?: string | null;
             hidden?: boolean;
+            level?: components["schemas"]["PageLevel"];
         };
         DocumentThread: {
             threadId: string;
@@ -14346,6 +14366,7 @@ export interface components {
             restricted?: boolean;
             draftOwnerId?: string | null;
             hidden?: boolean;
+            level?: components["schemas"]["PageLevel"];
             children: components["schemas"]["DocumentTreeNode"][];
             childCount: number;
         };
@@ -16032,6 +16053,10 @@ export interface components {
             lastHumanViewAt: string | null;
             collectingSince: string | null;
         };
+        PageLevel: {
+            key: string;
+            name: string;
+        };
         PlaudAuthorizeResponse: {
             url: string;
         };
@@ -16186,6 +16211,16 @@ export interface components {
         };
         ProjectGitResponse: {
             url: string | null;
+        };
+        ProjectLevelsResponse: {
+            projectId: string;
+            levels: {
+                key: string;
+                name: string;
+                description: string | null;
+                agentKey: string | null;
+                pages: number;
+            }[];
         };
         ProjectMethodologyResponse: {
             projectId: string;
@@ -17001,6 +17036,7 @@ export interface components {
             headingPath?: string[];
             entities?: components["schemas"]["EntityRef"][];
             layer?: components["schemas"]["EntityLayer"];
+            level?: components["schemas"]["PageLevel"];
             communityPath?: string[];
             validFrom?: string | null;
             validTo?: string | null;
@@ -21258,6 +21294,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProjectMethodologyResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ProjectsController_levels: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectLevelsResponse"];
                 };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */

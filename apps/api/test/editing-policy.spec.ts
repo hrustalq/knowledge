@@ -59,5 +59,6 @@ describe('the Proposals list (#958)', () => {
     await svc.listWorkspace({ workspaceId: WS, provenance: 'not-manual' }, scope);
     expect(prisma.mergeRequest.findMany.mock.calls[0]![0].where.provenance).toEqual({ not: 'manual' });
     expect(prisma.mergeRequest.groupBy.mock.calls[0]![0].where.provenance).toEqual({ not: 'manual' });
-  });
+    // The dynamic import loads the merge-request module graph: ~2 s alone, past 5 s under the full parallel run.
+  }, 15_000);
 });

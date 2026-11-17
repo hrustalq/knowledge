@@ -58,6 +58,18 @@ export function communityPrior(
 }
 
 /**
+ * The level prior (#1126): a page at the level a search asks for scores this
+ * much more. Off unless a search names a level (a chat turn at a level does,
+ * #1128); a page in a project without that level is ×1, so the ranking with no
+ * level is exactly the one before. A boost, never a filter.
+ */
+export const LEVEL_PRIOR_WEIGHT = 0.25;
+
+export function levelBoost(pageLevel: string | undefined, wanted: string | undefined): number {
+  return wanted && pageLevel === wanted ? 1 + LEVEL_PRIOR_WEIGHT : 1;
+}
+
+/**
  * The relevance floor (#401): the vector hits worth fusing — cosine at least
  * `minCosine` and at least `minCosineShare` of the leg's best. Applied before
  * fusion, so a chunk weak in both legs is gone and one weak in one leg keeps
@@ -198,6 +210,9 @@ export interface SearchPool {
   pages: Map<string, { status: SourceVerificationState; inactive: boolean; archived: boolean }>;
   /** The readable communities scored against the query (#475); empty when none, or under `asOf`. */
   communities: PriorCommunity[];
+  /** The level the search asked for (#1126), and each page's level key; absent = no level prior. */
+  level?: string;
+  levels?: Map<string, string>;
 }
 
 /**
@@ -215,7 +230,8 @@ export function rankPool(pool: SearchPool, knobs: SearchKnobs): string[] {
   const weighted = fused.map((h) => {
     const page = pool.pages.get(h.documentId)!;
     const weight = pool.trustOn ? trustWeight(page.status, page.inactive, knobs.trustWeights) : 1;
-    return { documentId: h.documentId, score: scoreOf(h, weight, prior.get(h.documentId) ?? 1) };
+    const boost = (prior.get(h.documentId) ?? 1) * levelBoost(pool.levels?.get(h.documentId), pool.level);
+    return { documentId: h.documentId, score: scoreOf(h, weight, boost) };
   });
   weighted.sort((a, b) => b.score - a.score);
   return weighted.slice(0, pool.k).map((w) => w.documentId);

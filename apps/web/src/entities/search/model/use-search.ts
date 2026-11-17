@@ -45,6 +45,8 @@ export interface SearchHit {
   snippet: SearchSnippetPart[]
   trust?: SourceVerificationState
   badges: { key: string; label: string }[]
+  /** The page's methodology level name (#1266). */
+  level?: string
   /** #81: when this text stopped being the page's content, on an `asOf` search. */
   supersededAt?: string
 }

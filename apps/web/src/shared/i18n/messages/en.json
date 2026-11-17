@@ -321,7 +321,9 @@
       "copyFailed": "Couldn't copy the link — the browser blocked clipboard access",
       "changed": "The linked passage has changed since it was linked, and this page no longer has it.",
       "openPinned": "Read it as linked"
-    }
+    },
+    "level": "Level: {name}",
+    "levelLabel": "Level"
   },
   "settings": {
     "generalHint": "Workspace name and deletion",
@@ -2194,13 +2196,18 @@
       "default": "Default",
       "defaultHint": "Follow the Ask/Agent toggle.",
       "auto": "Auto",
-      "autoHint": "Let the router choose."
+      "autoHint": "Let the router choose.",
+      "label": "Agent: {name}",
+      "fromLevel": "{name} · from the level",
+      "levelHint": "The level's agent: {name}."
     },
     "level": {
       "title": "Level",
       "hint": "Which level of the project's methodology this chat works at. It picks the default agent and adds that level's guidance; the Ask/Agent toggle still decides what it may do.",
       "none": "No level",
-      "noneHint": "Answer without a level's agent or guidance."
+      "noneHint": "Answer without a level's agent or guidance.",
+      "label": "Level: {name}",
+      "agent": "Agent: {name}"
     },
     "agentModeExplainer": "Ask mode only reads. Switching lets the assistant write — a new page goes live immediately, a change to an existing page opens a merge request for you to review.",
     "switchedToAgent": "Switched to Agent mode",
@@ -2335,7 +2342,7 @@
       "custom": "custom",
       "methodology": "Methodology",
       "minTier": "Needs {tier}",
-      "fromMethodology": "This agent comes from a methodology, which sets its name, instructions and tools. Change them in the methodology. Here you can pin a model or switch it off.",
+      "fromMethodology": "This agent comes from a methodology: its name, instructions and tools change only when that methodology is saved again. Settings → Blueprints shows what it declares. Here you can pin a model or switch it off.",
       "overridden": "no overrides | {count} override | {count} overrides",
       "routed": "workspace {purpose} route",
       "key": "Key",
@@ -8796,6 +8803,14 @@
     "kind": {
       "builtIn": "Built-in",
       "saved": "Saved"
+    },
+    "method": {
+      "levels": "Levels",
+      "agents": "Agents",
+      "workflows": "Workflows",
+      "guidance": "Guidance for the chat at this level",
+      "noTemplates": "No templates",
+      "tools": "No tools | {n} tool | {n} tools"
     }
   },
   "projectSettings": {
@@ -8823,7 +8838,12 @@
       "linked": "The project now follows {name}.",
       "unlinkTitle": "Unlink {name}?",
       "unlinkBody": "The project keeps every page. It stops reading {name}'s templates, workflows, styleguide and glossary.",
-      "unlinked": "The project no longer follows {name}."
+      "unlinked": "The project no longer follows {name}.",
+      "switchEffect": "The project reads {to}'s templates, workflows, styleguide, glossary and agents instead of {from}'s, and its pages take {to}'s levels.",
+      "levelShift": "Pages at a level: {before} today, {after} after the switch.",
+      "sectionsHint": "Ticked sections are created as new pages. Untick any the project does not need.",
+      "switchAdding": "Switch | Switch and add {n} section | Switch and add {n} sections",
+      "linkAdding": "Link | Link and add {n} section | Link and add {n} sections"
     },
     "title": "Policies",
     "readOnly": "Read-only",

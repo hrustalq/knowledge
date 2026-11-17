@@ -14,12 +14,13 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
-import { Eye, EyeOff, FolderTree, LayoutTemplate, Power, PowerOff, RotateCcw, Search, Trash2, WandSparkles } from 'lucide-vue-next'
-import { blueprintText, SUPPORTED_LOCALES, type BlueprintEntry, type BuiltInBlueprintKey, type Locale } from '@knowledge/contracts'
+import { Bot, Eye, EyeOff, FolderTree, LayoutTemplate, Workflow, Power, PowerOff, RotateCcw, Search, Trash2, WandSparkles } from 'lucide-vue-next'
+import { blueprintText, isMethodology, SUPPORTED_LOCALES, type BlueprintEntry, type BuiltInBlueprintKey, type Locale } from '@knowledge/contracts'
 import { api } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
 import { errorMessage } from '@/shared/api/errors'
 import { useAuthStore } from '@/stores/auth'
+import { useTemplatesStore } from '@/entities/template'
 import { Badge } from '@knowledge/ui/badge'
 import { Button } from '@knowledge/ui/button'
 import { Input } from '@knowledge/ui/input'
@@ -66,6 +67,20 @@ const routeKey = computed(() => (typeof route.params.key === 'string' && route.p
 const selected = computed(() => (routeKey.value ? (entries.value?.find((e) => e.key === routeKey.value) ?? null) : null))
 const conventions = computed(() => selected.value?.blueprint.conventions ?? {})
 const pages = computed(() => countPages(selected.value?.blueprint.tree ?? []))
+
+// A methodology's own parts (#1266): its levels, agents and workflows, read-only like the rest of the pane.
+const method = computed(() => (selected.value && isMethodology(selected.value.blueprint) ? selected.value.blueprint : null))
+const templates = useTemplatesStore()
+watch(method, (m) => {
+  if (m?.levels?.length) void templates.ensureLoaded()
+})
+const templatesOf = (refs: readonly string[]) => refs.map((ref) => templates.byRef(ref)?.name ?? ref).join(' · ')
+/** A level names one of the methodology's agents or a built-in one, which keeps its key. */
+const agentOf = (key: string) => {
+  const agent = method.value?.agents?.find((a) => a.key === key)
+  const name = agent?.name ?? key
+  return agent?.minTier ? `${name} · ${t('ai.agents.minTier', { tier: t(`ai.models.tier.${agent.minTier}`) })}` : name
+}
 
 const busy = ref(false)
 async function act(run: () => Promise<unknown>, done: string) {
@@ -176,7 +191,7 @@ watch(
       </div>
     </div>
 
-    <div ref="detailEl" data-kn-pane="3" class="flex min-h-0 min-w-0 flex-1 flex-col px-4 py-6 lg:px-8">
+    <div ref="detailEl" data-kn-pane="3" class="@container flex min-h-0 min-w-0 flex-1 flex-col px-4 py-6 lg:px-8">
       <div v-if="loadError" class="max-w-md rounded-xl border p-4 text-sm" role="alert">
         <p>{{ t('scaffold.start.loadFailed') }}</p>
         <p class="text-muted-foreground mt-1 text-xs">{{ loadError }}</p>
@@ -244,7 +259,8 @@ watch(
           </p>
         </header>
 
-        <div class="grid gap-8 xl:grid-cols-[minmax(0,1fr)_18rem]">
+        <!-- Split by the pane's width, not the viewport's: three rails sit beside it (#1266). -->
+        <div class="grid gap-8 @3xl:grid-cols-[minmax(0,1fr)_18rem]">
           <section class="min-w-0" aria-labelledby="kn-bp-tree">
             <h3 id="kn-bp-tree" class="text-muted-foreground mb-2 text-xs font-medium">{{ t('scaffold.shape.outline') }}</h3>
             <div class="rounded-md border px-4 py-3">
@@ -273,6 +289,69 @@ watch(
               <dd v-else class="text-xs leading-relaxed">{{ conventions.glossary.map((g) => g.term).join(' · ') }}</dd>
             </div>
           </dl>
+        </div>
+
+        <div v-if="method" class="mt-8 space-y-8">
+          <section v-if="method.levels?.length" aria-labelledby="kn-bp-levels">
+            <h3 id="kn-bp-levels" class="text-muted-foreground mb-2 text-xs font-medium">{{ t('blueprints.method.levels') }}</h3>
+            <ol class="divide-y rounded-md border">
+              <li v-for="level in method.levels" :key="level.key" class="space-y-1 px-4 py-3">
+                <p class="text-sm">
+                  <span class="font-medium">{{ blueprintText(level.name, lang) }}</span>
+                  <span v-if="blueprintText(level.description, lang)" class="text-muted-foreground"> — {{ blueprintText(level.description, lang) }}</span>
+                </p>
+                <p class="text-muted-foreground flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                  <span class="inline-flex min-w-0 items-center gap-1">
+                    <LayoutTemplate class="size-3 shrink-0" aria-hidden="true" />
+                    <span class="sr-only">{{ t('scaffold.conventions.templates') }}: </span>
+                    {{ level.templateRefs.length ? templatesOf(level.templateRefs) : t('blueprints.method.noTemplates') }}
+                  </span>
+                  <span v-if="level.agentKey" class="inline-flex min-w-0 items-center gap-1">
+                    <Bot class="size-3 shrink-0" aria-hidden="true" />
+                    {{ t('chat.level.agent', { name: agentOf(level.agentKey) }) }}
+                  </span>
+                </p>
+                <details v-if="blueprintText(level.guidance, lang)" class="text-xs">
+                  <summary class="text-muted-foreground hover:text-foreground focus-visible:ring-ring w-fit cursor-pointer rounded-sm outline-none focus-visible:ring-2">
+                    {{ t('blueprints.method.guidance') }}
+                  </summary>
+                  <p class="kn-measure mt-1.5 leading-relaxed whitespace-pre-line">{{ blueprintText(level.guidance, lang) }}</p>
+                </details>
+              </li>
+            </ol>
+          </section>
+
+          <div class="grid gap-8 @3xl:grid-cols-2">
+            <section v-if="method.agents?.length" aria-labelledby="kn-bp-agents">
+              <h3 id="kn-bp-agents" class="text-muted-foreground mb-2 text-xs font-medium">{{ t('blueprints.method.agents') }}</h3>
+              <ul class="divide-y rounded-md border">
+                <li v-for="agent in method.agents" :key="agent.key" class="space-y-0.5 px-4 py-2.5">
+                  <p class="flex flex-wrap items-center gap-2 text-sm">
+                    <Bot class="text-muted-foreground size-3.5 shrink-0" aria-hidden="true" />
+                    <span class="font-medium">{{ agent.name }}</span>
+                    <Badge v-if="agent.minTier" variant="outline" class="font-normal">
+                      {{ t('ai.agents.minTier', { tier: t(`ai.models.tier.${agent.minTier}`) }) }}
+                    </Badge>
+                  </p>
+                  <p v-if="agent.description" class="text-muted-foreground text-xs">{{ agent.description }}</p>
+                  <p class="text-muted-foreground text-xs tabular-nums">{{ t('blueprints.method.tools', { n: agent.tools?.length ?? 0 }, agent.tools?.length ?? 0) }}</p>
+                </li>
+              </ul>
+            </section>
+
+            <section v-if="method.workflows?.length" aria-labelledby="kn-bp-workflows">
+              <h3 id="kn-bp-workflows" class="text-muted-foreground mb-2 text-xs font-medium">{{ t('blueprints.method.workflows') }}</h3>
+              <ul class="divide-y rounded-md border">
+                <li v-for="wf in method.workflows" :key="wf.name" class="space-y-0.5 px-4 py-2.5">
+                  <p class="flex items-center gap-2 text-sm">
+                    <Workflow class="text-muted-foreground size-3.5 shrink-0" aria-hidden="true" />
+                    <span class="font-medium">{{ wf.name }}</span>
+                  </p>
+                  <p v-if="wf.description" class="text-muted-foreground text-xs">{{ wf.description }}</p>
+                </li>
+              </ul>
+            </section>
+          </div>
         </div>
       </template>
     </div>

@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import {
   blueprintText,
   levelOf,
+  ownedAgentKey,
   type BlueprintLevel,
   type Locale,
   type MethodologyPreviewResponse,
@@ -52,6 +53,7 @@ export class ProjectMethodologyService {
     const { workspaceId } = await this.requireProject(projectId);
     const levels = (await projectLevels(this.prisma, [projectId])).get(projectId) ?? [];
     if (!levels.length) return { projectId, levels: [] };
+    const { blueprintId } = await projectScope(this.prisma, projectId);
     const counts = await this.levelCounts(projectId, await this.permissions.scopeFor(principal, workspaceId), levels, locale);
     return {
       projectId,
@@ -60,6 +62,7 @@ export class ProjectMethodologyService {
         name: counts[i]!.name,
         description: blueprintText(l.description, locale) || null,
         agentKey: l.agentKey ?? null,
+        agent: l.agentKey && blueprintId ? ownedAgentKey(l.agentKey, blueprintId) : null,
         pages: counts[i]!.pages,
       })),
     };

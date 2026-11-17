@@ -37,6 +37,18 @@ in the pull request that introduces them — see
   with **Open page** and **Center graph here**. Clicking another page swaps the sheet; Esc or a click on empty canvas
   closes it. Ctrl/⌘-click and middle-click open the page in a new tab. On a phone the sheet rises from the bottom.
   The knowledge-health preview is the same sheet and now shows the page's breadcrumbs from its ancestors. (#1254)
+- Two agent runs no longer work the same page at once. When a sentinel and a cartographer are both started on one
+  page, by a trigger or by hand, the second waits as **pending** and starts as soon as the first finishes. It is not
+  refused. The runs list shows what it is waiting for ("Waiting for Sentinel to finish working on the same item"), and
+  `AgentRunSummary` carries `queuedBehind`. Runs on different pages, and workspace-wide runs such as the curator,
+  atlas and digest, still run side by side. A manual run on a single page no longer waits behind a workspace-wide run
+  of the same agent, and a scheduled run no longer skips its slot because a trigger is running that agent on some page.
+  (#1248)
+- A page holds at most one open merge request opened from an agent finding. Proposing a second finding on that page
+  answers 409 `agent-merge-request-open` with the open merge request's id, and the finding keeps its draft until that
+  one is merged or closed. Before, every finding opened its own merge request, and they collided only at merge. The
+  drift, scribe, memo, report and source-change sweepers skip a held finding and log it. It stays proposable by hand.
+  (#1248)
 
 ## [0.59.0] — 2026-11-17
 

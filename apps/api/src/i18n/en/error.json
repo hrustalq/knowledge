@@ -358,6 +358,7 @@
     "agentNoExecutor": "Agent \"{key}\" has no background executor.",
     "findingNotFound": "Run {runId} has no finding at index {index}",
     "findingAlreadyProposed": "This finding has already been proposed as a merge request.",
+    "agentMergeRequestOpen": "This page already has an open merge request from an agent. Merge or close it first, then propose this finding.",
     "findingInFlight": "This finding is already being proposed.",
     "findingNoDocument": "This finding cites no page to change.",
     "findingOrphan": "An orphan finding is about missing relations, not page content. Use Apply relations instead, or add one in the page's frontmatter.",

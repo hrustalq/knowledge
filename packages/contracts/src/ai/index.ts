@@ -3122,6 +3122,12 @@ export interface AgentRunSummary {
   summary: string | null;
   findings: AgentFinding[];
   findingCount: number;
+  /**
+   * Why a `pending` run has not started (#1248): another run — of any agent —
+   * is `running` on the same subject, and this one starts when it settles.
+   * Null for any other run, and when the reader may not see the blocker.
+   */
+  queuedBehind: { runId: string; agentName: string } | null;
   error: string | null;
   /**
    * What the run is doing now, free text from the executor (docs/features/29).

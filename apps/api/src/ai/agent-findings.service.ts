@@ -31,6 +31,7 @@ import { ConflictsService } from '../conflicts/conflicts.service.js';
 import type { Principal } from '../auth/principal.js';
 import { wrapUntrusted } from '../common/untrusted.js';
 import { PermissionService } from '../permissions/permission.service.js';
+import { lockSubject } from '../common/subject-lock.js';
 
 /** How much of a cited page the drafter is shown. The workflow executor's cap. */
 const MAX_DOC_CHARS = 24_000;
@@ -174,6 +175,8 @@ export class AgentFindingsService {
     if (finding.kind === 'orphan') {
       throw new BadRequestException(t('error.ai.findingOrphan'));
     }
+    // Before the drafter is paid for; `onlyAgentProposal` asks again under the lock.
+    await this.assertNoAgentProposal(documentId);
 
     // Claim the slot before the model is called, in one statement Postgres
     // settles: two presses race here, and the loser sees the 409 above on its
@@ -191,7 +194,7 @@ export class AgentFindingsService {
       // across it. So is the claim — it guards the LLM window, which is the
       // part that actually takes time, and a claim invisible until commit
       // would guard almost nothing.
-      const mergeRequestId = await openDraftMergeRequest(this, {
+      const mergeRequestId = await this.onlyAgentProposal(documentId, () => openDraftMergeRequest(this, {
         documentId,
         branch,
         title,
@@ -207,7 +210,7 @@ export class AgentFindingsService {
         userId: principal.userId,
         provenance: 'agent',
         onCreated: (id) => this.writeBack(runId, index, id),
-      });
+      }));
       // #81: a finding that reported a conflict links the conflict to its fix,
       // so merging the fix resolves it. Non-fatal: the proposal stands.
       if (finding.conflictId) {
@@ -527,9 +530,10 @@ export class AgentFindingsService {
     }
     // `propose`'s rule (#1090): asked now, and the refusal carries no title.
     await this.requireEdit(principal, workspaceId, documentId);
+    await this.assertNoAgentProposal(documentId);
 
     return this.underClaim(runId, index, 'proposal', async () => {
-      const result = await this.relations.propose(
+      const result = await this.onlyAgentProposal(documentId, () => this.relations.propose(
         documentId,
         {
           add: finding.relations,
@@ -541,7 +545,7 @@ export class AgentFindingsService {
         },
         principal,
         { provenance: 'agent' },
-      );
+      ));
 
       // The page already declared everything the finding proposed — someone got
       // there first. Nothing was opened, so the claim must come off again or the
@@ -692,6 +696,46 @@ export class AgentFindingsService {
       .trim();
     if (!markdown) throw new BadRequestException(t('error.ai.emptyPage'));
     return markdown;
+  }
+
+  /**
+   * One open agent merge request per page (#1248). A second finding on the
+   * same page is **held**, not stacked onto the first one's branch: both were
+   * drafted against the page's head, so a second revision on that branch would
+   * silently replace the first proposal. The finding keeps its draft, and
+   * Propose works again once the open one is merged or closed. A person's own
+   * merge request on the page does not hold anything.
+   */
+  private async assertNoAgentProposal(documentId: string): Promise<void> {
+    const open = await this.prisma.mergeRequest.findFirst({
+      where: { documentId, status: 'open', provenance: 'agent' },
+      select: { id: true },
+    });
+    if (open) {
+      throw new ConflictException({
+        statusCode: 409,
+        message: t('error.ai.agentMergeRequestOpen'),
+        reason: 'agent-merge-request-open',
+        mergeRequestId: open.id,
+      });
+    }
+  }
+
+  /**
+   * `open` in one transaction that first locks the page's agent proposals and
+   * re-checks `assertNoAgentProposal`, so two findings proposed at once cannot
+   * both see none open. The draft's own transaction joins this one; the
+   * options are the ones `openDraftMergeRequest` sets for itself.
+   */
+  private onlyAgentProposal<T>(documentId: string, open: () => Promise<T>): Promise<T> {
+    return this.prisma.withTransaction(
+      async () => {
+        await lockSubject(this.prisma, `agent-proposal:${documentId}`);
+        await this.assertNoAgentProposal(documentId);
+        return open();
+      },
+      { timeout: 30_000, maxWait: 10_000 },
+    );
   }
 
   /** Edit on the page a verb is about to change, as the route that changes it directly asks. */

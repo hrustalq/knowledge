@@ -12031,6 +12031,10 @@ export interface components {
             summary: string | null;
             findings: components["schemas"]["AgentFinding"][];
             findingCount: number;
+            queuedBehind: {
+                runId: string;
+                agentName: string;
+            } | null;
             error: string | null;
             stage: string | null;
             progress: number | null;

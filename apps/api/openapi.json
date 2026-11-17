@@ -54993,6 +54993,26 @@
           "findingCount": {
             "type": "number"
           },
+          "queuedBehind": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "runId": {
+                    "type": "string"
+                  },
+                  "agentName": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "runId",
+                  "agentName"
+                ]
+              }
+            ],
+            "nullable": true
+          },
           "error": {
             "type": "string",
             "nullable": true
@@ -55037,6 +55057,7 @@
           "summary",
           "findings",
           "findingCount",
+          "queuedBehind",
           "error",
           "stage",
           "progress",

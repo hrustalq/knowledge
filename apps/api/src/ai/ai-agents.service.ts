@@ -403,12 +403,20 @@ export class AgentRunsService {
     // enough for the month's quota to be spent by something else.
     await this.usage.assertWithinBudget(workspaceId, principal.userId);
 
+    // A run about one page carries that page as its subject (#1248), the key
+    // the trigger guard already reads, so the processor runs it after any other
+    // agent's run on the same page instead of beside it.
+    // ponytail: a multi-page run stays unscoped (per-agent lock only); give it one subject row per page if overlapping page sets collide in practice.
+    const subjectKey = documentIds?.length === 1 ? `doc:${documentIds[0]}` : null;
+
     // Back-pressure, the ConnectorScheduleSweeper rule: one run per agent at a
     // time, so an impatient second click queues nothing. Count and insert under
-    // one lock (#815), or two clicks both count zero.
+    // one lock (#815), or two clicks both count zero. A page run counts only
+    // this agent's runs on that page, and an unscoped run only unscoped ones:
+    // a workspace-wide pass never blocks a page run, nor the reverse (#1248).
     const run = await withSubjectLock(this.prisma, agentRunLockKey(workspaceId, agentKey), async () => {
       const inFlight = await this.prisma.agentRun.count({
-        where: { workspaceId, agentKey, status: { in: ['pending', 'running'] } },
+        where: { workspaceId, agentKey, subjectKey, status: { in: ['pending', 'running'] } },
       });
       if (inFlight > 0) {
         throw new ConflictException({
@@ -425,6 +433,7 @@ export class AgentRunsService {
           agentKey,
           agentId: row?.id ?? null,
           trigger: 'manual',
+          subjectKey,
           createdBy: principal.userId,
           locale: principal.locale,
           input:
@@ -439,7 +448,8 @@ export class AgentRunsService {
       });
     });
     await this.producer.enqueue(run.id);
-    return toRunSummary(run, agent.name);
+    const behind = await this.blockers(workspaceId, [run], principal);
+    return toRunSummary(run, agent.name, behind);
   }
 
   /**
@@ -524,8 +534,9 @@ export class AgentRunsService {
     }
 
     const names = new Map((await this.registry.list(workspaceId)).map((a) => [a.key, a.name]));
+    const behind = await this.blockers(workspaceId, page, principal, names);
     return {
-      runs: page.map((run) => toRunSummary(run, names.get(run.agentKey) ?? run.agentKey)),
+      runs: page.map((run) => toRunSummary(run, names.get(run.agentKey) ?? run.agentKey, behind)),
       nextCursor: rows.length > RUNS_PAGE ? page[page.length - 1].id : null,
       counts,
     };
@@ -537,11 +548,37 @@ export class AgentRunsService {
       throw new NotFoundException(t('error.ai.agentRunNotFound', { id }));
     }
     const agent = await this.registry.resolve(workspaceId, run.agentKey).catch(() => null);
-    return toRunSummary(run, agent?.name ?? run.agentKey);
+    return toRunSummary(run, agent?.name ?? run.agentKey, await this.blockers(workspaceId, [run], principal));
+  }
+
+  /**
+   * Why a pending run is waiting (#1248): the run `running` on its subject,
+   * keyed by subject. Derived on read, never stored — the processor's claim
+   * reads the same rows. A blocker the reader may not see (a memo's analysis,
+   * a restricted project's check) is left out, so the run reads as plainly queued.
+   */
+  private async blockers(
+    workspaceId: string,
+    runs: AgentRun[],
+    principal: Principal,
+    names?: Map<string, string>,
+  ): Promise<Map<string, AgentRunSummary['queuedBehind']>> {
+    const subjects = [...new Set(runs.flatMap((r) => (r.status === 'pending' && r.subjectKey ? [r.subjectKey] : [])))];
+    if (subjects.length === 0) return new Map();
+    const running = await this.prisma.agentRun.findMany({
+      where: { workspaceId, status: 'running', subjectKey: { in: subjects }, ...privateRunWhere(principal) },
+      select: { id: true, agentKey: true, subjectKey: true },
+    });
+    const named = names ?? new Map((await this.registry.list(workspaceId)).map((a) => [a.key, a.name]));
+    return new Map(running.map((r) => [r.subjectKey!, { runId: r.id, agentName: named.get(r.agentKey) ?? r.agentKey }]));
   }
 }
 
-function toRunSummary(run: AgentRun, agentName: string): AgentRunSummary {
+function toRunSummary(
+  run: AgentRun,
+  agentName: string,
+  behind: Map<string, AgentRunSummary['queuedBehind']> = new Map(),
+): AgentRunSummary {
   const findings = Array.isArray(run.findings) ? (run.findings as unknown as AgentFinding[]) : [];
   return {
     id: run.id,
@@ -557,6 +594,7 @@ function toRunSummary(run: AgentRun, agentName: string): AgentRunSummary {
     summary: run.summary,
     findings,
     findingCount: findings.length,
+    queuedBehind: (run.status === 'pending' && run.subjectKey && behind.get(run.subjectKey)) || null,
     error: run.error,
     // Progress as the run wrote it (docs/features/29). `stage` is free text from
     // the executor rather than a closed enum, so the web renders it through

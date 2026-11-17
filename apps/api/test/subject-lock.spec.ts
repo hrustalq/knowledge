@@ -2,6 +2,8 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { describe, expect, it, vi } from 'vitest';
 import { AgentRunsService } from '../src/ai/ai-agents.service.js';
 import { AgentScheduleSweeper } from '../src/agents/agent-schedule.sweeper.js';
+import { AgentProcessor } from '../src/agents/agent.processor.js';
+import { AgentFindingsService } from '../src/ai/agent-findings.service.js';
 import { ApiDriftCheckService } from '../src/api-specs/api-drift-check.service.js';
 import { CaptureService } from '../src/captures/capture.service.js';
 import { ComponentDraftsService } from '../src/components/component-drafts.service.js';
@@ -403,5 +405,139 @@ describe('one ticket per anchor (#816)', () => {
     expect(h.createIssue).toHaveBeenCalledTimes(1);
     expect(h.t('connectorWorkItem')).toHaveLength(1);
     expect(res.filter(Boolean)).toHaveLength(1);
+  });
+});
+
+describe('one agent run per page at a time (#1248)', () => {
+  /**
+   * The processor against the rig, with a queue that runs a woken job at once
+   * and an executor that holds each run open until the test lets it go, so two
+   * runs on one page are provably never `running` together.
+   */
+  function worker(runs: Row[]) {
+    const { prisma, t } = rig({ agentRun: runs.map((r) => ({ workspaceId: WS, status: 'pending', createdBy: 'u1', locale: 'en', attempt: 0, ...r })) });
+    let live = 0;
+    let peak = 0;
+    const gates = new Map<string, () => void>();
+    const executor = {
+      run: async (row: Row) => {
+        peak = Math.max(peak, ++live);
+        await new Promise<void>((r) => gates.set(row.id, r));
+        live--;
+        return { summary: 'done', findings: [] };
+      },
+    };
+    const woken: Promise<void>[] = [];
+    const producer = { enqueueWake: async (id: string) => void woken.push(proc.process({ data: { runId: id } } as never)) };
+    const proc: AgentProcessor = new AgentProcessor(
+      prisma as never,
+      { resolve: async () => ({ enabled: true }) } as never,
+      executor as never,
+      { principalFor: async () => principal, requireRole: async () => undefined } as never,
+      { assertWithinBudget: async () => undefined } as never,
+      { publish: async () => undefined } as never,
+      producer as never,
+    );
+    const until = async (cond: () => boolean) => {
+      for (let i = 0; i < 200 && !cond(); i++) await tick();
+      expect(cond()).toBe(true);
+    };
+    return { proc, t, gates, until, peak: () => peak, woken };
+  }
+  const status = (t: (m: string) => Row[], id: string) => t('agentRun').find((r) => r.id === id)!.status;
+
+  it('sentinel and cartographer on one page run one after the other, and both finish', async () => {
+    const w = worker([
+      { id: 'a', agentKey: 'sentinel', subjectKey: 'doc:d1', createdAt: new Date(1) },
+      { id: 'b', agentKey: 'cartographer', subjectKey: 'doc:d1', createdAt: new Date(2) },
+    ]);
+    const first = w.proc.process({ data: { runId: 'a' } } as never);
+    await w.until(() => w.gates.has('a'));
+    // The second job arrives while the first runs: accepted, left pending, not failed.
+    await w.proc.process({ data: { runId: 'b' } } as never);
+    expect(status(w.t, 'b')).toBe('pending');
+
+    w.gates.get('a')!();
+    await first;
+    expect(status(w.t, 'a')).toBe('succeeded');
+    // Settling the first woke the second.
+    await w.until(() => w.gates.has('b'));
+    w.gates.get('b')!();
+    await Promise.all(w.woken);
+    expect(status(w.t, 'b')).toBe('succeeded');
+    expect(w.peak()).toBe(1);
+  });
+
+  it('two workers claiming two runs on one page at once start one', async () => {
+    const w = worker([
+      { id: 'a', agentKey: 'sentinel', subjectKey: 'doc:d1' },
+      { id: 'b', agentKey: 'scribe', subjectKey: 'doc:d1' },
+    ]);
+    void w.proc.process({ data: { runId: 'a' } } as never);
+    void w.proc.process({ data: { runId: 'b' } } as never);
+    await w.until(() => w.gates.size === 1);
+    for (let i = 0; i < 20; i++) await tick();
+    expect(w.t('agentRun').filter((r) => r.status === 'running')).toHaveLength(1);
+  });
+
+  it('runs on different pages, and unscoped runs, still run concurrently', async () => {
+    const w = worker([
+      { id: 'a', agentKey: 'sentinel', subjectKey: 'doc:d1' },
+      { id: 'b', agentKey: 'cartographer', subjectKey: 'doc:d2' },
+      { id: 'c', agentKey: 'curator', subjectKey: null },
+    ]);
+    for (const id of ['a', 'b', 'c']) void w.proc.process({ data: { runId: id } } as never);
+    await w.until(() => w.gates.size === 3);
+    expect(w.peak()).toBe(3);
+  });
+
+  it('a page run and a workspace-wide run of one agent both start manually; a second click on the page 409s', async () => {
+    const { prisma, t } = rig();
+    const runs = new AgentRunsService(
+      prisma as never,
+      { resolve: async () => ({ enabled: true, name: 'Reviewer' }), list: async () => [] } as never,
+      { assertWithinBudget: async () => undefined } as never,
+      producer() as never,
+    );
+    const page = await runs.start(WS, 'reviewer', principal, { documentIds: ['d1'] });
+    expect(page.subjectKey).toBe('doc:d1');
+    await expect(runs.start(WS, 'reviewer', principal)).resolves.toMatchObject({ subjectKey: null });
+    await expect(runs.start(WS, 'reviewer', principal, { documentIds: ['d1'] })).rejects.toThrow();
+    // Another agent on the same page is accepted and reads as queued behind the running one.
+    t('agentRun').find((r) => r.id === page.id)!.status = 'running';
+    await expect(runs.start(WS, 'curator', principal, { documentIds: ['d1'] })).resolves.toMatchObject({
+      status: 'pending',
+      queuedBehind: { runId: page.id, agentName: 'reviewer' },
+    });
+  });
+
+  it('two findings on one page proposed at once open one agent merge request; the other is held', async () => {
+    const finding = (title: string) => ({ kind: 'stale', title, detail: 'x', documentIds: ['d1'], documentTitles: ['Page'], draft: { markdown: `# ${title}` } });
+    const { prisma, t } = rig({
+      agentRun: [{ id: 'r1', workspaceId: WS, agentKey: 'sentinel', createdBy: 'u1', locale: 'en', subjectKey: 'doc:d1', findings: [finding('one'), finding('two')] }],
+      document: [{ id: 'd1', workspaceId: WS, title: 'Page' }],
+    });
+    const mergeRequests = {
+      create: async (documentId: string, _dto: unknown, _user: string, opts: Row) => {
+        const mr = await prisma.mergeRequest.create({ data: { documentId, provenance: opts.provenance } });
+        return { mergeRequest: { mergeRequestId: mr.id } };
+      },
+    };
+    const documents = { getContent: async () => ({ markdown: 'old', frontmatter: {} }), createBranch: async () => undefined, writeRevision: async () => undefined };
+    const permissions = { scopeFor: async () => ({}), requireLevel: async () => undefined };
+    const findings = new AgentFindingsService(
+      prisma as never, documents as never, {} as never, mergeRequests as never, {} as never, {} as never,
+      {} as never, {} as never, {} as never, {} as never, {} as never, permissions as never,
+    );
+    const res = await Promise.allSettled([0, 1].map((i) => findings.propose(WS, 'r1', i, principal)));
+    expect(outcomes(res)).toEqual(['fulfilled', 'rejected']);
+    expect(t('mergeRequest')).toHaveLength(1);
+    const refused = res.find((r) => r.status === 'rejected') as PromiseRejectedResult;
+    expect(refused.reason.getResponse()).toMatchObject({ reason: 'agent-merge-request-open', mergeRequestId: t('mergeRequest')[0].id });
+
+    // Once that one is merged, the held finding proposes normally.
+    t('mergeRequest')[0].status = 'merged';
+    await expect(findings.propose(WS, 'r1', res.findIndex((r) => r.status === 'rejected'), principal)).resolves.toBeTruthy();
+    expect(t('mergeRequest')).toHaveLength(2);
   });
 });

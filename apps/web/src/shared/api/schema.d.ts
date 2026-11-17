@@ -8819,7 +8819,7 @@ export interface components {
              * @enum {string}
              */
             locale: "en" | "ru";
-            /** @description A built-in blueprint (discovery, code-product, service-docs, blank) or a saved one's id, as `GET /v1/blueprints` lists it. Exactly one of blueprintKey and blueprint. */
+            /** @description A built-in blueprint (discovery, construction, code-product, service-docs, blank) or a saved one's id, as `GET /v1/blueprints` lists it. Exactly one of blueprintKey and blueprint. */
             blueprintKey?: string;
             /** @description Link the new project to this methodology (#1121) — a key as `GET /v1/blueprints` lists it — instead of copying its conventions into the project. The wizard sends the entry it started from with the edited tree inline. Ignored unless that blueprint is a methodology (declares levels, workflows or agents); defaults to blueprintKey. */
             methodologyKey?: string;
@@ -8894,7 +8894,7 @@ export interface components {
              * @description Override this built-in instead of adding a blueprint.
              * @enum {string}
              */
-            builtInKey?: "discovery" | "code-product" | "service-docs" | "blank";
+            builtInKey?: "discovery" | "construction" | "code-product" | "service-docs" | "blank";
             /** @description A `Blueprint` (@knowledge/contracts), validated server-side by the same schema scaffold uses. */
             blueprint?: {
                 [key: string]: unknown;
@@ -10918,7 +10918,7 @@ export interface components {
              * @description Override this built-in for the workspace (`admin`): with `source` to customise it, with `enabled: false` to hide it
              * @enum {string}
              */
-            builtInKey?: "adr" | "rfc" | "runbook" | "postmortem" | "api-spec" | "use-case" | "entity" | "component" | "test-plan" | "test-case" | "test-data" | "bug-report" | "research-question";
+            builtInKey?: "adr" | "rfc" | "runbook" | "postmortem" | "api-spec" | "use-case" | "entity" | "component" | "test-plan" | "test-case" | "test-data" | "bug-report" | "research-question" | "intent" | "rule" | "quality-scenario" | "work-unit";
             /** @description Required for a custom template; a built-in override inherits the built-in name */
             name?: string;
             description?: string | null;
@@ -13226,7 +13226,7 @@ export interface components {
             createdAt: string;
         };
         /** @enum {string} */
-        BuiltInTemplateKey: "adr" | "rfc" | "runbook" | "postmortem" | "api-spec" | "use-case" | "entity" | "component" | "test-plan" | "test-case" | "test-data" | "bug-report" | "research-question";
+        BuiltInTemplateKey: "adr" | "rfc" | "runbook" | "postmortem" | "api-spec" | "use-case" | "entity" | "component" | "test-plan" | "test-case" | "test-data" | "bug-report" | "research-question" | "intent" | "rule" | "quality-scenario" | "work-unit";
         BulkRejectCapturesResponse: {
             rejected: number;
             closed: number;

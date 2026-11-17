@@ -1,5 +1,6 @@
 import type { Blueprint, BuiltInBlueprintKey } from '@knowledge/contracts';
 import { DISCOVERY_BLUEPRINT } from './discovery.js';
+import { CONSTRUCTION_BLUEPRINT } from './construction.js';
 import { CODE_PRODUCT_BLUEPRINT } from './code-product.js';
 import { SERVICE_DOCS_BLUEPRINT } from './service-docs.js';
 
@@ -10,6 +11,7 @@ import { SERVICE_DOCS_BLUEPRINT } from './service-docs.js';
  */
 export const BUILT_IN_BLUEPRINTS: Readonly<Record<BuiltInBlueprintKey, Blueprint>> = {
   discovery: DISCOVERY_BLUEPRINT,
+  construction: CONSTRUCTION_BLUEPRINT,
   'code-product': CODE_PRODUCT_BLUEPRINT,
   'service-docs': SERVICE_DOCS_BLUEPRINT,
   blank: {

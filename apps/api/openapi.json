@@ -46056,7 +46056,7 @@
           },
           "blueprintKey": {
             "type": "string",
-            "description": "A built-in blueprint (discovery, code-product, service-docs, blank) or a saved one's id, as `GET /v1/blueprints` lists it. Exactly one of blueprintKey and blueprint."
+            "description": "A built-in blueprint (discovery, construction, code-product, service-docs, blank) or a saved one's id, as `GET /v1/blueprints` lists it. Exactly one of blueprintKey and blueprint."
           },
           "methodologyKey": {
             "type": "string",
@@ -46206,6 +46206,7 @@
             "type": "string",
             "enum": [
               "discovery",
+              "construction",
               "code-product",
               "service-docs",
               "blank"
@@ -51553,7 +51554,11 @@
               "test-case",
               "test-data",
               "bug-report",
-              "research-question"
+              "research-question",
+              "intent",
+              "rule",
+              "quality-scenario",
+              "work-unit"
             ],
             "description": "Override this built-in for the workspace (`admin`): with `source` to customise it, with `enabled: false` to hide it"
           },
@@ -60198,7 +60203,11 @@
           "test-case",
           "test-data",
           "bug-report",
-          "research-question"
+          "research-question",
+          "intent",
+          "rule",
+          "quality-scenario",
+          "work-unit"
         ]
       },
       "BulkRejectCapturesResponse": {

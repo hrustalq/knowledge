@@ -6688,7 +6688,11 @@
       "test-case",
       "test-data",
       "bug-report",
-      "research-question"
+      "research-question",
+      "intent",
+      "rule",
+      "quality-scenario",
+      "work-unit"
     ]
   },
   "BulkRejectCapturesResponse": {

@@ -48,6 +48,17 @@ in the pull request that introduces them — see
   level is remembered by the chat from the next message on. Without a grounding page, or in a project with no
   levels, there is no picker, and the API refuses a `level` with a 400 (`level-unavailable`). Chats without a level
   send the same instructions as before. (#1128)
+- Two built-in methodologies. **Knowledge-Driven Construction** works top-down through eight levels, from L0 Intent
+  to L7 Code. It brings a section per level, a glossary page, a styleguide, five glossary terms, an agent per level
+  group (a large-tier modeller and system designer, a medium-tier contract writer, a small-tier unit writer) and a
+  workflow that drafts rule pages from an entity page. **Discovery-first** now has levels too (question, options,
+  findings, decision) and a discovery researcher agent; its page tree is unchanged. Research-question pages sit at
+  the question level. Projects already scaffolded from Discovery-first are not linked to it. The scaffold wizard
+  shows how many levels a methodology has. (#1129)
+- Four built-in page templates, in English and Russian: **Intent** (problem, measurable goals, scope, constraints),
+  **Business rule** (one invariant with a stable id and Given/When/Then examples), **Quality scenario** (stimulus,
+  response, measure, threshold) and **Unit of work** (objective, invariants, contracts, acceptance checks,
+  obligations, out of scope). (#1129)
 
 ### Changed
 

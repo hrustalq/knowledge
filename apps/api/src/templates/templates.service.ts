@@ -56,6 +56,8 @@ export interface ResolvedTemplate {
 export interface CreateTemplateInput {
   workspaceId: string;
   projectId?: string | null;
+  /** A methodology's own template (#1121), written only by its materializer; project id is then null. */
+  blueprintId?: string | null;
   builtInKey?: string;
   name?: string;
   description?: string | null;
@@ -415,7 +417,7 @@ export class TemplatesService {
       if (!name) throw new BadRequestException(t('error.template.nameRequired'));
       if (!input.source) throw new BadRequestException(t('error.template.sourceRequired'));
       const parsed = this.parseOrThrow(input.source);
-      await this.assertNameFree(input.workspaceId, input.projectId ?? null, name);
+      await this.assertNameFree(input.workspaceId, input.projectId ?? null, name, undefined, input.blueprintId ?? null);
 
       // `withTransaction`, not `$transaction`: a scaffold (#716) creates the
       // project's templates inside its own boundary, and must be able to roll them back.
@@ -424,6 +426,7 @@ export class TemplatesService {
           data: {
             workspaceId: input.workspaceId,
             projectId: input.projectId ?? null,
+            blueprintId: input.blueprintId ?? null,
             name,
             description: input.description ?? parsed.meta.description ?? null,
             icon: input.icon ?? null,
@@ -457,7 +460,7 @@ export class TemplatesService {
       const row = await this.requireRow(id);
       const name = input.name?.trim();
       if (input.name !== undefined && !name && !row.builtInKey) throw new BadRequestException(t('error.template.nameRequired'));
-      if (name && name !== row.name && !row.builtInKey) await this.assertNameFree(row.workspaceId, row.projectId, name, row.id);
+      if (name && name !== row.name && !row.builtInKey) await this.assertNameFree(row.workspaceId, row.projectId, name, row.id, row.blueprintId);
 
       let nextVersion: { version: number; source: string; meta: TemplateMeta } | null = null;
       if (input.source !== undefined) {
@@ -592,12 +595,19 @@ export class TemplatesService {
     return row.builtInKey && isBuiltInTemplateKey(row.builtInKey) ? BUILT_IN_TEMPLATES[row.builtInKey].version : 0;
   }
 
-  /** Names are unique per (workspace, project) among custom templates, archived ones included. */
-  private async assertNameFree(workspaceId: string, projectId: string | null, name: string, exceptId?: string): Promise<void> {
+  /** Names are unique per (workspace, project, methodology) among custom templates, archived ones included. */
+  private async assertNameFree(
+    workspaceId: string,
+    projectId: string | null,
+    name: string,
+    exceptId?: string,
+    blueprintId: string | null = null,
+  ): Promise<void> {
     const clash = await this.prisma.pageTemplate.findFirst({
       where: {
         workspaceId,
         projectId,
+        blueprintId,
         builtInKey: null,
         name: { equals: name, mode: 'insensitive' },
         ...(exceptId ? { id: { not: exceptId } } : {}),

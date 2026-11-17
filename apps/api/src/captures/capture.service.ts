@@ -59,6 +59,7 @@ import { LISTED_PAGE } from '../common/listed-page.js';
 import { withSubjectLock } from '../common/subject-lock.js';
 import { t } from '../i18n/t.js';
 import { findSecret } from '../common/secret-scan.js';
+import { projectScope, scopeWhere } from '../projects/methodology-scope.js';
 import {
   captureContentHash,
   cleanCaptureTitle,
@@ -737,9 +738,9 @@ export class CaptureService {
     const overlaps = (term: string, aliases: unknown) =>
       [...foldTermKeys(term, Array.isArray(aliases) ? aliases.filter((a): a is string => typeof a === 'string') : [])].some((k) => keys.has(k));
 
-    // The project's own terms and the workspace's (#926): a word the workspace already defines is defined here too.
+    // The project's own terms, its methodology's and the workspace's (#926, #1121): a word they already define is defined here too.
     const terms = await this.prisma.glossaryTerm.findMany({
-      where: { workspaceId: row.workspaceId, OR: [{ projectId: row.projectId }, { projectId: null }] },
+      where: { workspaceId: row.workspaceId, ...scopeWhere(await projectScope(this.prisma, row.projectId)) },
       select: { id: true, term: true, aliases: true },
     });
     const existing = terms.find((term) => overlaps(term.term, term.aliases));

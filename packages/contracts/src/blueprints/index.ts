@@ -119,6 +119,11 @@ export interface Blueprint {
   agents?: BlueprintAgent[];
 }
 
+/** A blueprint that declares levels, workflows or agents: what the UI calls a methodology (#1121). */
+export function isMethodology(blueprint: Blueprint): boolean {
+  return Boolean(blueprint.levels?.length || blueprint.workflows?.length || blueprint.agents?.length);
+}
+
 export const BUILT_IN_BLUEPRINT_KEYS = ['discovery', 'code-product', 'service-docs', 'blank'] as const;
 export type BuiltInBlueprintKey = (typeof BUILT_IN_BLUEPRINT_KEYS)[number];
 

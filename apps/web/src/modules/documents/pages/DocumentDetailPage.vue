@@ -36,6 +36,7 @@ import {
   GitMerge,
   Globe,
   History,
+  Layers,
   LayoutTemplate,
   Lock,
   LockOpen,
@@ -1147,6 +1148,11 @@ watch(
         <Badge v-if="templateChip" variant="outline" class="text-muted-foreground gap-1 font-normal">
           <LayoutTemplate class="size-3" aria-hidden="true" />
           {{ templateChip }}
+        </Badge>
+        <!-- The page's methodology level (#1266): derived from its template, never stored. -->
+        <Badge v-if="detail.document.level" variant="outline" class="text-muted-foreground gap-1 font-normal" :title="t('documents.level', { name: detail.document.level.name })">
+          <Layers class="size-3" aria-hidden="true" />
+          <span class="sr-only">{{ t('documents.levelLabel') }}: </span>{{ detail.document.level.name }}
         </Badge>
       </template>
 

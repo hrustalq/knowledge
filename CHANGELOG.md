@@ -13,6 +13,35 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Added
+
+- A page whose template puts it at a level of its project's methodology shows that level ("L0 Intent") beside its
+  template chip, and so does its search result. (#1266)
+- **Settings → Blueprints** shows what a methodology declares: its levels in order, with the templates each covers,
+  the agent each brings and the model tier that agent needs, plus the chat guidance for each level (expandable), its
+  agents and its workflows. (#1266)
+- `GET /v1/projects/:id/levels` returns `agent` per level: the key of the agent a turn at that level runs (the
+  methodology's own agent under its stored key, or a built-in agent's key). `agentKey` still carries the declared
+  key. (#1266)
+
+### Changed
+
+- In the chat composer, each level in the level picker names its agent. Once a level is picked, the agent chip shows
+  that agent instead of "Default". Picking an agent yourself still wins. (#1266)
+- Switching a project to another methodology starts with no sections ticked. A first link still starts with all of
+  them ticked. The dialog now says that the project's templates, workflows, styleguide, glossary and agents
+  change with the switch, shows how many pages sit at a level before and after, names how many sections the button
+  will add, and keeps its buttons in view on small screens. (#1266)
+
+### Fixed
+
+- In **Settings → Blueprints**, the page outline no longer drops the title of a section whose children are numbered
+  (KDC's "L2 Rules", "Decisions" and "L6 Units" read as missing at desktop widths), and the detail no longer squeezes
+  the outline into a narrow column beside the conventions. (#1266)
+- The level and agent pickers announce which option is selected to screen readers. (#1266)
+
 ## [0.58.0] — 2026-11-17
 
 ### Added

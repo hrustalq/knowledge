@@ -16237,6 +16237,7 @@ export interface components {
                 name: string;
                 description: string | null;
                 agentKey: string | null;
+                agent: string | null;
                 pages: number;
             }[];
         };

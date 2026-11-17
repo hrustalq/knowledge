@@ -19844,6 +19844,10 @@
               "type": "string",
               "nullable": true
             },
+            "agent": {
+              "type": "string",
+              "nullable": true
+            },
             "pages": {
               "type": "number"
             }
@@ -19853,6 +19857,7 @@
             "name",
             "description",
             "agentKey",
+            "agent",
             "pages"
           ]
         }

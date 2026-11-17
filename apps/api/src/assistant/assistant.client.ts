@@ -384,11 +384,18 @@ export class AssistantClient {
      * caller with a JSON output contract (the cartographer) gets it applied only
      * where no tools are offered.
      */
-    opts?: { jsonFinalRound?: boolean },
+    opts?: {
+      jsonFinalRound?: boolean;
+      /** Stops the loop before its next round or side effect — a background run that was cancelled (#1247). */
+      signal?: AbortSignal;
+      /** After each model round, with what it cost — a background run's step log (#1247). */
+      onRound?: (round: { tokens: AiUsageTokens; durationMs: number }) => Promise<void>;
+    },
   ): Promise<{
     content: string;
     trace: AssistantToolCall[];
     usage: AiUsageTokens;
+    cancelled: boolean;
   }> {
     const usage: AiUsageTokens = {
       promptTokens: 0,
@@ -397,14 +404,16 @@ export class AssistantClient {
       estimated: false,
       cachedPromptTokens: 0,
     };
-    const { content, trace } = await this.toolLoop(
+    const { content, trace, cancelled } = await this.toolLoop(
       ctx,
       messages,
       tools,
       execute,
       {
         jsonFinalRound: opts?.jsonFinalRound,
+        signal: opts?.signal,
         complete: async (params) => {
+          const started = Date.now();
           const completion = await this.create(ctx, params);
           const message = completion.choices[0]?.message;
           // No choices at all is an upstream failure, not an empty answer.
@@ -424,6 +433,7 @@ export class AssistantClient {
           if (tokens.reportedCost !== undefined)
             usage.reportedCost =
               (usage.reportedCost ?? 0) + tokens.reportedCost;
+          await opts?.onRound?.({ tokens, durationMs: Date.now() - started });
           const toolCalls = (message.tool_calls ?? [])
             .filter(
               (c): c is ChatCompletionMessageFunctionToolCall =>
@@ -444,7 +454,7 @@ export class AssistantClient {
         },
       },
     );
-    return { content, trace, usage };
+    return { content, trace, usage, cancelled };
   }
 
   /**

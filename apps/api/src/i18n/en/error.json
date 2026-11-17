@@ -355,6 +355,7 @@
     "agentDisabled": "Agent \"{key}\" is disabled.",
     "agentNotBackground": "Agent \"{key}\" cannot be run in the background.",
     "agentRunNotFound": "Unknown run {id}",
+    "agentRunNotCancellable": "Run {id} has already finished, so it cannot be cancelled",
     "agentNoExecutor": "Agent \"{key}\" has no background executor.",
     "findingNotFound": "Run {runId} has no finding at index {index}",
     "findingAlreadyProposed": "This finding has already been proposed as a merge request.",

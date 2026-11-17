@@ -6,6 +6,9 @@ export const routes: RouteRecordRaw[] = [
   // meta.trail 'lg': below lg the breadcrumb only repeated "Assistant" above the
   // chat header and cost a short screen 36px of transcript (#1067).
   { path: '/assistant', component: () => import('./pages/AssistantPage.vue'), meta: { fill: true, feature: 'assistant', trail: 'lg' } },
+  // One background run and its step log (#1247). Not behind the `assistant`
+  // section: runs are listed to every member, as the API lists them.
+  { path: '/agents/runs/:id', component: () => import('./pages/AgentRunPage.vue') },
 ]
 
 // AI (issue #182): Connect AI plus the assistant's provider config,

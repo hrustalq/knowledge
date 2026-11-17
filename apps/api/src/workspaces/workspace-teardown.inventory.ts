@@ -93,6 +93,8 @@ export const WORKSPACE_TEARDOWN = {
   // No FK in either direction.
   ActivityLog: 'workspace',
   AgentLearning: 'workspace',
+  // Cascades from its run too; deleted first so the run rows are light.
+  AgentRunStep: 'workspace',
   AgentRun: 'workspace',
   AgentTrigger: 'workspace',
   AiAgent: 'workspace',

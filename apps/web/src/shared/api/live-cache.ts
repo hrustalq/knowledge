@@ -151,10 +151,17 @@ export const defaultLiveCacheRules: LiveCacheRule[] = [
   {
     // Background agent runs (docs/features/20). `subjectId` is the run id on
     // every agent event, so one rule refreshes the list and that run's detail.
+    // A step (#1247) refreshes the run page — its log, and the run row whose
+    // stage moved with it — but not the list, which a step does not change.
     on: 'agent.run.*',
     invalidate: (e) => [
-      ['/v1/ai/agents/runs'],
-      ...(e.subjectId ? [['/v1/ai/agents/runs/{id}', { id: e.subjectId }]] : []),
+      ...(e.type === 'agent.run.step' ? [] : [['/v1/ai/agents/runs']]),
+      ...(e.subjectId
+        ? [
+            ['/v1/ai/agents/runs/{id}', { id: e.subjectId }],
+            ['/v1/ai/agents/runs/{id}/steps', { id: e.subjectId }],
+          ]
+        : []),
     ],
   },
   {

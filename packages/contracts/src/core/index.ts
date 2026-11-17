@@ -458,6 +458,11 @@ export const KNOWN_EVENT_TYPES = [
   'agent.run.started',
   'agent.run.succeeded',
   'agent.run.failed',
+  // A person cancelled the run (#1247). Not notifiable: they did it themselves.
+  'agent.run.cancelled',
+  // The worker appended one step to a running run's log (#1247): `subjectId`
+  // is the run. Live only — the run page refetches its steps on it.
+  'agent.run.step',
   // A trigger started a run (#70): `subjectId` is the run, `documentId` the
   // page it is about, when it is about one.
   'agent.trigger.fired',

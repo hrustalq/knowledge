@@ -2604,7 +2604,33 @@
       "dismissedToast": "Finding dismissed",
       "dismissedWithLearning": "Finding dismissed. Your learning is waiting for review.",
       "showDismissed": "Show dismissed ({count})",
-      "learningProposed": "Learning proposed"
+      "learningProposed": "Learning proposed",
+      "openRun": "Open run",
+      "page": {
+        "started": "Started {when}",
+        "queued": "Queued {when}",
+        "took": "took {duration}",
+        "tokens": "{n} tokens | {n} token | {n} tokens",
+        "subjectPage": "The page",
+        "subjectMergeRequest": "The merge request",
+        "cancel": "Cancel run",
+        "cancelTitle": "Cancel this run?",
+        "cancelBody": "A pending run never starts. A running one stops before its next step; what it already did stays in the log.",
+        "keepRunning": "Keep running",
+        "cancelled": "Run cancelled",
+        "steps": "Steps",
+        "stepsEmptyLive": "No steps yet. They appear here as the run works.",
+        "stepsEmpty": "This run logged no steps.",
+        "loadMore": "Load more steps",
+        "output": "Output",
+        "error": "Error",
+        "failed": "failed",
+        "kind": {
+          "model": "Model call",
+          "tool": "Tool",
+          "warning": "Warning"
+        }
+      }
     },
     "providerNone": "None — assistant disabled",
     "overridden": "· overridden",

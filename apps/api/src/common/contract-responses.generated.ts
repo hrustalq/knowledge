@@ -173,6 +173,7 @@ import type {
   ListAccessRequestsResponse,
   ListActivityResponse,
   ListAgentLearningsResponse,
+  ListAgentRunStepsResponse,
   ListAgentRunsResponse,
   ListAgentTriggersResponse,
   ListAiAgentChoicesResponse,
@@ -557,6 +558,7 @@ export interface ContractResponses {
   ListAccessRequestsResponse: ListAccessRequestsResponse;
   ListActivityResponse: ListActivityResponse;
   ListAgentLearningsResponse: ListAgentLearningsResponse;
+  ListAgentRunStepsResponse: ListAgentRunStepsResponse;
   ListAgentRunsResponse: ListAgentRunsResponse;
   ListAgentTriggersResponse: ListAgentTriggersResponse;
   ListAiAgentChoicesResponse: ListAiAgentChoicesResponse;

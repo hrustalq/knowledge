@@ -18,6 +18,7 @@ import {
   type AgentFinding,
   type AgentRunDetails,
   type AgentRunInput,
+  type AgentRunStep,
   type BuiltInAgentKey,
 } from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
@@ -98,6 +99,47 @@ export type AgentReporter = (update: {
   warning?: string;
 }) => Promise<void>;
 
+/** One step of a run's log (#1247), as a call reports it; the processor truncates, stamps and writes it. */
+export type AgentRunStepInput = Pick<AgentRunStep, 'kind'> &
+  Partial<Pick<AgentRunStep, 'name' | 'args' | 'output' | 'sources' | 'ok' | 'tokens' | 'durationMs'>>;
+
+/**
+ * A run's step log and its stop line (#1247), owned by the processor for the
+ * same reason the reporter is: only it knows whether this execution still owns
+ * the row. Every model and tool call of a run goes through `AgentServices.client`,
+ * which asks `live` before the call and appends a step after it.
+ */
+export interface AgentRunLog {
+  /** Appends one step. Never throws; one that cannot land means the run is no longer ours. */
+  step(step: AgentRunStepInput): Promise<void>;
+  /** Whether the run is still this execution's — false once a person cancelled it or the sweeper re-queued it. */
+  live(): Promise<boolean>;
+  /** Aborted once `live` has said no: a tool loop in flight stops at its next round. */
+  signal: AbortSignal;
+}
+
+/**
+ * Thrown inside a run that is no longer this execution's (#1247). A pass over
+ * many items stops on it (`stopsPass`); the processor's guarded settle then
+ * writes nothing, because the row is already `cancelled` or someone else's.
+ */
+export class RunStoppedError extends Error {
+  constructor() {
+    super('The run was cancelled');
+  }
+}
+
+/** The pages a tool result cites — a step's sources (#1247). Web and chat sources carry no page. */
+function pagesOf(result: unknown): Array<{ documentId: string; title: string }> {
+  const sources = (result as { sources?: unknown }).sources;
+  if (!Array.isArray(sources)) return [];
+  return sources.flatMap((s: { kind?: string; documentId?: unknown; title?: unknown }) =>
+    (s.kind ?? 'document') === 'document' && typeof s.documentId === 'string'
+      ? [{ documentId: s.documentId, title: typeof s.title === 'string' ? s.title : '' }]
+      : [],
+  );
+}
+
 /**
  * One background agent (#823): its key and the function that runs it, in its
  * own file under `runners/`. `svc` is the executor itself — the collaborators
@@ -161,6 +203,8 @@ export class AgentServices {
   private readonly ledgers = new Map<string, RunLedger>();
   /** In-flight runs' memory recall, by run id: asked on a run's first model call, so a runner that never calls one never recalls. */
   private readonly memoryGroundings = new Map<string, () => Promise<string>>();
+  /** In-flight runs' step logs (#1247), by run id; found through the run context, so no runner passes one. */
+  private readonly runLogs = new Map<string, AgentRunLog>();
   /**
    * The model client every runner calls (#1167): inside a run, each call's last user turn
    * carries the run's memory recall. One wrapper, so a runner — or a helper it hands this
@@ -199,18 +243,74 @@ export class AgentServices {
     readonly specDiff: ApiSpecDiffService,
     @Optional() readonly memory?: MemoryRuntimeService,
   ) {
+    // The same wrapper is where a run's step log is written (#1247): a step per
+    // model call (per round of a tool loop) and per tool call, each asked
+    // `live` first, so a cancelled run stops before its next step.
     this.client = {
-      chat: async (call, messages, opts) =>
-        assistant.chat(call, await this.withMemoryGrounding(messages), opts),
-      runWithTools: async (call, messages, tools, execute, opts) =>
-        assistant.runWithTools(
-          call,
-          await this.withMemoryGrounding(messages),
-          tools,
-          execute,
-          opts,
-        ),
+      chat: async (call, messages, opts) => {
+        const grounded = await this.withMemoryGrounding(messages);
+        const log = this.runLog();
+        if (!log) return assistant.chat(call, grounded, opts);
+        if (!(await log.live())) throw new RunStoppedError();
+        const started = Date.now();
+        try {
+          const { content, tokens } = await assistant.chatWithUsage(call, grounded, opts);
+          await log.step({ kind: 'model', name: call.operation, tokens: tokens.totalTokens, durationMs: Date.now() - started });
+          return content;
+        } catch (error) {
+          await log.step({ kind: 'model', name: call.operation, ok: false, output: reasonOf(error), durationMs: Date.now() - started });
+          throw error;
+        }
+      },
+      runWithTools: async (call, messages, tools, execute, opts) => {
+        const grounded = await this.withMemoryGrounding(messages);
+        const log = this.runLog();
+        if (!log) return assistant.runWithTools(call, grounded, tools, execute, opts);
+        if (!(await log.live())) throw new RunStoppedError();
+        const logged: ToolExecutor = async (name, args, callId) => {
+          if (!(await log.live())) return { content: JSON.stringify({ error: 'The run was cancelled' }), ok: false };
+          const started = Date.now();
+          const step = { kind: 'tool' as const, name, args: JSON.stringify(args) };
+          try {
+            const result = await execute(name, args, callId);
+            await log.step({ ...step, output: result.content, ok: result.ok ?? true, sources: pagesOf(result), durationMs: Date.now() - started });
+            return result;
+          } catch (error) {
+            await log.step({ ...step, output: reasonOf(error), ok: false, durationMs: Date.now() - started });
+            throw error;
+          }
+        };
+        let result: Awaited<ReturnType<AssistantClient['runWithTools']>>;
+        try {
+          result = await assistant.runWithTools(call, grounded, tools, logged, {
+            ...opts,
+            signal: log.signal,
+            onRound: ({ tokens, durationMs }) =>
+              log.step({ kind: 'model', name: call.operation, tokens: tokens.totalTokens, durationMs }),
+          });
+        } catch (error) {
+          await log.step({ kind: 'model', name: call.operation, ok: false, output: reasonOf(error) });
+          throw error;
+        }
+        if (result.cancelled) throw new RunStoppedError();
+        return result;
+      },
     };
+  }
+
+  /** Registered by the executor for a run's lifetime (#1247). */
+  setRunLog(runId: string, log: AgentRunLog): void {
+    this.runLogs.set(runId, log);
+  }
+
+  clearRunLog(runId: string): void {
+    this.runLogs.delete(runId);
+  }
+
+  /** The step log of the run this call is made in, if any. */
+  private runLog(): AgentRunLog | undefined {
+    const runId = currentAgentRun()?.agentRunId;
+    return runId ? this.runLogs.get(runId) : undefined;
   }
 
   /**
@@ -418,6 +518,8 @@ export class AgentServices {
     report: AgentReporter,
     budgetSpent?: () => string,
   ): Promise<boolean> {
+    // Cancelled, or handed to a retry (#1247): every later call would stop the same way.
+    if (error instanceof RunStoppedError) return true;
     if (
       budgetSpent &&
       error instanceof HttpException &&

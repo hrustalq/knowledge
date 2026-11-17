@@ -4765,13 +4765,14 @@
           "editor": "Editor",
           "desktop": "Desktop app",
           "harness": "Agent harness",
-          "any": "Any MCP client"
+          "any": "Streamable HTTP"
         },
         "facts": {
           "command": "One-line setup",
           "skill": "Skill",
           "kit": "Capture hook"
-        }
+        },
+        "anyName": "Any MCP client"
       },
       "workflow": {
         "title": "What should the agent do?",
@@ -4818,7 +4819,8 @@
         "unlimited": "Every toolset your account can reach.",
         "reload": "The key is shown on this page only. Leave or reload it and only its hash remains.",
         "created": "“{name}” is ready — it is already in every snippet that follows.",
-        "createFirst": "Create the key to continue, or say you already have one."
+        "createFirst": "Create the key to continue, or say you already have one.",
+        "label": "API key"
       },
       "preferences": {
         "title": "How should it be installed?",
@@ -4843,11 +4845,12 @@
             "label": "Skip it",
             "hint": "The skill still explains capturing; there is just no reminder."
           }
-        }
+        },
+        "none": "Nothing to choose for {client}. Continue."
       },
       "configure": {
         "title": "Add the server to {client}",
-        "hint": "Run these where you use {client}. “Your config” holds the same thing, written to its file."
+        "hint": "Run these where you use {client}. Where there is both a command and a file, they do the same thing: one is enough."
       },
       "skill": {
         "title": "Teach {client} how to use it",
@@ -4859,7 +4862,7 @@
         "waitingHint": "Start {client} (restart it if it was open) and ask: “Who am I in Knowledge?”",
         "connected": "Connected",
         "connectedHint": "{client} reached the server with “{name}” {when}. It is offered {n} tools.",
-        "devMode": "This server runs with AUTH_MODE=none, so there is no key to watch. Run the check below to confirm the server answers.",
+        "devMode": "The server answers and offers {n} tools. It runs with AUTH_MODE=none, so there is no key whose first call could be watched: run the check below on the machine where the client runs.",
         "slow": "No call yet. Run this from the same terminal, with the same variable, and read the reply.",
         "showCheck": "Check from a terminal",
         "check": "Terminal — calls knowledge_whoami as your key",
@@ -4889,7 +4892,8 @@
             "code": "A JSON reply naming you",
             "fix": "The server and key are fine; the tool's config is the problem. Restart the tool, check it read the file you edited, and look below."
           }
-        }
+        },
+        "checkDev": "Terminal — calls knowledge_whoami"
       },
       "pane": {
         "title": "Your config",
@@ -4898,6 +4902,7 @@
       },
       "help": {
         "title": "Something not working?",
+        "unsure": "Not sure?",
         "role": [
           {
             "q": "None of these fit",
@@ -4907,7 +4912,7 @@
         "client": [
           {
             "q": "My tool isn't listed",
-            "a": "Pick “Any client · curl”. Any tool that speaks MCP over Streamable HTTP works with a URL and an Authorization: Bearer header."
+            "a": "Pick “Any MCP client”. Any tool that speaks MCP over Streamable HTTP works with a URL and an Authorization: Bearer header."
           },
           {
             "q": "I use two tools",
@@ -5088,6 +5093,11 @@
       "manage": {
         "start": "Connect a client",
         "startHint": "A guided setup: tell it your tool and how you work, get a key and the exact config, then check that it connects."
+      },
+      "leave": {
+        "title": "Leave the setup?",
+        "body": "The key you created is shown only here. If you have not copied it, it cannot be shown again: you would revoke it and create another.",
+        "action": "Leave"
       }
     },
     "title": "Connect AI",
@@ -5186,8 +5196,7 @@
       "ticket": {
         "title": "Context when a ticket starts",
         "hint": "With the kit installed, {client} is nudged once per ticket it reads to call knowledge_context: a few pages, glossary terms and project memory as pointers inside a small token budget. The hook still holds no key. Clients without hooks, Codex and Kimi among them, follow the same step from the skill.",
-        "cursor": " Cursor hooks cannot add context to a prompt, so a ticket pasted as a message is left to the skill too.",
-        "label": "The skill’s step"
+        "cursor": " Cursor hooks cannot add context to a prompt, so a ticket pasted as a message is left to the skill too."
       }
     },
     "llms": {

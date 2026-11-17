@@ -1,14 +1,14 @@
 <script setup lang="ts">
 /**
  * The wizard's skill step (#1225): the skill in the format picked under
- * Preferences, the capture hook when it was asked for, and the ticket step a
- * developer's agent follows. Fetched as the key just minted when there is one,
+ * Preferences, the capture hook when it was asked for, and what a developer's
+ * agent does when a ticket starts. Fetched as the key just minted when there is one,
  * because the SKILL.md describes the credential that reads it.
  */
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
-import { Download, KeyRound } from 'lucide-vue-next'
+import { Download, ExternalLink, KeyRound } from 'lucide-vue-next'
 import type { ApiKeyScope } from '@knowledge/contracts'
 import { Button } from '@knowledge/ui/button'
 import { api } from '@/shared/api/queries'
@@ -35,9 +35,11 @@ const props = defineProps<{
 const { t } = useI18n()
 
 const skill = ref<string | null>(null)
+// Only a client with no skills directory needs the file itself (Download).
 watch(
-  () => props.apiKey,
+  () => (props.client.skillDir ? null : props.apiKey ?? ''),
   async (asKey) => {
+    if (asKey === null) return
     try {
       // Not the query cache: its key carries no credential, so a read as the new key would collide.
       skill.value = (await api.get('/v1/mcp/skill', {
@@ -52,9 +54,6 @@ watch(
 
 const dir = computed(() => props.client.skillDir)
 const stack = computed(() => (dir.value && props.format === 'stack' ? skillStackInstallCommand(props.url, dir.value, props.needsKey) : null))
-const ticketStep = computed(
-  () => /^### Starting a ticket\n[\s\S]*?(?=\n#{2,3} |$(?![\s\S]))/m.exec(skill.value ?? '')?.[0].trim() ?? null,
-)
 
 function download() {
   if (skill.value) saveFile(new Blob([skill.value], { type: 'text/markdown' }), 'SKILL.md')
@@ -94,18 +93,20 @@ function download() {
         <p class="kn-measure text-xs leading-relaxed text-muted-foreground">{{ t('connect.capture.hint', { client: client.name }) }}</p>
         <CopyBlock :code="captureKitInstallCommand(`${url}/capture-kit`, client.captureKit, needsKey)" :label="t('connect.wizard.skill.kitTitle')" />
         <p class="text-caption text-muted-foreground">
-          <RouterLink to="/captures" class="text-primary underline underline-offset-2">{{ t('connect.capture.review') }}</RouterLink>
+          <!-- A new tab: leaving the wizard would drop a key that exists only on this page. -->
+          <RouterLink to="/captures" target="_blank" rel="noopener" class="inline-flex items-center gap-0.5 text-primary underline underline-offset-2">
+            {{ t('connect.capture.review') }}<ExternalLink class="size-3" aria-hidden="true" />
+          </RouterLink>
         </p>
       </template>
     </section>
 
-    <section v-if="ticket && ticketStep" class="grid min-w-0 gap-2 border-t pt-4">
+    <section v-if="ticket" class="grid min-w-0 gap-1 border-t pt-4">
       <h3 class="text-sm font-medium">{{ t('connect.capture.ticket.title') }}</h3>
       <p class="kn-measure text-xs leading-relaxed text-muted-foreground">
         {{ t('connect.capture.ticket.hint', { client: client.name }) }}
         <template v-if="client.captureKit === 'cursor'">{{ t('connect.capture.ticket.cursor') }}</template>
       </p>
-      <CopyBlock :code="ticketStep" :label="t('connect.capture.ticket.label')" />
     </section>
   </div>
 </template>

@@ -10,7 +10,7 @@
  */
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { CircleCheck, Loader2 } from 'lucide-vue-next'
+import { CircleCheck } from 'lucide-vue-next'
 import { useQueryClient } from '@tanstack/vue-query'
 import type { ApiKeyInfo } from '@knowledge/contracts'
 import { Button } from '@knowledge/ui/button'
@@ -87,6 +87,8 @@ watch(
 onBeforeUnmount(stop)
 
 const STATUSES = ['refused', 's401', 's403', 's404', 's405', 'ok'] as const
+/** With no key there is no 401 or 403 to explain. */
+const statuses = computed(() => (props.needsKey ? STATUSES : STATUSES.filter((s) => s !== 's401' && s !== 's403')))
 </script>
 
 <template>
@@ -102,14 +104,18 @@ const STATUSES = ['refused', 's401', 's403', 's404', 's405', 'ok'] as const
         </div>
       </template>
       <template v-else>
-        <Loader2 class="mt-0.5 size-5 shrink-0 animate-spin text-panel-note motion-reduce:animate-none" aria-hidden="true" />
+        <!-- Waiting is work in progress: the status dot's pulse, not a spinner (DESIGN.md: one thing moves at rest). -->
+        <span class="mt-1.5 size-2.5 shrink-0 animate-pulse rounded-full bg-panel-note motion-reduce:animate-none" aria-hidden="true" />
         <div class="min-w-0">
           <p class="text-sm font-medium">{{ t('connect.wizard.verify.waiting', { client: clientName }) }}</p>
           <p class="mt-0.5 text-xs text-muted-foreground">{{ t('connect.wizard.verify.waitingHint', { client: clientName }) }}</p>
         </div>
       </template>
     </div>
-    <p v-else class="kn-measure text-xs text-muted-foreground">{{ t('connect.wizard.verify.devMode') }}</p>
+    <div v-else class="flex items-start gap-3 rounded-lg border bg-card px-4 py-3.5">
+      <CircleCheck class="mt-0.5 size-5 shrink-0 text-panel-note" aria-hidden="true" />
+      <p class="kn-measure text-xs leading-relaxed text-muted-foreground">{{ t('connect.wizard.verify.devMode', { n: sessionTools }) }}</p>
+    </div>
 
     <div v-if="needsKey && !hit && !slow">
       <Button variant="outline" size="sm" @click="asked = true">{{ t('connect.wizard.verify.showCheck') }}</Button>
@@ -117,10 +123,10 @@ const STATUSES = ['refused', 's401', 's403', 's404', 's405', 'ok'] as const
 
     <section v-if="showCheck && !hit" class="grid min-w-0 gap-3">
       <p v-if="needsKey" class="kn-measure text-xs text-muted-foreground">{{ t('connect.wizard.verify.slow') }}</p>
-      <CopyBlock :code="check" :label="t('connect.wizard.verify.check')" />
+      <CopyBlock :code="check" :label="needsKey ? t('connect.wizard.verify.check') : t('connect.wizard.verify.checkDev')" />
       <h3 class="text-xs font-medium text-muted-foreground">{{ t('connect.wizard.verify.statusTitle') }}</h3>
       <dl class="divide-y rounded-lg border">
-        <div v-for="s in STATUSES" :key="s" class="grid gap-1 px-3.5 py-2.5 sm:grid-cols-[11rem_minmax(0,1fr)] sm:gap-4">
+        <div v-for="s in statuses" :key="s" class="grid gap-1 px-3.5 py-2.5 sm:grid-cols-[11rem_minmax(0,1fr)] sm:gap-4">
           <dt class="text-xs font-medium">{{ t(`connect.wizard.verify.statuses.${s}.code`) }}</dt>
           <dd class="text-xs leading-relaxed text-muted-foreground">{{ t(`connect.wizard.verify.statuses.${s}.fix`) }}</dd>
         </div>

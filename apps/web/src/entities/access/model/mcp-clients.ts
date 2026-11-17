@@ -34,6 +34,8 @@ export interface McpClientInput {
   auth: boolean
   /** A key minted on this page just now, or null — clients that cannot read env get a placeholder then. */
   key: string | null
+  /** The generic client's name in the reader's language. */
+  anyClientName?: string
 }
 
 export interface McpClientGuide {
@@ -346,7 +348,7 @@ export function mcpClients(input: McpClientInput): McpClientGuide[] {
     },
     {
       id: 'http',
-      name: 'Any client · curl',
+      name: input.anyClientName ?? 'Any MCP client',
       command: null,
       config: {
         path: 'POST ' + url,

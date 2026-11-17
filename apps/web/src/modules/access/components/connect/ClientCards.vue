@@ -61,7 +61,7 @@ function facts(c: McpClientGuide): string {
         :class="model === c.id ? 'border-primary/60 bg-primary/5' : 'hover:border-foreground/20'"
       >
         <input v-model="model" type="radio" name="kn-wiz-client" :value="c.id" class="sr-only" />
-        <span class="pr-8 font-display text-lg leading-tight font-semibold tracking-tight wrap-anywhere">{{ c.name }}</span>
+        <span class="pr-8 text-base leading-tight font-semibold wrap-anywhere">{{ c.name }}</span>
         <span class="mt-1 text-xs text-muted-foreground">{{ t(`connect.wizard.client.kinds.${KIND[c.id] ?? 'any'}`) }}</span>
         <span class="mt-auto max-w-[70%] pt-4 text-caption text-muted-foreground">{{ facts(c) }}</span>
 

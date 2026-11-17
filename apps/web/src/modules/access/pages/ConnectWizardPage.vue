@@ -13,7 +13,7 @@
  * gone, by design. What the answers mean (scope, toolsets, which steps apply)
  * is `connect-plan.ts`, pure and spec'd.
  */
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
@@ -21,12 +21,14 @@ import { ArrowLeft, ArrowRight, Check, ChevronDown, X } from 'lucide-vue-next'
 import { useQueryClient } from '@tanstack/vue-query'
 import type { ApiKeyInfo, McpConnectionInfo } from '@knowledge/contracts'
 import { Button } from '@knowledge/ui/button'
+import { confirm } from '@knowledge/ui/confirm'
 import { Skeleton } from '@knowledge/ui/skeleton'
 import { fetchApi } from '@/shared/api/queries'
 import { ownPath } from '@/shared/utils/own-path'
 import {
   CONNECT_ROLES,
   CONNECT_WORKFLOWS,
+  hasPreferences,
   KEY_ENV,
   mcpClients,
   scopeFor,
@@ -69,9 +71,21 @@ onMounted(async () => {
   }
 })
 
-function close() {
+/**
+ * Leaving drops a key minted here (only its hash is stored), so ask first
+ * unless the person already reached the end. Esc takes the same way out.
+ */
+async function close() {
+  const ask = fresh.value && step.value !== 'verify'
+  if (ask && !(await confirm({ title: t('connect.wizard.leave.title'), description: t('connect.wizard.leave.body'), action: t('connect.wizard.leave.action') })))
+    return
   void router.push(ownPath(route.query.next, '/settings/ai/connect'))
 }
+function onEscape(e: KeyboardEvent) {
+  if (e.key === 'Escape' && !e.defaultPrevented) void close()
+}
+onMounted(() => window.addEventListener('keydown', onEscape))
+onBeforeUnmount(() => window.removeEventListener('keydown', onEscape))
 
 /* ------------------------------------------------------------------ answers */
 
@@ -91,7 +105,13 @@ const kit = ref<'yes' | 'no'>('yes')
 
 const clients = computed(() =>
   connection.value
-    ? mcpClients({ url: connection.value.url, serverName: connection.value.serverName, auth: needsKey.value, key: fresh.value?.apiKey ?? null })
+    ? mcpClients({
+        url: connection.value.url,
+        serverName: connection.value.serverName,
+        auth: needsKey.value,
+        key: fresh.value?.apiKey ?? null,
+        anyClientName: t('connect.wizard.client.anyName'),
+      })
     : [],
 )
 const client = computed(() => clients.value.find((c) => c.id === clientId.value) ?? null)
@@ -110,12 +130,9 @@ const check = computed(() => {
 const stackable = computed(
   () => !!(connection.value && client.value?.skillDir && skillStackInstallCommand(connection.value.url, client.value.skillDir, false)),
 )
-const steps = computed(() =>
-  stepsFor({
-    needsKey: needsKey.value,
-    client: client.value && { stackable: stackable.value, captureKit: client.value.captureKit },
-    workflows: workflows.value,
-  }),
+const steps = computed(() => stepsFor({ needsKey: needsKey.value }))
+const preferences = computed(() =>
+  hasPreferences({ client: client.value && { stackable: stackable.value, captureKit: client.value.captureKit }, workflows: workflows.value }),
 )
 const index = ref(0)
 const step = computed<ConnectStep>(() => steps.value[Math.min(index.value, steps.value.length - 1)]!)
@@ -144,10 +161,10 @@ function next() {
   if (last.value) return close()
   if (ok(step.value)) go(index.value + 1)
 }
-/** Enter on a choice moves on, as it would submit a one-question form. */
+/** Enter on a choice moves on, as it would submit a one-question form — except inside the key form, which submits itself. */
 function onEnter(e: KeyboardEvent) {
   const el = e.target as HTMLInputElement
-  if (el.type === 'radio' || el.type === 'checkbox') {
+  if ((el.type === 'radio' || el.type === 'checkbox') && !el.closest('form')) {
     e.preventDefault()
     next()
   }
@@ -156,12 +173,27 @@ function onEnter(e: KeyboardEvent) {
 // Each step replaces the last: focus its heading so a screen reader hears where it is.
 const heading = ref<HTMLElement | null>(null)
 const paneOpen = ref(false)
-watch(step, (now) => {
-  if (now === 'configure') paneOpen.value = true
+watch(step, () => {
   void nextTick(() => heading.value?.focus({ preventScroll: true }))
   main.value?.scrollTo({ top: 0 })
 })
 const main = ref<HTMLElement | null>(null)
+
+/**
+ * The config pane is a live preview while the answers are being given. From
+ * Configure on, the commands are the step itself, in the question column, so
+ * the pane steps aside rather than repeat them.
+ */
+const showPane = computed(() => steps.value.indexOf(step.value) < steps.value.indexOf('configure'))
+
+// The tab names the step (WCAG 2.4.2); the shell, which normally does this, is not mounted here.
+watch(
+  [step, () => t('connect.wizard.title')],
+  ([now, title]) => {
+    if (typeof document !== 'undefined') document.title = `${t(`connect.wizard.steps.${now}`)} · ${title} · Knowledge`
+  },
+  { immediate: true },
+)
 
 /* ---------------------------------------------------------------- the words */
 
@@ -218,6 +250,10 @@ function helpAt(key: string): HelpItem[] {
   const raw = tm(key) as unknown
   return Array.isArray(raw) ? (raw as { q: unknown; a: unknown }[]).map((i) => ({ q: rt(i.q as string), a: rt(i.a as string) })) : []
 }
+/** On a question, help is "not sure?"; once something is installed, it is "not working?". */
+const helpTitle = computed(() =>
+  ['role', 'client', 'workflow', 'preferences'].includes(step.value) ? t('connect.wizard.help.unsure') : t('connect.wizard.help.title'),
+)
 const help = computed(() => [
   ...helpAt(`connect.wizard.help.${step.value}`),
   ...(client.value && (step.value === 'configure' || step.value === 'verify') ? helpAt(`connect.wizard.clientHelp.${client.value.note}`) : []),
@@ -226,12 +262,12 @@ const help = computed(() => [
 
 <template>
   <header class="flex h-14 shrink-0 items-center gap-3 border-b px-4 lg:px-6">
-    <h1 class="min-w-0 truncate font-display text-base font-semibold tracking-tight">{{ t('connect.wizard.title') }}</h1>
+    <h1 class="sr-only min-w-0 truncate font-display text-base font-semibold tracking-tight lg:not-sr-only">{{ t('connect.wizard.title') }}</h1>
     <!-- The rail's job below lg: where you are, and a way back to an answered step. -->
     <label v-if="!loading && connection" class="relative ml-auto flex min-w-0 items-center lg:hidden">
       <span class="sr-only">{{ t('connect.wizard.stepsLabel') }}</span>
       <select
-        class="h-8 max-w-[10rem] appearance-none rounded-md border bg-transparent pr-7 pl-2.5 text-xs outline-none focus-visible:ring-3 focus-visible:ring-ring"
+        class="h-9 max-w-[12rem] appearance-none rounded-md border bg-transparent pr-7 pl-2.5 text-base outline-none focus-visible:ring-3 focus-visible:ring-ring"
         :value="index"
         @change="go(Number(($event.target as HTMLSelectElement).value))"
       >
@@ -254,7 +290,11 @@ const help = computed(() => [
 
   <p v-else-if="!connection" class="m-auto px-4 text-sm text-muted-foreground">{{ t('connect.loadFailed') }}</p>
 
-  <div v-else class="min-h-0 flex-1 overflow-y-auto lg:grid lg:grid-cols-[14rem_minmax(0,1fr)_minmax(19rem,26rem)] lg:overflow-hidden">
+  <div
+    v-else
+    class="min-h-0 flex-1 overflow-y-auto lg:grid lg:overflow-hidden"
+    :class="showPane ? 'lg:grid-cols-[14rem_minmax(0,1fr)_minmax(19rem,26rem)]' : 'lg:grid-cols-[14rem_minmax(0,1fr)]'"
+  >
     <!-- The steps ---------------------------------------------------------- -->
     <nav :aria-label="t('connect.wizard.stepsLabel')" class="hidden overflow-y-auto border-r bg-sidebar px-3 py-6 lg:block">
       <ol class="grid gap-0.5">
@@ -308,7 +348,7 @@ const help = computed(() => [
             quiet-legend
             multiple
             :legend="t('connect.wizard.steps.workflow')"
-            :note="workflows.length ? t('connect.wizard.workflow.needs', { scope: t(`connect.keys.scopes.${scopeFor(workflows)}`) }) : undefined"
+            :note="needsKey && workflows.length ? t('connect.wizard.workflow.needs', { scope: t(`connect.keys.scopes.${scopeFor(workflows)}`) }) : undefined"
             :options="workflowOptions"
           />
         </div>
@@ -323,6 +363,9 @@ const help = computed(() => [
           />
         </div>
         <div v-show="step === 'preferences'" class="grid gap-6">
+          <p v-if="!preferences" class="kn-measure text-sm text-muted-foreground">
+            {{ t('connect.wizard.preferences.none', { client: client?.name ?? '' }) }}
+          </p>
           <ChoiceCards v-if="stackable" v-model="skillFormat" name="kn-wiz-skill" :legend="t('connect.wizard.preferences.skill.legend')" :options="skillOptions" />
           <ChoiceCards
             v-if="client?.captureKit && workflows.includes('capture')"
@@ -332,7 +375,10 @@ const help = computed(() => [
             :options="kitOptions"
           />
         </div>
-        <div v-if="client" v-show="step === 'skill'">
+        <div v-if="step === 'configure'">
+          <ConfigPane :url="connection.url" :client="client" :needs-key="needsKey" :api-key="fresh?.apiKey ?? null" />
+        </div>
+        <div v-if="client && step === 'skill'">
           <SkillStep
             :url="connection.url"
             :client="client"
@@ -357,7 +403,7 @@ const help = computed(() => [
           />
         </div>
 
-        <StepHelp :key="step" :items="help" />
+        <StepHelp :key="step" :title="helpTitle" :items="help" />
 
         <!-- Pinned to the bottom of whatever scrolls, so a long step never hides its way on. -->
         <footer
@@ -376,7 +422,7 @@ const help = computed(() => [
     </main>
 
     <!-- The config --------------------------------------------------------- -->
-    <aside class="min-w-0 border-t bg-sidebar px-4 py-6 lg:overflow-y-auto lg:border-t-0 lg:border-l lg:px-8 lg:py-10" :aria-label="t('connect.wizard.pane.title')">
+    <aside v-if="showPane" class="min-w-0 border-t bg-sidebar px-4 py-6 lg:overflow-y-auto lg:border-t-0 lg:border-l lg:px-8 lg:py-10" :aria-label="t('connect.wizard.pane.title')">
       <h2 class="hidden font-display text-sm font-semibold tracking-tight lg:block">{{ t('connect.wizard.pane.title') }}</h2>
       <button
         type="button"

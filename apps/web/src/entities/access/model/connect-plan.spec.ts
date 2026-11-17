@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CONNECT_ROLES, scopeFor, stepsFor, toolsetsFor, workflowsFor } from './connect-plan'
+import { CONNECT_ROLES, hasPreferences, scopeFor, stepsFor, toolsetsFor, workflowsFor } from './connect-plan'
 
 describe('connect plan', () => {
   it('every role starts from asking, and seeds a copy the caller may change', () => {
@@ -23,21 +23,16 @@ describe('connect plan', () => {
     expect(toolsetsFor(['ask', 'code', 'author', 'review', 'capture', 'qa'])).not.toContain('core')
   })
 
-  it('shows only the steps that apply', () => {
-    const claude = { stackable: true, captureKit: 'claude-code' }
-    const desktop = { stackable: false, captureKit: null }
-    expect(stepsFor({ needsKey: true, client: claude, workflows: ['ask'] })).toEqual([
-      'role', 'client', 'workflow', 'key', 'preferences', 'configure', 'skill', 'verify',
-    ])
-    // Dev mode has no key; a client with no skill stack and no kit has nothing to prefer.
-    expect(stepsFor({ needsKey: false, client: desktop, workflows: ['ask', 'capture'] })).toEqual([
-      'role', 'client', 'workflow', 'configure', 'skill', 'verify',
-    ])
-    // A kit alone is a preference, but only once capturing was chosen.
-    const kitOnly = { stackable: false, captureKit: 'cursor' }
-    expect(stepsFor({ needsKey: true, client: kitOnly, workflows: ['capture'] })).toContain('preferences')
-    expect(stepsFor({ needsKey: true, client: kitOnly, workflows: ['ask'] })).not.toContain('preferences')
-    // Before a client is chosen the list does not shrink under the person.
-    expect(stepsFor({ needsKey: true, client: null, workflows: [] })).toContain('preferences')
+  it('keeps the step count fixed; only the key step depends on the server', () => {
+    expect(stepsFor({ needsKey: true })).toEqual(['role', 'client', 'workflow', 'key', 'preferences', 'configure', 'skill', 'verify'])
+    expect(stepsFor({ needsKey: false })).toEqual(['role', 'client', 'workflow', 'preferences', 'configure', 'skill', 'verify'])
+  })
+
+  it('has preferences only for a stackable skill dir, or a kit once capturing was chosen', () => {
+    expect(hasPreferences({ client: { stackable: true, captureKit: null }, workflows: ['ask'] })).toBe(true)
+    expect(hasPreferences({ client: { stackable: false, captureKit: null }, workflows: ['capture'] })).toBe(false)
+    expect(hasPreferences({ client: { stackable: false, captureKit: 'cursor' }, workflows: ['capture'] })).toBe(true)
+    expect(hasPreferences({ client: { stackable: false, captureKit: 'cursor' }, workflows: ['ask'] })).toBe(false)
+    expect(hasPreferences({ client: null, workflows: [] })).toBe(false)
   })
 })

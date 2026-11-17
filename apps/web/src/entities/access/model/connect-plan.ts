@@ -62,12 +62,16 @@ export interface StepInput {
   workflows: readonly ConnectWorkflow[]
 }
 
-/** The steps that apply to these answers, in order. */
-export function stepsFor({ needsKey, client, workflows }: StepInput): ConnectStep[] {
-  const kit = !!client?.captureKit && workflows.includes('capture')
-  return CONNECT_STEPS.filter((step) => {
-    if (step === 'key') return needsKey
-    if (step === 'preferences') return !client || client.stackable || kit
-    return true
-  })
+/**
+ * The steps that apply, in order. Only the key step depends on the server, so
+ * the count never moves under the person while they answer: Preferences stays
+ * even when there is nothing to choose, and says so (`hasPreferences`).
+ */
+export function stepsFor({ needsKey }: { needsKey: boolean }): ConnectStep[] {
+  return CONNECT_STEPS.filter((step) => step !== 'key' || needsKey)
+}
+
+/** Whether Preferences has anything to ask for this client and these workflows. */
+export function hasPreferences({ client, workflows }: Omit<StepInput, 'needsKey'>): boolean {
+  return !!client && (client.stackable || (!!client.captureKit && workflows.includes('capture')))
 }

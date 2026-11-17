@@ -15,6 +15,7 @@ export { clientMark } from './model/client-logos'
 export {
   CONNECT_ROLES,
   CONNECT_WORKFLOWS,
+  hasPreferences,
   scopeFor,
   stepsFor,
   toolsetsFor,

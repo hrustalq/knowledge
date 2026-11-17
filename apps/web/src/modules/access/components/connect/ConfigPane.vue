@@ -9,6 +9,7 @@ import { computed, onBeforeUnmount, reactive, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ExternalLink } from 'lucide-vue-next'
 import { CopyBlock, KEY_ENV, type McpClientGuide } from '@/entities/access'
+import { codeSpans } from '../../model/code-spans'
 
 const props = defineProps<{
   url: string
@@ -74,7 +75,10 @@ onBeforeUnmount(() => timers.forEach(clearTimeout))
       </div>
       <p v-if="placeholder" class="text-caption text-panel-warning-ink">{{ t('connect.clients.placeholder') }}</p>
       <p class="text-caption text-muted-foreground">
-        {{ t(`connect.clients.notes.${client.note}`) }}
+        <template v-for="(span, i) in codeSpans(t(`connect.clients.notes.${client.note}`))" :key="i">
+          <code v-if="span.code" class="font-mono">{{ span.text }}</code>
+          <template v-else>{{ span.text }}</template>
+        </template>
         <a :href="client.docs" target="_blank" rel="noopener noreferrer" class="ml-1 inline-flex items-center gap-0.5 text-primary underline underline-offset-2">
           {{ t('connect.clients.docs') }}<ExternalLink class="size-3" aria-hidden="true" />
         </a>

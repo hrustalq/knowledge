@@ -17,6 +17,7 @@ import { Label } from '@knowledge/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@knowledge/ui/select'
 import { api, fetchApi } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
+import { errorMessage } from '@/shared/api/errors'
 import { CopyBlock } from '@/entities/access'
 import { useWorkspacesStore } from '@/stores/workspaces'
 import ChoiceCards from './ChoiceCards.vue'
@@ -98,7 +99,7 @@ async function create() {
     })
     emit('created', { key: res.key, apiKey: res.apiKey })
   } catch (e) {
-    error.value = (e as Error).message || t('connect.keys.createFailed')
+    error.value = errorMessage(e, t) || t('connect.keys.createFailed')
   } finally {
     creating.value = false
   }
@@ -113,7 +114,7 @@ async function create() {
         <TriangleAlert class="size-3.5 shrink-0 translate-y-0.5" aria-hidden="true" />
         <span>{{ t('connect.wizard.key.created', { name: fresh.key.name }) }} {{ t('connect.wizard.key.reload') }}</span>
       </p>
-      <CopyBlock :code="fresh.apiKey" label="API key" secret />
+      <CopyBlock :code="fresh.apiKey" :label="t('connect.wizard.key.label')" secret />
     </div>
 
     <template v-else>
@@ -197,22 +198,18 @@ async function create() {
               <span class="mt-0.5 block text-xs text-muted-foreground">{{ t('connect.wizard.key.limitHint') }}</span>
             </span>
           </label>
-          <div v-if="limit" class="flex flex-wrap gap-1.5 pl-6.5">
-            <span class="rounded-md border border-dashed px-2.5 py-1 text-xs text-muted-foreground">
-              {{ t('connect.toolsets.core.label') }} · {{ t('connect.keys.toolsetPicker.always') }}
-            </span>
-            <button
-              v-for="key in PICKABLE"
-              :key="key"
-              type="button"
-              class="rounded-md border px-2.5 py-1 text-xs transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring"
-              :class="toolsets.includes(key) ? 'border-primary/40 bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-accent hover:text-foreground'"
-              :aria-pressed="toolsets.includes(key)"
-              :title="t(`connect.toolsets.${key}.description`)"
-              @click="toggleToolset(key)"
-            >
-              {{ t(`connect.toolsets.${key}.label`) }}
-            </button>
+          <!-- Each toolset with what it does, in text: a tooltip never reaches the keyboard or a touch screen. -->
+          <div v-if="limit" class="grid gap-x-4 gap-y-2 pl-6.5 sm:grid-cols-2">
+            <p class="text-xs text-muted-foreground sm:col-span-2">
+              <span class="font-medium text-foreground">{{ t('connect.toolsets.core.label') }}</span> · {{ t('connect.keys.toolsetPicker.always') }}
+            </p>
+            <label v-for="key in PICKABLE" :key="key" class="flex min-w-0 cursor-pointer items-start gap-2.5">
+              <input type="checkbox" class="mt-0.5 size-4 shrink-0 accent-primary" :checked="toolsets.includes(key)" @change="toggleToolset(key)" />
+              <span class="min-w-0">
+                <span class="block text-sm">{{ t(`connect.toolsets.${key}.label`) }}</span>
+                <span class="block text-caption text-muted-foreground">{{ t(`connect.toolsets.${key}.description`) }}</span>
+              </span>
+            </label>
           </div>
           <p v-else class="pl-6.5 text-caption text-muted-foreground">{{ t('connect.wizard.key.unlimited') }}</p>
         </fieldset>

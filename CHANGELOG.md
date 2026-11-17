@@ -17,6 +17,11 @@ in the pull request that introduces them — see
 
 ### Fixed
 
+- An agent mentioned in a page or merge-request comment answered without project memory: nothing was recalled before
+  the reply and nothing was retained after it, in restricted and unrestricted projects alike, and its skills were
+  matched against an empty question. The reply read its own still-empty placeholder as the question. It now uses the
+  comment that mentioned the agent, so a mention reply recalls from and retains into the page's project bank under the
+  rules of doc 80. (#1208)
 - On a phone or tablet the page tree's ⋯ menu (New child page, Move to…, Export…, Access…) was hidden until hover, so a
   page could not be moved from the tree by touch. It is now always shown where there is no hover, with a 44px touch
   target, in both the navigation drawer and the Pages tree view; a swipe that starts on a row now scrolls the tree

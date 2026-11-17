@@ -1,4 +1,4 @@
-import type { ChatPlatformKind } from '@knowledge/contracts';
+import type { ChatPlatformKind, Locale } from '@knowledge/contracts';
 
 /**
  * The seam between the chat core and one messenger (issue #71).
@@ -195,6 +195,8 @@ export interface ChatAdapterContext {
   actionUrl: string;
   /** The key a platform signs every delivery with (Slack's signing secret); null where it signs nothing. */
   signingSecret?: string | null;
+  /** The bot's own language (`chat_integrations.locale`): text it sends with no person to read the language from. */
+  locale?: Locale;
 }
 
 /** The platform refused or could not be reached. The message never contains the token. */

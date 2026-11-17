@@ -443,6 +443,16 @@ The web pages are `/settings/chat` (`ChatSettingsPage.vue` +
 
 `/cmd@OtherBot` in a group is somebody else's command and is dropped.
 
+Telegram's `/` menu and autocomplete list them (#1223): every webhook
+registration (save, re-enable, **Test**) also sends `setMyCommands` per scope.
+Private chats list `/new`, `/unlink`, `/capture`, `/forget` and `/help`. Groups
+list `/ask`, `/new`, `/capture`, `/forget` and `/help`, plus `/bind` and
+`/unbind` for group admins only. Each scope is sent in en and ru, plus a
+fallback in the bot's `locale`. `TELEGRAM_COMMANDS` in `telegram.adapter.ts` is
+the list, and `chat-telegram.spec.ts` fails when it and the dispatcher's
+command switch disagree. A refused menu is logged and never marks the webhook
+failed.
+
 On Time the commands are the same words **without the slash** — `help`, `new`,
 `unlink`, `bind`, `unbind`, and `capture` (also `remember` or `запомни`, said
 inside the thread) — sent as a whole message (in a channel, after

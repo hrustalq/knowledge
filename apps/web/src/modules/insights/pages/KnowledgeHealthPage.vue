@@ -37,11 +37,11 @@ import { errorMessage } from '@/shared/api/errors'
 import { getProjectId, getWorkspaceId } from '@/shared/api/api'
 import { useAuthStore } from '@/stores/auth'
 import { useProjectsStore } from '@/stores/projects'
+import { DocumentPreviewSheet } from '@/entities/document'
 import { Button } from '@knowledge/ui/button'
 import { PageLayout, PageTabs, panelId, tabId, usePageTabs, type PageTab } from '@knowledge/ui/layout'
 import HealthBulkBar from '@/modules/insights/components/HealthBulkBar.vue'
 import HealthFilters from '@/modules/insights/components/HealthFilters.vue'
-import HealthPreviewSheet from '@/modules/insights/components/HealthPreviewSheet.vue'
 import HealthSettings from '@/modules/insights/components/HealthSettings.vue'
 import WorkItemRulesSettings from '@/modules/insights/components/WorkItemRulesSettings.vue'
 import HealthTable from '@/modules/insights/components/HealthTable.vue'
@@ -272,6 +272,12 @@ async function runHandoff(connectorId: string) {
 /* --------------------------------------------------------------- preview */
 
 const previewRow = ref<KnowledgeHealthRow | null>(null)
+
+/** The sheet's widget wrote: the row it was opened from may have left its preset. */
+function onPreviewChanged() {
+  void queryClient.invalidateQueries({ queryKey: ['/v1/knowledge-health'] })
+  void queryClient.invalidateQueries({ queryKey: ['/v1/knowledge-health/summary'] })
+}
 </script>
 
 <template>
@@ -351,6 +357,11 @@ const previewRow = ref<KnowledgeHealthRow | null>(null)
       <WorkItemRulesSettings v-if="auth.canAdminWorkspace" class="mt-10" />
     </div>
 
-    <HealthPreviewSheet :row="previewRow" @close="previewRow = null" />
+    <DocumentPreviewSheet
+      :document-id="previewRow?.documentId ?? null"
+      :title="previewRow?.title"
+      @close="previewRow = null"
+      @changed="onPreviewChanged"
+    />
   </PageLayout>
 </template>

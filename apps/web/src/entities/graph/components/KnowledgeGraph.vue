@@ -26,6 +26,9 @@
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useResizeObserver } from '@vueuse/core'
+import { Crosshair } from 'lucide-vue-next'
+import { Button } from '@knowledge/ui/button'
+import { DocumentPreviewSheet } from '@/entities/document'
 import {
   forceCollide,
   forceLink,
@@ -56,7 +59,6 @@ const props = withDefaults(
 )
 
 const emit = defineEmits<{
-  open: [id: string]
   /** An operation or channel entity (#78): its card in the API reference is where it lives. */
   'open-operation': [key: string]
   select: [node: GraphNodeInput | null]
@@ -639,6 +641,62 @@ function pick(px: number, py: number): SimNode | null {
   return best
 }
 
+/* ---------------------------------------------------------------- preview */
+
+/**
+ * A page node opens beside the graph rather than replacing it (#1254): the
+ * preview sheet, with the node pinned so its neighbourhood stays lit. The
+ * browser's own "elsewhere" gestures — Ctrl/⌘-click, middle-click — still
+ * open the page itself, in a new tab, as they would on a link.
+ */
+const preview = shallowRef<{ id: string; title: string } | null>(null)
+const pageHref = (id: string) => `/documents/${id}`
+
+function openPreview(node: { id: string; label: string }) {
+  preview.value = { id: node.id, title: node.label }
+}
+
+function openInNewTab(id: string) {
+  window.open(pageHref(id), '_blank', 'noopener')
+}
+
+/**
+ * "Center graph here": the previewed node to the middle of what is still
+ * visible. The sheet covers the canvas from the right on a wide screen and
+ * from the bottom on a narrow one, so the node lands beside it, not under it.
+ * The zoom stays: the reader chose it.
+ */
+function onCenter(e: MouseEvent) {
+  const n = simNodes.find((s) => s.id === preview.value?.id)
+  const host = hostEl.value?.getBoundingClientRect()
+  if (!n || !host) return
+  const cover = (e.currentTarget as Element).closest('[data-slot="sheet-content"]')?.getBoundingClientRect()
+  let right = width
+  let bottom = height
+  if (cover && cover.left > host.left + width / 2) right = Math.max(cover.left - host.left, 80)
+  else if (cover && cover.top > host.top + height / 3) bottom = Math.max(cover.top - host.top, 80)
+  userFramed = true
+  view.x = (props.insetLeft + right) / 2 - n.x * view.k
+  view.y = bottom / 2 - n.y * view.k
+  pinned.value = n
+  wake()
+}
+
+/** The fallback link: a plain click previews, any modified click is the browser's. */
+function onLinkClick(e: MouseEvent, node: { id: string; label: string }) {
+  if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
+  e.preventDefault()
+  openPreview(node)
+}
+
+/** Middle-click on a page node: a new tab, the way a middle-clicked link opens one. */
+function onAuxClick(e: MouseEvent) {
+  if (e.button !== 1) return
+  const rect = canvasEl.value!.getBoundingClientRect()
+  const node = pick(e.clientX - rect.left, e.clientY - rect.top)
+  if (node?.kind === 'document') openInNewTab(node.id)
+}
+
 let drag: { node: SimNode | null; startX: number; startY: number; ox: number; oy: number; moved: boolean } | null = null
 
 function local(e: PointerEvent) {
@@ -701,9 +759,16 @@ function onPointerUp(e: PointerEvent) {
   }
   if (d.moved) { wake(); return }
 
-  if (!d.node) { pinned.value = null; emit('select', null); wake(); return }
+  if (!d.node) { pinned.value = null; preview.value = null; emit('select', null); wake(); return }
+  if (d.node.kind === 'document' && (e.metaKey || e.ctrlKey)) {
+    openInNewTab(d.node.id)
+    return
+  }
   if (d.node.kind === 'document' && d.node.id !== props.rootId) {
-    emit('open', d.node.id)
+    openPreview(d.node)
+    pinned.value = d.node
+    emit('select', d.node)
+    wake()
     return
   }
   if (d.node.kind === 'entity' && isOperationType(d.node.entityType)) {
@@ -738,7 +803,9 @@ function onKeydown(e: KeyboardEvent) {
     '=': () => zoomBy(1.25),
     '-': () => zoomBy(0.8),
     '0': () => fit(),
-    Escape: () => { pinned.value = null; emit('select', null) },
+    // The preview closes here too: this handler prevents the default, and the
+    // sheet's own Esc listener stands down for a prevented event.
+    Escape: () => { pinned.value = null; preview.value = null; emit('select', null) },
   }
   const fn = map[e.key]
   if (!fn) return
@@ -803,8 +870,15 @@ const cardStyle = computed(() => {
   }
 })
 
+/**
+ * The card describes the node under the pointer. A pinned node (a previewed
+ * page, a clicked entity) keeps its neighbourhood lit, but hovering another
+ * node must not print the pinned one's name beside it.
+ */
+const cardNode = computed(() => hovered.value ?? pinned.value)
+
 const cardRelations = computed(() => {
-  const id = focusId.value
+  const id = cardNode.value?.id
   if (!id) return []
   const seen = new Map<string, number>()
   for (const e of simEdges) {
@@ -834,6 +908,8 @@ const operationNodes = computed(() => projection.value.nodes.filter((n) => n.kin
       @pointercancel="onPointerUp"
       @pointerleave="onLeave"
       @wheel="onWheel"
+      @auxclick="onAuxClick"
+      @mousedown.middle.prevent
       @keydown="onKeydown"
     />
 
@@ -846,7 +922,7 @@ const operationNodes = computed(() => projection.value.nodes.filter((n) => n.kin
          Every collapsed row is zero-height, so the focused one lands at the top. -->
     <ul class="absolute top-2 left-2 z-20">
       <li v-for="n in documentNodes" :key="n.id">
-        <a :href="`/documents/${n.id}`" :class="FOCUS_REVEAL" @click.prevent="emit('open', n.id)">{{ n.label }}</a>
+        <a :href="pageHref(n.id)" :class="FOCUS_REVEAL" @click="onLinkClick($event, n)">{{ n.label }}</a>
       </li>
       <li v-for="n in operationNodes" :key="n.id">
         <button type="button" :class="FOCUS_REVEAL" @click="emit('open-operation', n.id)">{{ n.label }}</button>
@@ -864,21 +940,35 @@ const operationNodes = computed(() => projection.value.nodes.filter((n) => n.kin
          said once, for the thing actually being asked about. -->
     <Transition name="kn-fade">
       <div
-        v-if="focusNode && hoverPoint"
+        v-if="cardNode && hoverPoint"
         class="pointer-events-none absolute z-10 max-w-60 rounded-lg border bg-card/95 px-2.5 py-2 shadow-[0_16px_48px_-12px] shadow-foreground/20 backdrop-blur-sm dark:shadow-black/60"
         :style="cardStyle"
       >
-        <p class="truncate text-ui font-semibold leading-tight">{{ focusNode.label }}</p>
+        <p class="truncate text-ui font-semibold leading-tight">{{ cardNode.label }}</p>
         <p class="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-caption text-muted-foreground">
           <span class="rounded-full border px-1.5 py-px">
-            {{ focusNode.kind === 'document' ? t('graph.kindPage') : (focusNode.entityType ?? t('graph.kindEntity')) }}
+            {{ cardNode.kind === 'document' ? t('graph.kindPage') : (cardNode.entityType ?? t('graph.kindEntity')) }}
           </span>
-          <span>{{ t('graph.linkCount', { n: focusNode.degree ?? 0 }, focusNode.degree ?? 0) }}</span>
+          <span>{{ t('graph.linkCount', { n: cardNode.degree ?? 0 }, cardNode.degree ?? 0) }}</span>
         </p>
         <p v-if="cardRelations.length" class="mt-1 truncate font-mono text-micro text-muted-foreground">
           {{ cardRelations.map(([type, n]) => (n > 1 ? `${type} ×${n}` : type)).join(' · ') }}
         </p>
       </div>
     </Transition>
+
+    <DocumentPreviewSheet
+      :document-id="preview?.id ?? null"
+      :title="preview?.title"
+      :modal="false"
+      @close="preview = null"
+    >
+      <template #actions>
+        <Button variant="outline" size="xs" @click="onCenter">
+          <Crosshair class="size-3" />
+          {{ t('graph.centerHere') }}
+        </Button>
+      </template>
+    </DocumentPreviewSheet>
   </div>
 </template>

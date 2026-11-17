@@ -13,6 +13,16 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Changed
+
+- Clicking a page in a graph (the Pages graph, a page's graph widget and its full-screen view) opens the page in a
+  side sheet beside the graph instead of navigating away: title, breadcrumbs, verification and the rendered page,
+  with **Open page** and **Center graph here**. Clicking another page swaps the sheet; Esc or a click on empty canvas
+  closes it. Ctrl/⌘-click and middle-click open the page in a new tab. On a phone the sheet rises from the bottom.
+  The knowledge-health preview is the same sheet and now shows the page's breadcrumbs from its ancestors. (#1254)
+
 ## [0.59.0] — 2026-11-17
 
 ### Added

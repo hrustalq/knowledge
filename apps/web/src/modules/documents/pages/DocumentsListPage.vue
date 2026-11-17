@@ -21,7 +21,7 @@
  */
 import { computed, onMounted, onServerPrefetch, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { useQueryClient } from '@tanstack/vue-query'
 import { Archive, FileText, List, ListTree, Loader2, Network, NotepadTextDashed, Plus, SlidersHorizontal, Upload, X } from 'lucide-vue-next'
@@ -60,7 +60,6 @@ const projects = useProjectsStore()
  * graph, tags and timeline, then the project's.
  */
 const scopeReady = computed(() => projects.activeId !== null || projects.loaded)
-const router = useRouter()
 const route = useRoute()
 const queryClient = useQueryClient()
 
@@ -325,7 +324,6 @@ watch(virtualRows, (rows) => {
             :show-entity-controls="hasEntities"
             :time="graphTime"
             storage-key="kn_graph_opts_workspace"
-            @open="(id) => router.push(`/documents/${id}`)"
           />
         </template>
 

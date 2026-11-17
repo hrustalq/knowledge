@@ -264,6 +264,8 @@
     }
   },
   "documents": {
+    "previewRoot": "Top level",
+    "previewOpen": "Open page",
     "title": "Pages",
     "scopeProject": "in {name}",
     "scopeWorkspace": "in this workspace",
@@ -2034,6 +2036,7 @@
     "newChildFromTemplate": "New child page from template…"
   },
   "graph": {
+    "centerHere": "Center graph here",
     "depth": "Depth",
     "hops": "{n} hop | {n} hops",
     "zoomIn": "Zoom in",
@@ -5673,8 +5676,6 @@
     "selectAll": "Select every loaded page",
     "selectRow": "Select “{title}”",
     "preview": "Preview",
-    "previewRoot": "Top level",
-    "openPage": "Open page",
     "emptyChip": "Empty",
     "missingPathsChip": "{n} missing path | {n} missing paths",
     "brokenCallsChip": "{n} missing operation | {n} missing operations",

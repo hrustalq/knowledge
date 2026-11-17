@@ -46,8 +46,6 @@ const props = withDefaults(
   { rootId: null, truncated: false, showEntityControls: true, storageKey: '', time: null, loading: false },
 )
 
-const emit = defineEmits<{ open: [id: string] }>()
-
 const { t } = useI18n()
 const router = useRouter()
 
@@ -122,7 +120,6 @@ const summary = computed(() =>
       :options="options"
       :query="query"
       :inset-left="narrow ? 0 : 264"
-      @open="emit('open', $event)"
       @open-operation="openOperation"
       @stats="stats = $event"
     />

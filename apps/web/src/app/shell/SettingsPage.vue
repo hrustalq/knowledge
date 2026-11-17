@@ -20,6 +20,7 @@ import {
   MessagesSquare,
   Milestone,
   Plug,
+  Settings2,
   ShieldCheck,
   Sparkles,
   ToggleRight,
@@ -39,8 +40,8 @@ const features = useFeaturesStore()
 
 interface SettingsLink { to: string; label: string; icon: Component; hint: string }
 const links = computed<SettingsLink[]>(() => [
-  // First, and open to every role: the only section that acts on you rather
-  // than on the workspace.
+  { to: '/settings/general', label: t('nav.general'), icon: Settings2, hint: t('settings.generalHint') },
+  // Open to every role: the only section that acts on you rather than on the workspace.
   { to: '/settings/profile', label: t('nav.profile'), icon: UserRound, hint: t('settings.profileHint') },
   { to: '/settings/notifications', label: t('nav.notifications'), icon: Bell, hint: t('settings.notificationsHint') },
   // Open to every role: an export is a reader's act, and this lists your own.

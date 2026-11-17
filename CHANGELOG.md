@@ -65,6 +65,7 @@ in the pull request that introduces them — see
 - A blueprint that a project follows can no longer be deleted. The delete is refused with the number of projects
   using it; switch it off (archive) instead, which hides it from pickers while the projects that follow it keep
   reading it. (#1125)
+- Workspace rename and delete now live under **Settings → General**, first in the settings navigation, instead of at the foot of **Access → Members**. Existing member-tab links still open Members, and only workspace and platform admins see the controls. (#1257)
 
 ### Fixed
 

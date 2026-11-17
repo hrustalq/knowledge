@@ -31,6 +31,8 @@ export interface AssistantThreadSummary {
   title: string | null;
   /** The model pinned to this thread, when the member picked one. */
   modelId: string | null;
+  /** The methodology level the thread works at (#1121), a key from GET /v1/projects/{id}/levels. */
+  level: string | null;
   createdBy: string;
   createdAt: string;
   updatedAt: string;

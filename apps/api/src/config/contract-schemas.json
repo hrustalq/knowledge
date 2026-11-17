@@ -6049,6 +6049,10 @@
         "type": "string",
         "nullable": true
       },
+      "level": {
+        "type": "string",
+        "nullable": true
+      },
       "createdBy": {
         "type": "string"
       },
@@ -6068,6 +6072,7 @@
       "documentId",
       "title",
       "modelId",
+      "level",
       "createdBy",
       "createdAt",
       "updatedAt"

@@ -86,6 +86,17 @@ export async function projectLevels(prisma: PrismaService, projectIds: readonly 
   return out;
 }
 
+/** One level of `projectId`'s methodology by key, with the methodology's id (#1128); null when it declares none such. */
+export async function projectLevel(
+  prisma: PrismaService,
+  projectId: string,
+  key: string,
+): Promise<{ level: BlueprintLevel; blueprintId: string } | null> {
+  const [{ blueprintId }, levels] = await Promise.all([projectScope(prisma, projectId), projectLevels(prisma, [projectId])]);
+  const level = levels.get(projectId)?.find((l) => l.key === key);
+  return level && blueprintId ? { level, blueprintId } : null;
+}
+
 /** A page's level as responses carry it, or undefined. */
 export function pageLevel(templateRef: string | null | undefined, levels: readonly BlueprintLevel[] | undefined, locale: Locale): PageLevel | undefined {
   const level = levelOf(templateRef, levels);

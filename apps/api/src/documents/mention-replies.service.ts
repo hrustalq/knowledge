@@ -497,7 +497,8 @@ export class MentionRepliesService {
         .slice(0, -1)
         .map((c) => `${c.agentKey ? `${c.agentKey} (agent)` : 'A reviewer'} wrote:\n${c.body}`)
         .join('\n\n');
-      question = thread.comments.at(-1)?.body ?? '';
+      // Not `thread.comments.at(-1)`: that is this reply's own empty placeholder (#1208).
+      question = asked?.body ?? '';
       if (said) parts.push(wrapUntrusted(clamp(said, MAX_THREAD_CHARS), 'discussion', 'discussion'));
       if (asked) parts.push(`The comment that mentioned you:\n${clamp(asked.body, MAX_THREAD_CHARS)}`);
     }

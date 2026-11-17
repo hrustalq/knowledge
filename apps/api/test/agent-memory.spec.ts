@@ -269,12 +269,18 @@ describe('mention reply memory (#1167)', () => {
       documentThread: {
         findUnique: vi.fn(async () => ({
           anchor: null,
-          comments: [{ body: 'Is the retry limit right? @curator', pending: false, agentKey: null }],
+          // #1208: by the time the thread is read, `claim()` has already inserted the
+          // agent's own pending, empty placeholder — the question is the comment before it.
+          comments: [
+            { body: 'Is the retry limit right? @curator', pending: false, agentKey: null },
+            { body: '', pending: true, agentKey: 'curator' },
+          ],
         })),
       },
       documentComment: { updateMany: vi.fn(async () => ({ count: 1 })) },
     };
     const client = { chat: vi.fn(async () => 'Yes, three retries.') };
+    const skills = { forTurn: vi.fn(async () => []), renderPrompt: () => '' };
     const memory = {
       ground: vi.fn(async () => ({ text: '<memories>Retries are capped at 3.</memories>', personal: false })),
       remember: vi.fn(async () => undefined),
@@ -282,7 +288,7 @@ describe('mention reply memory (#1167)', () => {
     const s = new MentionRepliesService(
       prisma as never,
       { resolve: vi.fn(async () => ({ key: 'curator', name: 'Curator', enabled: true, config: { enabled: true }, surfaces: ['interactive'], missing: [], skillIds: [], instructions: '' })) } as never,
-      { forTurn: vi.fn(async () => []), renderPrompt: () => '' } as never,
+      skills as never,
       { assertWithinBudget: vi.fn(async () => undefined) } as never,
       client as never,
       { getContent: vi.fn(async () => ({ markdown: 'Retry three times.' })) } as never,
@@ -307,6 +313,7 @@ describe('mention reply memory (#1167)', () => {
     expect(memory.ground).toHaveBeenCalledWith(
       expect.objectContaining({ projectId: PROJECT, userId: USER, audience, query: 'Is the retry limit right? @curator' }),
     );
+    expect(skills.forTurn).toHaveBeenCalledWith(WS, 'Is the retry limit right? @curator', []);
     const [, messages] = client.chat.mock.calls[0]! as unknown as [unknown, Array<{ role: string; content: string }>];
     expect(messages.at(-1)!.content).toMatch(/^<memories>Retries are capped at 3.<\/memories>\n\n/);
     expect(memory.remember).toHaveBeenCalledWith(
@@ -314,6 +321,7 @@ describe('mention reply memory (#1167)', () => {
         audience,
         sourceKind: 'mention-reply',
         sourceId: 'comment-1',
+        question: 'Is the retry limit right? @curator',
         answer: 'Yes, three retries.',
         shareWithProject: true,
       }),

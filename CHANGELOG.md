@@ -13,6 +13,177 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.57.0] — 2026-11-17
+
+### Added
+
+- The Telegram bot now shows its commands: typing `/` (or tapping the menu button) lists them with a one-line
+  description, in Russian or English to match the person's Telegram app, otherwise in the bot's language. A private
+  chat lists `/new`, `/unlink`, `/capture`, `/forget` and `/help`; a group lists `/ask`, `/new`, `/capture`, `/forget`
+  and `/help`, and group admins also see `/bind` and `/unbind`. Before, the commands were only discoverable through
+  `/help`. (#1223)
+- Connecting an AI client is now a full-screen guided setup at `/setup/connect` (**Settings → AI → Connect AI →
+  Connect a client**). It asks what you do, which tool connects (Claude Code, Codex, Gemini CLI, Cursor, VS Code,
+  Claude Desktop, Windsurf, opencode, Zed, and now Qwen Code, Kimi Code, DeepSeek Harness, pi, Oh My Pi and Hermes
+  Agent, or any MCP client) and what the agent will do, then suggests the narrowest key
+  that covers it. The tool's exact command and config file stay on screen and update as you answer, with the new key
+  already in them. The setup installs the skill (and the capture hook for Claude Code and Cursor) and ends by waiting
+  for the client's first call, showing **Connected** when it arrives. If no call arrives, it gives a terminal check
+  and explains what each reply means (no reply, 401, 403, 404, 405). Every step has a "Something not working?" panel
+  with fixes for that step and for the chosen tool, in English and Russian. (#1225)
+
+### Changed
+
+- **Settings → AI → Connect AI** is now where you manage keys: the endpoint, your keys (revoke, last used), what a
+  connected client is offered and the llms.txt URLs. Creating a key and copying client configs moved into the guided
+  setup. Links that open the page with `?client=<tool>`, including those in a `SKILL.md` already installed, now open
+  the setup on that tool. (#1225)
+- `knowledge_context` (and `POST /v1/context`) now answers within a larger token budget: 1200 by default, clamped to
+  600–4000 (was 600, 200–2000). At the old minimum no page fit at all, and the old default dropped memories or terms
+  that had passed every relevance floor; the new minimum always fits all four pages and the default fits a full answer
+  of 4 pages, 3 memories and 3 terms. An agent's answer can be up to twice as long as before. (#1211)
+- A glossary term now matches its inflected forms, so it is linked in Russian prose without listing every case form
+  as an alias: `заморозка выкладок` links `заморозкой выкладок` and `заморозки выкладок`, `Вега` links `Веги` and
+  `Вегой` (but never `Вегас`), English words take plural and possessive endings (`deploy freezes`, `Orion's`), and the
+  words of a term may be split by spaces or hyphens (`code freeze` = `code-freeze`). The same rule decides what a
+  reader sees linked, which AI-suggested terms count as grounded, and which terms `knowledge_context` offers for a
+  ticket. Code-like and case-sensitive terms (`.env`, `C++`, `@Access`, `customer_id`) still match exactly as written.
+  Pages may show more glossary links than before. (#1210)
+
+### Fixed
+
+- An agent mentioned in a page or merge-request comment answered without project memory: nothing was recalled before
+  the reply and nothing was retained after it, in restricted and unrestricted projects alike, and its skills were
+  matched against an empty question. The reply read its own still-empty placeholder as the question. It now uses the
+  comment that mentioned the agent, so a mention reply recalls from and retains into the page's project bank under the
+  rules of doc 80. (#1208)
+- On a phone or tablet the page tree's ⋯ menu (New child page, Move to…, Export…, Access…) was hidden until hover, so a
+  page could not be moved from the tree by touch. It is now always shown where there is no hover, with a 44px touch
+  target, in both the navigation drawer and the Pages tree view; a swipe that starts on a row now scrolls the tree
+  instead of starting (and cancelling) a drag. Desktop is unchanged. (#1031)
+- On a phone or tablet the "+" that starts a comment on a line of a merge request's Changes diff was invisible (it
+  appeared only on hover) and 20×16px. It is now always shown where there is no hover, 24px square on touch, and
+  screen readers announce which line it comments on. Desktop is unchanged. (#1032)
+- On a phone the activity feed (Settings → Activity, and the activity widgets on pages and projects) drew a row's page
+  title over the next row when its action was long, most often in Russian. The action now shortens with an ellipsis
+  beside the time, so every row keeps to two lines. Desktop is unchanged. (#1033)
+- In the editor on a phone or tablet, the panel colour switcher and the two/three-column switcher were hidden until
+  hover, so touch users could not change them. They are now always shown there with 24px targets; the panel swatches
+  sit on their own row at the panel's foot. Desktop is unchanged. (#1034)
+- The editor's slash (/) and @-mention menu could open past the right edge of a phone, or behind the on-screen
+  keyboard. It now stays inside the visible screen and scrolls when the room is short. (#1035)
+- Import → Review: on a phone the action row no longer cuts Discard off the right edge; the buttons wrap. (#1036)
+- Side sheets (page preview in Knowledge health, search, connector runs and others) can be closed by touch: the
+  close button has a 44px touch target. Desktop is unchanged. (#1037)
+- A long URL or unbroken token in a comment wraps inside its thread card instead of being cut off at the edge.
+  (#1038)
+- Pages → Tree view on a phone: titles from the third level down no longer shrink to nothing; the creation date and
+  the draft badge's word give up their room below 640px. (#1039)
+- A profile's activity list no longer pushes the page sideways on a phone: each row is two lines, the action beside
+  the time and the page title under it. (#1042)
+- Knowledge health on a phone: the page title column stays pinned while the table scrolls sideways, so each state
+  can be matched to its page. (#1043)
+- A page mention with a long title in an assistant answer wraps on a phone instead of pushing the conversation
+  sideways. (#1044)
+- Settings on a phone: the section strip scrolls the current section into view instead of always starting at
+  Profile. (#1045)
+- Notifications: the header buttons wrap on a phone instead of scrolling the page sideways (most visible in
+  Russian). (#1050)
+- On a phone, "Open in a larger view" on a page's rail widget opens full screen, rail widgets no longer squeeze
+  their content into a short inner scroll, and the revision list hides its hash, message and parents columns. (#1054)
+- API reference on a phone: an operation's entity key truncates inside its card instead of overflowing it and hiding
+  the copy button. (#1055)
+- Editor on a phone: the formatting bubble over a selection fits the screen; its status colours move to the
+  toolbar's More menu below 416px. (#1056)
+- A long URL or token inside a panel wraps instead of pushing the whole page sideways (editor and read view).
+  (#1057)
+- Editor on a phone: the toolbar fades at the edge that has more buttons, so More and Insert can be found by
+  scrolling the row. (#1059)
+- New page from template on a phone: the dialog no longer bleeds past its edge, and a chosen template's form gets
+  the whole pane, with Back to the list. (#1060)
+- Knowledge health below 1280px: the bulk action bar stays at the top of the screen while rows further down are
+  selected. (#1064)
+- AI → Web access on a phone: the "Try a URL" field takes a full row at a readable size, like the Add domain field
+  (#1081). (#1068)
+- AI → Usage on a phone: the range and group-by buttons wrap instead of pushing the page sideways (Russian). (#1069)
+- A long project name wraps on the project page on a phone instead of being cut to one line. (#1072)
+- The import stepper and the new-project Structure step fit a phone screen instead of being a few pixels wider than
+  it. (#1073)
+- The navigation drawer on a phone uses most of the screen width instead of the desktop rail's 256px, so deep page
+  titles have room. (#1074)
+- At tablet widths the breadcrumb keeps the current page's name visible instead of collapsing it to nothing. (#1075)
+- Analytics lists and merge request cards show titles on up to two lines on a phone instead of cutting them to a few
+  words. (#1077)
+- A page's "On this page" contents list never appeared, and a link to one of its sections (#heading) did not jump
+  there: headings were read before the page body had drawn. The list now shows whenever a page has more than one
+  heading, a #section link lands on its heading, and on a phone or tablet the list is offered as a folded "On this
+  page" block above the text instead of under it. (#1053)
+- On a phone or tablet, focusing a search box, filter, comment composer, the editor body or a settings field no
+  longer makes iOS Safari zoom the page and leave it scrolled sideways: every text field is 16px on a touch screen.
+  Desktop sizes are unchanged. (#1048)
+- Small buttons and checkboxes are easier to hit on a phone or tablet: comment Reply / Edit / Delete (now spaced
+  apart), checkboxes, dialog close, the merge request sidebar pencils, filter clears, Copy, search Filters, the page
+  tree and revision pickers, activity-heatmap days (24px; the year scrolls), and the editor toolbar, selection bubble,
+  resize handles and task checkboxes. The workflow builder shows its disconnect control without hover. Desktop is
+  unchanged. (#1049)
+- Opening an address that does not exist shows a "Nothing lives at this address" page with a link back to the pages,
+  instead of an empty screen. (#1051)
+- Knowledge health on a phone: the preset filters are one scrolling row and the owner and sort pickers share a line,
+  so the page list is on screen when the page opens instead of below the fold. (#1065)
+- Assistant on a phone or tablet: each chat in the list shows its ⋯ menu (rename, delete), opening the chat list no
+  longer pops the keyboard up over it, and tapping a numbered source under an answer opens its card (with an Open page
+  link) instead of leaving the chat. A chat opened from a link now loads the chat list too, which stayed on
+  placeholders before. (#1066)
+- Assistant on a phone (keyboard open, or in landscape): the breadcrumb row that only repeated "Assistant" is gone
+  below 1024px, giving the conversation that height back. (#1067)
+- The Pages graph on a phone: the controls start as one Filters button and the graph uses the whole canvas, instead
+  of most of it sitting under the controls panel. (#1052)
+- Editing on a phone or tablet: the page can no longer slide sideways under the closed assistant panel, which cut
+  off the toolbar, title and text on the left with no way to swipe back. (#1058)
+- Settings pages with a list and a detail (projects, docs, templates, blueprints, workflows) on a phone: the list
+  takes at most 40% of the screen, and picking an item scrolls its details into view instead of changing nothing
+  visible. (#1071)
+- The navigation drawer in phone landscape (or at large text sizes) scrolls, and the project and page list keeps a
+  usable height instead of a one-row window. (#1041)
+- Choosing another project in the phone navigation drawer keeps the drawer open on that project's pages, instead of
+  closing it. (#1076)
+- Settings at 1024–1279px wide (a tablet in landscape, a small laptop): the AI sections, projects, docs, templates,
+  blueprints and workflows lists sit above the content instead of squeezing it into a narrow column beside three
+  navigation columns. (#1046)
+- Reading a page, a merge request or a project at 1024–1279px wide: the side panel moves under the content instead
+  of leaving the text a column narrower than on a phone, and the editor's assistant opens over the page there rather
+  than squeezing the text. (#1047)
+- Wide settings tables on a phone (members, accounts, AI feedback) keep the person's name (or the time) in view
+  while you scroll to the row's actions, so Disable or Revoke admin is never tapped on an unnamed row. (#1070)
+- Editing in phone landscape (or with the keyboard up): the top bar and breadcrumb row step aside, leaving the
+  editor's own bar and the formatting toolbar, so about 100px more of the page is on screen. (#1062)
+- Language and theme moved from the top bar to Profile settings, and both follow your device unless you choose:
+  Language has Automatic (your browser's language), Theme has System, Light and Dark, and System switches with the
+  device. The top bar keeps every control on screen at large text sizes. (#1040)
+- Editing on a phone or tablet: the toolbar's ⋯ menu has Move block up, Move block down, Duplicate block and Delete
+  block for the block you are typing in. The block handle that showed up off-screen on touch is gone. (#1063)
+- Workflow builder on a phone or tablet: while editing, the workflow list steps aside and the canvas fills the
+  screen, so the page no longer scrolls under a canvas that swallows the swipe. The breadcrumb leads back to the list.
+  (#1061)
+- Revisions on a phone: each revision is a compact two-line row that fits the panel, and a person's working branch
+  shows as "Draft" with their avatar instead of a long draft/… identifier (also in the desktop table). (#1054)
+
+### Security
+
+- Share links and published sites no longer load a page's external images straight from their hosts, so an anonymous
+  reader is no longer a tracking-pixel target. Each external image now loads through the API, by a URL the API signed
+  when it served the page (`GET /v1/public/images`). An unsigned or altered URL is refused, so the route is not an
+  open relay. Public pages now send `img-src 'self' data: blob:` plus the storage origins in their
+  Content-Security-Policy. An image that was never written into the page does not load at all. (#1146)
+
+### Operations
+
+- Signed image URLs use a key derived from `SETTINGS_ENCRYPTION_KEY`. Without that key, each API process signs with
+  its own random key: after a restart, or across several API replicas, a cached published-site render shows broken
+  external images until the page is re-rendered. No new env var, no migration. (#1146)
+- Press **Test** on each Telegram bot in Settings → Chat after deploying, so a bot saved before this release
+  registers its command menu. Bots saved or re-enabled later register it on their own. (#1223)
+
 ## [0.56.0] — 2026-11-16
 
 ### Added
@@ -7453,7 +7624,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.56.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.57.0...HEAD
+[0.57.0]: https://github.com/hrustalq/knowledge/compare/v0.56.0...v0.57.0
 [0.56.0]: https://github.com/hrustalq/knowledge/compare/v0.55.2...v0.56.0
 [0.55.2]: https://github.com/hrustalq/knowledge/compare/v0.55.1...v0.55.2
 [0.55.1]: https://github.com/hrustalq/knowledge/compare/v0.55.0...v0.55.1

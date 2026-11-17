@@ -22,6 +22,7 @@ import { Button } from '@knowledge/ui/button'
 import { Toaster } from '@knowledge/ui/sonner'
 import { useSidebarStore } from '@/stores/sidebar'
 import { useLayoutStore } from '@/stores/layout'
+import { useSidebarNavStore } from '@/stores/sidebar-nav'
 import { SearchSheet, useSearchUiStore } from '@/modules/documents'
 import { useAuthStore } from '@/stores/auth'
 import { useTemplatesStore } from '@/entities/template'
@@ -100,7 +101,8 @@ const showVerifyBanner = computed(
 )
 
 /**
- * `h-14` topbar and `h-10` verify banner, in the unit the consumers want. The
+ * `h-14` topbar and `h-10` verify banner, in the unit the consumers want (the
+ * topbar through `--kn-topbar-h`, which a short viewport zeroes, #1062). The
  * trail row adds `--kn-trail-h` and the editor's bar under it (#441)
  * `--kn-toolbar-h`, both set by the stylesheet: the trail row is drawn for a
  * trail *or* for page actions, and only the page knows whether it has those,
@@ -110,7 +112,7 @@ const TOPBAR_REM = 3.5
 const BANNER_REM = 2.5
 const chromeHeight = computed(
   () =>
-    `calc(${TOPBAR_REM + (showVerifyBanner.value ? BANNER_REM : 0)}rem + var(--kn-trail-h, 0rem) + var(--kn-toolbar-h, 0rem))`,
+    `calc(var(--kn-topbar-h, ${TOPBAR_REM}rem) + ${showVerifyBanner.value ? BANNER_REM : 0}rem + var(--kn-trail-h, 0rem) + var(--kn-toolbar-h, 0rem))`,
 )
 
 /**
@@ -129,11 +131,15 @@ function toggleSidebar() {
   }
   sidebar.toggle()
 }
+const sidebarNav = useSidebarNavStore()
 watch(
   () => route.fullPath,
   () => {
-    mobileOpen.value = false
     actionsOpen.value = false
+    // #1076: a project switch in the drawer navigates as a side effect; the
+    // drawer stays open on the pages pane it asked for.
+    if (sidebarNav.holdDrawerFor === route.path) return
+    mobileOpen.value = false
   },
 )
 
@@ -189,6 +195,7 @@ function skipToMain() {
     class="kn-shell relative flex h-dvh overflow-hidden bg-background text-foreground"
     :class="sidebar.resizing ? 'kn-resizing' : ''"
     :style="{ '--kn-rail-w': sidebar.widthPx, '--kn-chrome-h': chromeHeight }"
+    :data-focus-short="route.meta.focusWhenShort || undefined"
     :data-rail-open="railOpen"
     :data-measure="layout.fullWidth ? undefined : 'narrow'"
   >
@@ -236,7 +243,7 @@ function skipToMain() {
             aria-modal="true"
             :aria-label="t('nav.navigation')"
             class="kn-drawer-panel absolute inset-y-0 left-0 h-full shadow-[0_16px_48px_-12px_rgb(0_0_0/0.45)]"
-            :style="{ width: 'min(var(--kn-rail-w), 88vw)' }"
+            :style="{ width: 'min(22rem, 88vw)' }"
           >
             <AppSidebar />
           </div>
@@ -259,7 +266,13 @@ function skipToMain() {
            teleport never misses one; each is drawn only while it holds
            something. `id` stays the first attribute: entry-server splices the
            server's teleport buffers in by it. -->
-      <div class="kn-trail" :data-actions-open="actionsOpen || undefined">
+      <!-- `meta.trail: 'lg'`: a surface whose own header already names the
+           place keeps the strip only from lg up, where height is not short (#1067). -->
+      <div
+        class="kn-trail"
+        :data-actions-open="actionsOpen || undefined"
+        :data-trail-lg="route.meta.trail === 'lg' || undefined"
+      >
         <AppBreadcrumbs v-if="showCrumbs" :crumbs="crumbs" />
         <!-- Phones only (the stylesheet shows it while the page has actions):
              the one control the row keeps, opening them as an aside. -->

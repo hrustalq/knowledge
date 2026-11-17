@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { GlossaryTerm } from '@knowledge/contracts'
-import { pageTerms } from './glossary'
+import { TERM_MATCH_CASES } from '@knowledge/contracts/content/term-cases'
+import { buildMatcher, candidateFor, pageTerms, spellingMatches } from './glossary'
 
 // The page being read picks the vocabulary, never the project switcher (#702).
 // The roster is the whole workspace's, so a page in project B must drop a term
@@ -36,5 +37,29 @@ describe('pageTerms', () => {
   it("keeps a workspace term replaced even when the project's entry is retired", () => {
     const shared = [term('tenant', null), term('tenant-b', 'B', { term: 'tenant', enabled: false })]
     expect(pageTerms(shared, { projectId: 'B', documentId: 'p1' })).toEqual([])
+  })
+})
+
+// #1210: the same table the API's matchers run (apps/api/test/term-pattern.spec.ts).
+describe('buildMatcher', () => {
+  it.each(TERM_MATCH_CASES)('$term in "$text"', (c) => {
+    const matcher = buildMatcher([term('t', 'A', { term: c.term, caseSensitive: !!c.caseSensitive, matchAliases: true })])!
+    const match = matcher.re!.exec(c.text)
+    const candidate = match ? candidateFor(matcher, match) : undefined
+    const linked = match && candidate && spellingMatches(candidate, match[0]) ? match[0] : null
+    expect(linked).toBe(c.match)
+  })
+
+  it('claims an inflected form for the spelling that matched, longest first', () => {
+    const matcher = buildMatcher([
+      term('freeze', 'A', { term: 'заморозка' }),
+      term('release-freeze', 'A', { term: 'заморозка выкладок' }),
+      term('vega', 'A', { term: 'Vega', aliases: ['Вега'], matchAliases: true }),
+    ])!
+    const linked = [...'перед заморозкой выкладок у Веги'.matchAll(matcher.re!)].map((m) => [m[0], candidateFor(matcher, m)?.term.termId])
+    expect(linked).toEqual([
+      ['заморозкой выкладок', 'release-freeze'],
+      ['Веги', 'vega'],
+    ])
   })
 })

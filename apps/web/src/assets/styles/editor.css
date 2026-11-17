@@ -263,6 +263,13 @@
   background-position: center;
   background-repeat: no-repeat;
 }
+/* Task checkboxes grow to a 20px touch target on touch screens (#1049). */
+@media (pointer: coarse) {
+  .kn-prose ul[data-type='taskList'] input[type='checkbox'] {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+}
 
 /* Panels ------------------------------------------------------------------ */
 
@@ -270,7 +277,8 @@
   --kn-accent: var(--kn-panel-note);
   position: relative;
   display: grid;
-  grid-template-columns: auto 1fr;
+  /* minmax(0, 1fr), not 1fr: a bare 1fr is minmax(auto, 1fr), so a long token grew the track instead of wrapping (#1057). */
+  grid-template-columns: auto minmax(0, 1fr);
   gap: 0.7rem;
   margin-block: var(--kn-block-gap);
   padding: 0.85rem 1rem 0.85rem 0.9rem;
@@ -285,6 +293,7 @@
 [data-kn-panel='caution'] { --kn-accent: var(--kn-panel-caution); }
 
 .kn-panel-icon { color: var(--kn-accent); padding-top: 0.2rem; }
+.kn-panel-body { min-width: 0; } /* (#1057) */
 .kn-panel-body > :first-child { margin-top: 0; }
 .kn-panel-body > :last-child { margin-bottom: 0; }
 
@@ -834,6 +843,18 @@ select.kn-api-method:focus-visible { outline: 2px solid var(--ring); outline-off
 }
 .kn-layout-switch button { padding: 0.25rem; border-radius: 5px; color: var(--muted-foreground); }
 .kn-layout-switch button[aria-pressed='true'] { background: var(--accent); color: var(--accent-foreground); }
+/* Touch has no hover to reveal the switchers (they sit at opacity 0 in the templates),
+   so show them outright and grow the targets to 24px (#1034). Unlayered, so it beats
+   the opacity-0 utility. At 24px the panel's five swatches are ~140px, which would
+   cover a long first line on a phone, so there they take their own row at the
+   panel's foot instead of floating over its corner. */
+@media (hover: none) {
+  .kn-panel-switch,
+  .kn-layout-switch { opacity: 1; }
+  .kn-panel-switch { position: static; grid-column: 1 / -1; justify-self: end; }
+  .kn-panel-swatch { width: 1.5rem; height: 1.5rem; }
+  .kn-layout-switch button { padding: 0.3125rem; }
+}
 
 /* Inline chips ------------------------------------------------------------ */
 
@@ -869,6 +890,16 @@ select.kn-api-method:focus-visible { outline: 2px solid var(--ring); outline-off
   font-weight: 520;
   white-space: nowrap;
   line-height: 1.5;
+}
+/* A long page title wraps inside the message column instead of pushing the whole
+   transcript sideways (#1044). Narrow only: desktop keeps the pill on one line. */
+@media (max-width: 48rem) {
+  .kn-mention,
+  .markdown-body a[data-kn-mention] {
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
 }
 .markdown-body a[data-kn-mention]::before {
   content: '';
@@ -1297,6 +1328,20 @@ select.kn-api-method:focus-visible { outline: 2px solid var(--ring); outline-off
 .kn-block > .kn-resize-grip { z-index: 1; }
 .kn-block > .kn-resize-grip[data-side='left'] { left: 0.2rem; }
 .kn-block > .kn-resize-grip[data-side='right'] { right: 0.2rem; }
+/* On touch a grip is a 24px target drawn at the same 0.4rem: the padding is
+   hit area, not paint. The offsets keep each one centred on its edge (#1049). */
+@media (pointer: coarse) {
+  .kn-resize-grip {
+    width: 1.5rem;
+    padding-inline: 0.55rem;
+    background-clip: content-box;
+    touch-action: none;
+  }
+  .kn-resize-grip[data-side='left'] { left: -0.75rem; }
+  .kn-resize-grip[data-side='right'] { right: -0.75rem; }
+  .kn-block > .kn-resize-grip[data-side='left'] { left: -0.35rem; }
+  .kn-block > .kn-resize-grip[data-side='right'] { right: -0.35rem; }
+}
 
 /* ---------------------------------------------------------------- editor */
 
@@ -1347,6 +1392,13 @@ select.kn-api-method:focus-visible { outline: 2px solid var(--ring); outline-off
 .kn-tb-btn:hover:not(:disabled) { background: var(--accent); color: var(--accent-foreground); }
 .kn-tb-btn[aria-pressed='true'] { background: color-mix(in oklch, var(--primary) 14%, transparent); color: var(--primary); }
 .kn-tb-btn:disabled { opacity: 0.35; cursor: default; }
+/* Toolbar buttons grow to a 36px thumb target on touch screens (#1049). */
+@media (pointer: coarse) {
+  .kn-tb-btn {
+    height: 2.25rem;
+    min-width: 2.25rem;
+  }
+}
 .kn-tb-select {
   display: inline-flex;
   align-items: center;
@@ -1425,6 +1477,12 @@ select.kn-api-method:focus-visible { outline: 2px solid var(--ring); outline-off
 .kn-gutter:hover .kn-gutter-btn { opacity: 0.9; }
 .kn-gutter-grip { cursor: grab; }
 .kn-gutter-grip:active { cursor: grabbing; }
+/* #1063: a tap's synthetic mousemove parked the handle off-screen, in the
+ * margin a phone does not have, and a finger never starts its HTML5 drag.
+ * Touch reaches the same actions through the toolbar's More menu. */
+@media (hover: none) {
+  .kn-gutter { display: none; }
+}
 
 /* Bubble + table bars ------------------------------------------------------ */
 
@@ -1458,8 +1516,27 @@ select.kn-api-method:focus-visible { outline: 2px solid var(--ring); outline-off
 .kn-bubble button:hover,
 .kn-table-bar button:hover { background: var(--accent); color: var(--accent-foreground); }
 .kn-bubble button[aria-pressed='true'] { background: color-mix(in oklch, var(--primary) 16%, transparent); color: var(--primary); }
+/* Bubble and table-bar buttons grow to a 36px thumb target on touch screens (#1049). */
+@media (pointer: coarse) {
+  .kn-bubble button,
+  .kn-table-bar button {
+    height: 2.25rem;
+    min-width: 2.25rem;
+  }
+}
 .kn-bubble-sep { width: 1px; height: 1.1rem; margin: 0 0.2rem; background: var(--border); }
 .kn-bubble-status { width: 1.1rem; min-width: 1.1rem; height: 1.1rem; border-radius: 999px; padding: 0; }
+/*
+ * The bubble is 13 buttons, ~397px, and Floating UI caps it to the viewport
+ * (374px at 390), so the last swatches fell off the edge (#1056). Below 26rem
+ * the six status swatches (and the separator in front of them) go; the same
+ * colours are in the toolbar's More menu, which is reachable on those widths.
+ */
+@media (max-width: 26rem) {
+  /* Scoped under .kn-bubble to outrank `.kn-bubble button { display: inline-flex }`. */
+  .kn-bubble .kn-bubble-status,
+  .kn-bubble .kn-bubble-sep-status { display: none; }
+}
 .kn-table-bar .kn-danger:hover { background: color-mix(in oklch, var(--destructive) 15%, transparent); color: var(--destructive); }
 
 /*
@@ -1838,6 +1915,17 @@ select.kn-api-method:focus-visible { outline: 2px solid var(--ring); outline-off
 }
 .kn-unstaged-chip:hover { background: var(--muted); color: var(--foreground); }
 .kn-unstaged-chip:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+/* The chip is ~10px tall; an invisible layer grows its hit area to ~44px on touch screens (#1049). */
+@media (pointer: coarse) {
+  .kn-unstaged-chip {
+    position: relative;
+  }
+  .kn-unstaged-chip::after {
+    content: "";
+    position: absolute;
+    inset: -17px -11px;
+  }
+}
 /* Not stored: the dot turns from "pending" to "at risk". */
 .kn-unstaged-chip[data-failed] { color: var(--destructive); }
 .kn-unstaged-chip[data-failed] .kn-dirty-dot { background: var(--destructive); }
@@ -2462,6 +2550,8 @@ select.kn-api-method:focus-visible { outline: 2px solid var(--ring); outline-off
 .kn-comment-surface .markdown-body {
   font-size: 0.875rem;
   line-height: 1.6;
+  /* A long URL or token wraps inside the card; the thread body is clipped, not scrolled (#1038). */
+  overflow-wrap: anywhere;
 }
 .kn-comment-surface .markdown-body > :first-child {
   margin-top: 0;
@@ -2536,7 +2626,9 @@ select.kn-api-method:focus-visible { outline: 2px solid var(--ring); outline-off
   overflow: hidden;
 }
 [data-ai-open='true'] > .kn-ai-slot { width: var(--kn-ai-w); }
-@media (min-width: 1024px) {
+/* #1047: inline beside the page only from 1280px; at 1024-1279 the app rail
+ * and a 24rem panel left the text a 352px column, so it stays a drawer. */
+@media (min-width: 1280px) {
   .kn-ai-slot { transition-property: width; transition-duration: 0s; transition-delay: var(--rail-duration); }
   [data-ai-open='true'] > .kn-ai-slot { transition: none; }
   .kn-ai-slot .kn-ai-panel { transition: transform var(--rail-duration) var(--pane-ease); }
@@ -2652,10 +2744,15 @@ select.kn-api-method:focus-visible { outline: 2px solid var(--ring); outline-off
 .kn-ai-dock-enter-from,
 .kn-ai-dock-leave-to { opacity: 0; transform: translateY(0.5rem); }
 
-/* Below the shell's hinge the page has no width to give: the panel floats
+/* Below 1280px (#1047) the page has no width to give: the panel floats
  * over it as a drawer from the same edge, and the scrim is the way back. */
 .kn-ai-scrim { display: none; }
-@media (max-width: 1023.98px) {
+@media (max-width: 1279.98px) {
+  /* #1058: the closed drawer is parked past the right edge, and an
+   * overflow:hidden <main> is still scrollable by script (ProseMirror's
+   * scroll-into-view moved it), with no way back by touch. `clip` makes the
+   * parked drawer add no scrollable overflow at all. */
+  .kn-page-editor { overflow: clip; }
   .kn-ai-slot {
     position: absolute;
     inset-block: 0;

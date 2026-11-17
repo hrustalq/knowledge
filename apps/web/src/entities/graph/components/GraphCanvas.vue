@@ -10,6 +10,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
+import { useMediaQuery } from '@vueuse/core'
 import { toast } from 'vue-sonner'
 import { Minus, Plus, Scan } from 'lucide-vue-next'
 import { api } from '@/shared/api/queries'
@@ -98,6 +99,9 @@ watch(
 
 const hasCommunities = computed(() => props.nodes.some((n) => !!n.community))
 
+/** Below `sm` the controls are a chip, not a panel, so the graph gets the whole canvas. */
+const narrow = useMediaQuery('(width < 40rem)')
+
 const summary = computed(() =>
   [
     t('graph.countNodes', { n: stats.value.nodes }, stats.value.nodes),
@@ -117,7 +121,7 @@ const summary = computed(() =>
       :root-id="rootId"
       :options="options"
       :query="query"
-      :inset-left="264"
+      :inset-left="narrow ? 0 : 264"
       @open="emit('open', $event)"
       @open-operation="openOperation"
       @stats="stats = $event"

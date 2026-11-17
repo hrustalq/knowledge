@@ -456,8 +456,8 @@ function refresh() {
     />
 
     <!-- Content column + rail. `items-start` keeps the aside from stretching,
-         which is what lets it stick. -->
-    <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start">
+         which is what lets it stick. Beside the content only from xl (#1047). -->
+    <div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_300px] xl:items-start">
       <div class="min-w-0 space-y-4">
         <PageTabs v-model="tab" :tabs="pageTabs" :label="t('mr.tabsLabel')" />
 

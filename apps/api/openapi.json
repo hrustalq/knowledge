@@ -39863,6 +39863,73 @@
         ]
       }
     },
+    "/v1/public/images": {
+      "get": {
+        "operationId": "PublicImagesController_image",
+        "parameters": [
+          {
+            "name": "sig",
+            "required": true,
+            "in": "query",
+            "description": "Its signature from imageProxy",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "url",
+            "required": true,
+            "in": "query",
+            "description": "The image address, as a key of the page’s imageProxy",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "403": {
+            "description": "The signature is missing or does not match the URL"
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "An external image from a shared or published page, by the URL the page's answer signed",
+        "tags": [
+          "public"
+        ]
+      }
+    },
     "/v1/exports/capabilities": {
       "get": {
         "operationId": "ExportController_capabilities",
@@ -44750,7 +44817,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.55.1",
+    "version": "0.56.0",
     "contact": {}
   },
   "tags": [],
@@ -47409,7 +47476,7 @@
           },
           "budget": {
             "type": "number",
-            "description": "Tokens for the answer; 600 when omitted, clamped to 200–2000"
+            "description": "Tokens for the answer; 1200 when omitted, clamped to 600–4000"
           }
         },
         "required": [
@@ -73195,6 +73262,12 @@
           "markdown": {
             "type": "string"
           },
+          "imageProxy": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
           "updatedAt": {
             "type": "string",
             "nullable": true
@@ -73204,6 +73277,7 @@
           "documentId",
           "title",
           "markdown",
+          "imageProxy",
           "updatedAt"
         ]
       },

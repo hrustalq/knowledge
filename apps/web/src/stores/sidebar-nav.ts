@@ -24,6 +24,13 @@ export const useSidebarNavStore = defineStore('sidebarNav', {
      * 'none' a `land()` — a pane resolved on load was never travelled to.
      */
     direction: 'push' as 'push' | 'pop' | 'none',
+    /**
+     * #1076: the path of a navigation the stack itself is making (a project
+     * switch leaving a page of the old scope). The shell closes the phone
+     * drawer on every route change except this one. Set only for the length
+     * of that push, never persisted.
+     */
+    holdDrawerFor: null as string | null,
   }),
   actions: {
     go(pane: SidebarPane, direction: 'push' | 'pop') {

@@ -392,6 +392,16 @@ export type I18nTranslations = {
     "chat": {
         "help": string;
         "helpTime": string;
+        "commands": {
+            "new": string;
+            "unlink": string;
+            "capture": string;
+            "forget": string;
+            "bind": string;
+            "unbind": string;
+            "ask": string;
+            "help": string;
+        };
         "link": {
             "required": string;
             "button": string;
@@ -1267,6 +1277,7 @@ export type I18nTranslations = {
             "invalid": string;
             "blocked": string;
             "unavailable": string;
+            "unsigned": string;
         };
         "notification": {
             "subjectNotInWorkspace": string;

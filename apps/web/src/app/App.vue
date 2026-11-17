@@ -89,6 +89,13 @@ watch(
     <Toaster />
   </div>
 
+  <!-- `meta.focus` (#1225): a signed-in task that owns the whole viewport —
+       its own top bar and a way out, none of the shell's chrome. -->
+  <div v-else-if="route.meta.focus" data-kn-pane="1" class="flex h-dvh flex-col bg-background text-foreground">
+    <RouterView />
+    <Toaster />
+  </div>
+
   <AppShell v-else />
   <!-- Once, for both shells: every `confirm()` draws here. -->
   <ConfirmDialog />

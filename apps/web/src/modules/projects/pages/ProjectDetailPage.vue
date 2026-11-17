@@ -186,7 +186,8 @@ async function onDeleted(result: DeleteProjectResponse) {
       />
       <div class="min-w-0 flex-1 space-y-2">
         <div class="flex flex-wrap items-center gap-2">
-          <h1 class="font-display truncate text-2xl font-bold tracking-tight">{{ project.name }}</h1>
+          <!-- Wraps on a phone so two projects named alike stay tellable apart (#1072). -->
+          <h1 class="font-display min-w-0 break-words text-2xl font-bold tracking-tight sm:truncate">{{ project.name }}</h1>
           <span
             v-if="project.restricted"
             class="text-muted-foreground grid place-items-center"

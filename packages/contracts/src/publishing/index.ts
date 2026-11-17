@@ -191,6 +191,8 @@ export interface PublicSharePage {
   title: string;
   /** The page body without frontmatter. */
   markdown: string;
+  /** Signatures for the body's external URLs, by `imageProxyKey` (#1146). */
+  imageProxy: Record<string, string>;
   /** When the revision shown was published. */
   updatedAt: string | null;
 }
@@ -218,6 +220,69 @@ export function publicShareExportPath(token: string, exportId: string, download 
 export function parseAttachmentPath(path: string): { documentId: string; attachmentId: string } | null {
   const m = /^\/v1\/documents\/([0-9a-fA-F-]{36})\/attachments\/([0-9a-fA-F-]{36})\/content(?:[?#].*)?$/.exec(path);
   return m ? { documentId: m[1], attachmentId: m[2] } : null;
+}
+
+// ---------------------------------------------------------------------------
+// Signed image proxy (#1146)
+//
+// A share's or site's reader has no session, so it cannot use the member
+// app's image proxy. The API signs every external URL a public page's
+// markdown holds (`imageProxy` beside the markdown) and the public renderer
+// sends each `<img>` through `publicImagePath`; the route serves only a URL
+// whose signature holds, so it is no open relay.
+// ---------------------------------------------------------------------------
+
+/**
+ * The one spelling both sides sign and look up: markdown-it percent-encodes a
+ * destination and decodes its entities, the API sees the raw text. Decode what
+ * `decodeURI` may (never a reserved character), then let `URL` re-encode it.
+ * Protocol-relative is https. Null for anything not an absolute http(s) URL.
+ */
+export function imageProxyKey(src: string): string | null {
+  let s = src.trim();
+  if (s.startsWith('//')) s = `https:${s}`;
+  if (!/^https?:\/\//i.test(s)) return null;
+  try {
+    s = decodeURI(s);
+  } catch {
+    // A stray `%`: URL keeps it as written, on both sides.
+  }
+  try {
+    return new URL(s).href;
+  } catch {
+    return null;
+  }
+}
+
+// A URL as written in markdown or HTML: up to whitespace, a quote, an angle
+// bracket or an unbalanced paren (one level of `(…)` inside, as markdown-it allows).
+const URL_TOKEN = /(?:https?:)?\/\/(?:[^\s<>"'`()[\]]|\([^\s<>"'`()]*\))+/gi;
+// `![](<https://x/a b.png>)`: the only destination that may hold a space.
+const ANGLE_URL = /<((?:https?:)?\/\/[^<>\n]+)>/gi;
+
+/**
+ * Every key a rendered `<img src>` of this markdown can have. Deliberately
+ * wider than images: each URL as written, and again with `&amp;` and
+ * backslash escapes undone (what the renderer sees). A key for a link that is
+ * not an image only lets the route fetch it to refuse it: it answers images only.
+ */
+export function publicImageKeys(markdown: string): string[] {
+  const keys = new Set<string>();
+  const add = (raw: string) => {
+    const unescaped = raw.replace(/&amp;|&#0*38;|&#x0*26;/gi, '&').replace(/\\([!-/:-@[-`{-~])/g, '$1');
+    for (const v of [raw, unescaped]) {
+      const key = imageProxyKey(v);
+      if (key) keys.add(key);
+    }
+  };
+  for (const [raw] of markdown.matchAll(URL_TOKEN)) add(raw);
+  for (const [, raw] of markdown.matchAll(ANGLE_URL)) add(raw);
+  return [...keys];
+}
+
+/** The anonymous image route for a signed key. */
+export function publicImagePath(key: string, signature: string): string {
+  return `/v1/public/images?url=${encodeURIComponent(key)}&sig=${signature}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -885,6 +950,8 @@ export interface PublicSitePage {
   slugPath: string;
   /** The page body without frontmatter. */
   markdown: string;
+  /** Signatures for the body's external URLs, by `imageProxyKey` (#1146). */
+  imageProxy: Record<string, string>;
   /** When the published revision was finalized. */
   updatedAt: string | null;
   /**

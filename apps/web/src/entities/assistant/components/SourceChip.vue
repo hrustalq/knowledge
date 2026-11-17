@@ -79,6 +79,15 @@ const said = computed(() => (chat.value ? formatRelative(chat.value.lastAt) : ''
 
 const open = ref(false)
 const canHover = useHydratedMediaQuery('(hover: hover)')
+/**
+ * On touch the chip is the popover's trigger and a link at once, so one tap
+ * opened the card and left the page in the same moment (#1066). There the tap
+ * only toggles the card; its own "open page" link navigates. Capture phase,
+ * because RouterLink's own click handler runs before a bubbling one.
+ */
+function onTap(event: MouseEvent) {
+  if (hasCard.value && !canHover.value) event.preventDefault()
+}
 </script>
 
 <template>
@@ -94,6 +103,7 @@ const canHover = useHydratedMediaQuery('(hover: hover)')
         class="kn-source group/src"
         :class="[row ? 'kn-source-row' : 'kn-source-chip', active && 'kn-source-active']"
         :data-tone="tone"
+        @click.capture="onTap"
         @mouseenter="emit('hover', true)"
         @mouseleave="emit('hover', false)"
         @focus="emit('hover', true)"

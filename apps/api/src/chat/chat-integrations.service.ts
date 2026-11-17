@@ -15,6 +15,7 @@ import {
   chatPlatformNeedsServer,
   chatPlatformListens,
   chatPlatformNeedsSigningSecret,
+  isLocale,
   type ChatAutoHarvestLimits,
   type ChatBindingEntry,
   type ChatBindingsResponse,
@@ -117,6 +118,7 @@ export class ChatIntegrationsService {
           serverUrl: row.serverUrl || null,
           actionUrl: this.webhookUrl(row.id),
           signingSecret: decryptSecret(row.signingSecret, this.key, slots.chatIntegration(row, 'signing_secret')),
+          ...(isLocale(row.locale) ? { locale: row.locale } : {}),
         }
       : null;
   }

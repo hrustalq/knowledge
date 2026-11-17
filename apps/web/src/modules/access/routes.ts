@@ -1,12 +1,16 @@
 import type { RouteRecordRaw } from 'vue-router'
 
+import { CONNECT_SETUP_PATH } from './model/connect-setup-path'
 import { PURPOSE_SETUP_PATH } from './model/purpose-setup-path'
 
-export { PURPOSE_SETUP_PATH }
+export { CONNECT_SETUP_PATH, PURPOSE_SETUP_PATH }
 
 export const routes: RouteRecordRaw[] = [
   // No `meta.feature`: this is how the sections get chosen, so none of them gates it.
   { path: PURPOSE_SETUP_PATH, component: () => import('./pages/PurposeSetupPage.vue') },
+  // Connecting an AI client (#1225): a full-screen wizard, so `focus` drops the
+  // shell. `?client=` opens it on that client; `?next=` is where Close goes.
+  { path: CONNECT_SETUP_PATH, component: () => import('./pages/ConnectWizardPage.vue'), meta: { focus: true } },
   // A person, inside this workspace. `/u` with no id is your own — the
   // avatar menu's target, and a link that stays right after a rename.
   { path: '/u', component: () => import('./pages/ProfilePage.vue') },
@@ -59,4 +63,8 @@ export const connectAiRoute: RouteRecordRaw = {
   // keys, and each tool a connected client calls is checked on its own.
   path: 'connect',
   component: () => import('./pages/ConnectAiPage.vue'),
+  // `?client=` was "open the setup for this client" in every SKILL.md handed
+  // out; setup is the wizard now (#1225), so the link goes there.
+  beforeEnter: (to) =>
+    typeof to.query.client === 'string' ? { path: CONNECT_SETUP_PATH, query: { client: to.query.client } } : true,
 }

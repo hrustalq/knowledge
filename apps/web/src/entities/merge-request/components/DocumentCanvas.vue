@@ -738,17 +738,48 @@ function collectHeadings() {
       const n = (seen.get(base) ?? 0) + 1
       seen.set(base, n)
       const id = n === 1 ? base : `${base}-${n}`
-      el.id = id
+      if (el.id !== id) el.id = id
       return { id, text, level: Number(el.tagName.slice(1)) }
     },
   )
+  const key = JSON.stringify(headings)
+  if (key === lastHeadings) return
+  lastHeadings = key
   emit('headings', headings)
+  // The browser looked for a `#section` before the editor drew it: land on it
+  // once, the first time its heading has the id.
+  const hash = decodeURIComponent(location.hash.slice(1))
+  if (!hashLanded && hash && headings.some((h) => h.id === hash)) {
+    hashLanded = true
+    document.getElementById(hash)?.scrollIntoView({ block: 'start' })
+  }
 }
+let lastHeadings = ''
+let hashLanded = false
 
-// The editor mounts and re-parses asynchronously; headings are read once the
-// text it produced is actually in the DOM.
-watch(body, () => void nextTick().then(collectHeadings), { immediate: true })
-onMounted(() => void nextTick().then(collectHeadings))
+// The editor builds its DOM after this component mounts, and rebuilds it on
+// every re-parse (a new body, the page-title resolver landing), which drops
+// the ids: watching for a body or a ready event misses one or the other
+// (#1053). So the headings are read again whenever the surface's DOM changes,
+// at most once a frame, and emitted only when the list itself changed.
+let headingsObserver: MutationObserver | null = null
+let headingsFrame = 0
+onMounted(() => {
+  collectHeadings()
+  if (!page.value) return
+  headingsObserver = new MutationObserver(() => {
+    if (headingsFrame) return
+    headingsFrame = requestAnimationFrame(() => {
+      headingsFrame = 0
+      collectHeadings()
+    })
+  })
+  headingsObserver.observe(page.value, { childList: true, subtree: true, characterData: true })
+})
+onBeforeUnmount(() => {
+  headingsObserver?.disconnect()
+  cancelAnimationFrame(headingsFrame)
+})
 
 function onOutdated(ids: string[]) {
   emit('outdated', ids)
@@ -887,7 +918,7 @@ function onOutdated(ids: string[]) {
           {{ t('count.threads', { n: openThreads.length }, openThreads.length) }}{{ ' ' }}{{ t('review.onThisPassage') }}
         </p>
         <button
-          class="shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground"
+          class="kn-hit shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground"
           :aria-label="t('common.close')"
           @click="closePopover"
         >

@@ -12,18 +12,21 @@
  */
 import { useI18n } from 'vue-i18n'
 import { computed, ref } from 'vue'
-import { useElementSize } from '@vueuse/core'
+import { useElementSize, useMediaQuery } from '@vueuse/core'
 import type { Editor } from '@tiptap/core'
 import {
   AlignCenter,
   AlignLeft,
   AlignRight,
+  ArrowDown,
+  ArrowUp,
   Bold,
   Check,
   ChevronDown,
   Code,
   Columns2,
   Columns3,
+  CopyPlus,
   FileText,
   Highlighter,
   Image as ImageIcon,
@@ -46,6 +49,7 @@ import {
   Square,
   Strikethrough,
   Table2,
+  Trash2,
   Type,
   Underline as UnderlineIcon,
   Undo2,
@@ -65,6 +69,7 @@ import {
 import { PANEL_META, PANEL_TYPES, STATUS_COLORS, type PanelType, type StatusColor } from '@/core/markdown/nodes'
 import { useObservable } from '@/shared/composables/rx-vue'
 import { indent, outdent } from './extensions/list-indent'
+import { deleteBlock, duplicateBlock, moveBlock, selectedBlockPos } from './extensions/drag-handle'
 import { editorStreams, readFormatState } from '../model/editor-streams'
 
 const { t } = useI18n()
@@ -128,6 +133,44 @@ const tier = computed(() => {
   return 0
 })
 
+/**
+ * #1063: the gutter handle is a hover affordance, and touch has no hover — it
+ * rendered off-screen and its HTML5 drag never starts from a finger. On touch
+ * the block actions live in "More" instead, acting on the block holding the
+ * caret. Page editor only: the comment box has no gutter to stand in for.
+ */
+const touch = useMediaQuery('(hover: none)')
+const blockActions = computed(() => touch.value && !props.compact)
+
+type BlockAction = 'up' | 'down' | 'duplicate' | 'delete'
+
+/**
+ * A block action redraws the moved block, and run from inside the open menu it
+ * redraws it while focus is in the menu: ProseMirror cannot place the DOM
+ * selection then, reads back a stale one on the next tap, and the caret leaps
+ * to the end of the page. So the item only records the action; it runs once
+ * the menu has closed, in the editor rather than back on the More button.
+ */
+let pendingBlock: BlockAction | null = null
+function pickBlock(action: BlockAction) {
+  pendingBlock = action
+}
+
+function onMoreClosed(event: Event) {
+  const action = pendingBlock
+  pendingBlock = null
+  if (!action) return
+  event.preventDefault()
+  props.editor.commands.focus()
+  const { view, state } = props.editor
+  const pos = selectedBlockPos(state)
+  if (pos === null) return
+  if (action === 'up') moveBlock(view, pos, -1)
+  else if (action === 'down') moveBlock(view, pos, 1)
+  else if (action === 'duplicate') duplicateBlock(view, pos)
+  else deleteBlock(view, pos)
+}
+
 const ALIGNMENTS = [
   { id: 'left', icon: AlignLeft, label: 'toolbar.left' },
   { id: 'center', icon: AlignCenter, label: 'toolbar.center' },
@@ -139,6 +182,7 @@ const ALIGNMENTS = [
   <div
     ref="bar"
     class="kn-toolbar"
+    :class="{ 'kn-scroll-strip': tier === 2 }"
     :data-compact="compact ? 'true' : undefined"
     :data-tier="tier"
     role="toolbar"
@@ -371,99 +415,118 @@ const ALIGNMENTS = [
       </DropdownMenuContent>
     </DropdownMenu>
 
-    <!-- Whatever the row had no room for, in the row's own order. -->
-    <DropdownMenu v-if="tier > 0">
+    <!-- Whatever the row had no room for, in the row's own order; on touch,
+         the block actions too (#1063). -->
+    <DropdownMenu v-if="tier > 0 || blockActions">
       <DropdownMenuTrigger as-child>
         <button type="button" class="kn-tb-btn" :title="t('toolbar.more')" :aria-label="t('toolbar.more')">
           <MoreHorizontal class="size-4" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" class="w-56">
-        <template v-if="tier > 1">
-          <DropdownMenuItem @select="editor.chain().focus().toggleUnderline().run()">
-            <UnderlineIcon class="size-4" /> {{ t('toolbar.underline') }}
-            <Check v-if="format.underline" class="ml-auto size-3.5 opacity-70" />
+      <DropdownMenuContent align="end" class="w-56" @close-auto-focus="onMoreClosed">
+        <template v-if="tier > 0">
+          <template v-if="tier > 1">
+            <DropdownMenuItem @select="editor.chain().focus().toggleUnderline().run()">
+              <UnderlineIcon class="size-4" /> {{ t('toolbar.underline') }}
+              <Check v-if="format.underline" class="ml-auto size-3.5 opacity-70" />
+            </DropdownMenuItem>
+            <DropdownMenuItem @select="editor.chain().focus().toggleStrike().run()">
+              <Strikethrough class="size-4" /> {{ t('toolbar.strikethrough') }}
+              <Check v-if="format.strike" class="ml-auto size-3.5 opacity-70" />
+            </DropdownMenuItem>
+            <DropdownMenuItem @select="editor.chain().focus().toggleCode().run()">
+              <Code class="size-4" /> {{ t('toolbar.inlineCode') }}
+              <Check v-if="format.code" class="ml-auto size-3.5 opacity-70" />
+            </DropdownMenuItem>
+            <DropdownMenuItem @select="editor.chain().focus().toggleHighlight().run()">
+              <Highlighter class="size-4" /> {{ t('toolbar.highlight') }}
+              <Check v-if="format.highlight" class="ml-auto size-3.5 opacity-70" />
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem @select="editor.chain().focus().toggleOrderedList().run()">
+              <ListOrdered class="size-4" /> {{ t('toolbar.numberedList') }}
+              <Check v-if="format.orderedList" class="ml-auto size-3.5 opacity-70" />
+            </DropdownMenuItem>
+            <DropdownMenuItem @select="editor.chain().focus().toggleTaskList().run()">
+              <ListTodo class="size-4" /> {{ t('toolbar.taskList') }}
+              <Check v-if="format.taskList" class="ml-auto size-3.5 opacity-70" />
+            </DropdownMenuItem>
+          </template>
+          <DropdownMenuItem :disabled="!format.canOutdent" @select="outdent(editor)">
+            <Outdent class="size-4" /> {{ t('toolbar.outdent') }}
           </DropdownMenuItem>
-          <DropdownMenuItem @select="editor.chain().focus().toggleStrike().run()">
-            <Strikethrough class="size-4" /> {{ t('toolbar.strikethrough') }}
-            <Check v-if="format.strike" class="ml-auto size-3.5 opacity-70" />
-          </DropdownMenuItem>
-          <DropdownMenuItem @select="editor.chain().focus().toggleCode().run()">
-            <Code class="size-4" /> {{ t('toolbar.inlineCode') }}
-            <Check v-if="format.code" class="ml-auto size-3.5 opacity-70" />
-          </DropdownMenuItem>
-          <DropdownMenuItem @select="editor.chain().focus().toggleHighlight().run()">
-            <Highlighter class="size-4" /> {{ t('toolbar.highlight') }}
-            <Check v-if="format.highlight" class="ml-auto size-3.5 opacity-70" />
+          <DropdownMenuItem :disabled="!format.canIndent" @select="indent(editor)">
+            <Indent class="size-4" /> {{ t('toolbar.indent') }}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem @select="editor.chain().focus().toggleOrderedList().run()">
-            <ListOrdered class="size-4" /> {{ t('toolbar.numberedList') }}
-            <Check v-if="format.orderedList" class="ml-auto size-3.5 opacity-70" />
+          <DropdownMenuItem @select="emit('link')">
+            <Link2 class="size-4" /> {{ t('toolbar.link') }}
+            <Check v-if="format.link" class="ml-auto size-3.5 opacity-70" />
           </DropdownMenuItem>
-          <DropdownMenuItem @select="editor.chain().focus().toggleTaskList().run()">
-            <ListTodo class="size-4" /> {{ t('toolbar.taskList') }}
-            <Check v-if="format.taskList" class="ml-auto size-3.5 opacity-70" />
+          <DropdownMenuItem @select="emit('linkPage')">
+            <FileText class="size-4" /> {{ t('toolbar.linkToPageHint') }}
           </DropdownMenuItem>
+          <template v-if="!compact">
+            <DropdownMenuSeparator />
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger><AlignLeft class="size-4" /> {{ t('toolbar.alignment') }}</DropdownMenuSubTrigger>
+              <DropdownMenuSubContent>
+                <DropdownMenuItem
+                  v-for="a in ALIGNMENTS"
+                  :key="a.id"
+                  @select="editor.chain().focus().setTextAlign(a.id).run()"
+                >
+                  <component :is="a.icon" class="size-4" /> {{ t(a.label) }}
+                </DropdownMenuItem>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <span class="kn-tb-status-dot" /> {{ t('toolbar.statusLozenge') }}
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent>
+                <DropdownMenuItem
+                  v-for="color in STATUS_COLORS"
+                  :key="color"
+                  @select="editor.chain().focus().toggleStatus(color as StatusColor).run()"
+                >
+                  <span class="kn-status-sample" :data-kn-status="color">{{ color }}</span>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem @select="editor.chain().focus().unsetStatus().run()">
+                  {{ t('toolbar.removeStatus') }}
+                </DropdownMenuItem>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger><Info class="size-4" /> {{ t('toolbar.insertPanel') }}</DropdownMenuSubTrigger>
+              <DropdownMenuSubContent>
+                <DropdownMenuItem
+                  v-for="type in PANEL_TYPES"
+                  :key="type"
+                  @select="editor.chain().focus().toggledPanel(type as PanelType).run()"
+                >
+                  <span class="kn-panel-dot" :data-kn-panel="type" /> {{ t(PANEL_META[type].label) }}
+                </DropdownMenuItem>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+          </template>
         </template>
-        <DropdownMenuItem :disabled="!format.canOutdent" @select="outdent(editor)">
-          <Outdent class="size-4" /> {{ t('toolbar.outdent') }}
-        </DropdownMenuItem>
-        <DropdownMenuItem :disabled="!format.canIndent" @select="indent(editor)">
-          <Indent class="size-4" /> {{ t('toolbar.indent') }}
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem @select="emit('link')">
-          <Link2 class="size-4" /> {{ t('toolbar.link') }}
-          <Check v-if="format.link" class="ml-auto size-3.5 opacity-70" />
-        </DropdownMenuItem>
-        <DropdownMenuItem @select="emit('linkPage')">
-          <FileText class="size-4" /> {{ t('toolbar.linkToPageHint') }}
-        </DropdownMenuItem>
-        <template v-if="!compact">
-          <DropdownMenuSeparator />
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger><AlignLeft class="size-4" /> {{ t('toolbar.alignment') }}</DropdownMenuSubTrigger>
-            <DropdownMenuSubContent>
-              <DropdownMenuItem
-                v-for="a in ALIGNMENTS"
-                :key="a.id"
-                @select="editor.chain().focus().setTextAlign(a.id).run()"
-              >
-                <component :is="a.icon" class="size-4" /> {{ t(a.label) }}
-              </DropdownMenuItem>
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger>
-              <span class="kn-tb-status-dot" /> {{ t('toolbar.statusLozenge') }}
-            </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent>
-              <DropdownMenuItem
-                v-for="color in STATUS_COLORS"
-                :key="color"
-                @select="editor.chain().focus().toggleStatus(color as StatusColor).run()"
-              >
-                <span class="kn-status-sample" :data-kn-status="color">{{ color }}</span>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem @select="editor.chain().focus().unsetStatus().run()">
-                {{ t('toolbar.removeStatus') }}
-              </DropdownMenuItem>
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger><Info class="size-4" /> {{ t('toolbar.insertPanel') }}</DropdownMenuSubTrigger>
-            <DropdownMenuSubContent>
-              <DropdownMenuItem
-                v-for="type in PANEL_TYPES"
-                :key="type"
-                @select="editor.chain().focus().toggledPanel(type as PanelType).run()"
-              >
-                <span class="kn-panel-dot" :data-kn-panel="type" /> {{ t(PANEL_META[type].label) }}
-              </DropdownMenuItem>
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
+        <template v-if="blockActions">
+          <DropdownMenuSeparator v-if="tier > 0" />
+          <DropdownMenuLabel>{{ t('toolbar.block') }}</DropdownMenuLabel>
+          <DropdownMenuItem :disabled="!format.canMoveUp" @select="pickBlock('up')">
+            <ArrowUp class="size-4" /> {{ t('toolbar.moveBlockUp') }}
+          </DropdownMenuItem>
+          <DropdownMenuItem :disabled="!format.canMoveDown" @select="pickBlock('down')">
+            <ArrowDown class="size-4" /> {{ t('toolbar.moveBlockDown') }}
+          </DropdownMenuItem>
+          <DropdownMenuItem @select="pickBlock('duplicate')">
+            <CopyPlus class="size-4" /> {{ t('toolbar.duplicateBlock') }}
+          </DropdownMenuItem>
+          <DropdownMenuItem variant="destructive" @select="pickBlock('delete')">
+            <Trash2 class="size-4" /> {{ t('toolbar.deleteBlock') }}
+          </DropdownMenuItem>
         </template>
       </DropdownMenuContent>
     </DropdownMenu>

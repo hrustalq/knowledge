@@ -70,7 +70,8 @@ const MIN_HEIGHT = 220
 function fit() {
   const el = panelEl.value
   if (!el) return
-  if (!window.matchMedia('(min-width: 1024px)').matches) {
+  // Beside the content only from 1280px (#1047); below that the panel is unbounded.
+  if (!window.matchMedia('(min-width: 1280px)').matches) {
     maxHeight.value = undefined
     return
   }
@@ -180,10 +181,11 @@ const revisionRows = computed(() =>
 </script>
 
 <template>
-  <aside class="lg:sticky lg:top-6 lg:self-start">
+  <!-- Sticky beside the content only from xl (#1047); below it stacks. -->
+  <aside class="xl:sticky xl:top-6 xl:self-start">
     <div
       ref="panelEl"
-      class="flex flex-col overflow-hidden rounded-lg border bg-card lg:max-h-[calc(100vh-8.75rem)]"
+      class="flex flex-col overflow-hidden rounded-lg border bg-card xl:max-h-[calc(100vh-8.75rem)]"
       :style="{ maxHeight }"
     >
       <!-- Segmented header. Two panes only, so tabs sit inside the panel's
@@ -225,7 +227,7 @@ const revisionRows = computed(() =>
             <h3 class="text-xs font-medium text-muted-foreground">{{ t('mr.assignee') }}</h3>
             <button
               v-if="!readonly"
-              class="ml-auto text-muted-foreground transition-colors hover:text-foreground"
+              class="kn-hit ml-auto text-muted-foreground transition-colors hover:text-foreground"
               :aria-label="editingAssignee ? t('mr.stopEditingAssignee') : t('mr.editAssignee')"
               @click="editingAssignee = !editingAssignee"
             >
@@ -276,7 +278,7 @@ const revisionRows = computed(() =>
             </h3>
             <button
               v-if="!readonly"
-              class="ml-auto text-muted-foreground transition-colors hover:text-foreground"
+              class="kn-hit ml-auto text-muted-foreground transition-colors hover:text-foreground"
               :aria-label="editingReviewers ? t('mr.stopEditingReviewers') : t('mr.editReviewers')"
               @click="editingReviewers ? cancelReviewers() : (editingReviewers = true)"
             >

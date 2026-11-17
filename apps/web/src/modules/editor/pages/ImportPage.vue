@@ -342,7 +342,8 @@ function tryAgain(): void {
 
     <!-- Fixed frame, part two: one action bar, in one place, on every step. -->
     <footer class="shrink-0 border-t px-4 py-4 lg:px-8">
-      <div class="flex items-center gap-3">
+      <!-- Below sm the three review actions wrap rather than push Discard off the edge (#1036). -->
+      <div class="flex flex-wrap items-center gap-3 sm:flex-nowrap">
         <template v-if="view === 'choose'">
           <Button :disabled="!canStart" @click="start">{{ busy ? t('import.starting') : t('import.start') }}</Button>
           <p v-if="file && !projectId" class="text-sm text-muted-foreground">

@@ -162,7 +162,7 @@ watch(connectorId, () => {
   <PageState v-if="detail.isError.value" state="error" :error="detail.error.value" />
   <div v-else-if="!connector" class="space-y-4">
     <Skeleton class="h-9 w-64" />
-    <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
+    <div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_24rem]">
       <Skeleton class="h-64 w-full" />
       <Skeleton class="h-40 w-full" />
     </div>
@@ -200,7 +200,7 @@ watch(connectorId, () => {
     </template>
 
     <template #rail>
-      <!-- kn-widget-rail: sticky and bounded to the viewport above lg, so the
+      <!-- kn-widget-rail: sticky and bounded to the viewport above xl (#1047), so the
            rail scrolls itself beside a list that already fills the page. -->
       <aside class="kn-widget-rail space-y-3">
         <div class="rounded-lg border p-4">

@@ -26,9 +26,10 @@ const state = computed(() => mrIcon(mr.value))
       <component :is="state.icon" class="mt-0.5 size-4 shrink-0" :class="state.class" :title="t(state.label)" />
       <div class="min-w-0 flex-1">
         <div class="flex flex-wrap items-center gap-2">
+          <!-- Two lines on a phone, one truncated line from sm (#1077). -->
           <RouterLink
             :to="`/merge-requests/${mr.mergeRequestId}`"
-            class="truncate text-sm font-medium transition-colors hover:text-primary"
+            class="min-w-0 text-sm font-medium transition-colors hover:text-primary max-sm:line-clamp-2 sm:truncate"
           >
             {{ mr.title }}
           </RouterLink>
@@ -39,7 +40,7 @@ const state = computed(() => mrIcon(mr.value))
             <Bot class="size-3" aria-hidden="true" />{{ t(`mr.provenance.${mr.provenance}`) }}
           </Badge>
         </div>
-        <p class="mt-0.5 truncate text-xs text-muted-foreground">
+        <p class="mt-0.5 text-xs text-muted-foreground max-sm:line-clamp-2 sm:truncate">
           <span class="font-mono">{{ mr.sourceBranch }} → {{ mr.targetBranch }}</span>
           <!-- A project branch can change several pages (#636); one is the old normal, so it goes unsaid. -->
           <template v-if="mr.pageCount > 1"> · {{ t('count.pages', { n: mr.pageCount }, mr.pageCount) }}</template>

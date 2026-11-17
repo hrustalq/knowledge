@@ -7449,6 +7449,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/public/images": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** An external image from a shared or published page, by the URL the page's answer signed */
+        get: operations["PublicImagesController_image"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/exports/capabilities": {
         parameters: {
             query?: never;
@@ -9350,7 +9367,7 @@ export interface components {
             projectIds?: string[];
             /** @description Page, term or memory ids an earlier call already showed */
             exclude?: string[];
-            /** @description Tokens for the answer; 600 when omitted, clamped to 200–2000 */
+            /** @description Tokens for the answer; 1200 when omitted, clamped to 600–4000 */
             budget?: number;
         };
         GraphQueryDto: {
@@ -16197,6 +16214,9 @@ export interface components {
             documentId: string;
             title: string;
             markdown: string;
+            imageProxy: {
+                [key: string]: string;
+            };
             updatedAt: string | null;
         };
         PublicShareResponse: {
@@ -42793,6 +42813,50 @@ export interface operations {
             };
             /** @description No live site with this id */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    PublicImagesController_image: {
+        parameters: {
+            query: {
+                /** @description Its signature from imageProxy */
+                sig: string;
+                /** @description The image address, as a key of the page’s imageProxy */
+                url: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The signature is missing or does not match the URL */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

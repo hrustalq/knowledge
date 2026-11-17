@@ -199,7 +199,7 @@ const indent = computed(() => `${0.5 + props.depth * 0.85}rem`)
           v-if="primary"
           type="button"
           class="rounded px-2 py-0.5 text-caption font-medium text-foreground hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-50"
-          :class="ITEM_EVENT_ICON[primary] && 'grid size-6 place-items-center px-0'"
+          :class="ITEM_EVENT_ICON[primary] ? 'grid size-6 place-items-center px-0' : 'relative after:absolute after:-inset-y-1'"
           :disabled="busy"
           :title="ITEM_EVENT_ICON[primary] ? t(ITEM_EVENT_LABEL[primary]) : undefined"
           :aria-label="ITEM_EVENT_ICON[primary] ? t(ITEM_EVENT_LABEL[primary]) : undefined"

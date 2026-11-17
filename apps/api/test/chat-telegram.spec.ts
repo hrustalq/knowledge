@@ -1,5 +1,7 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { TelegramAdapter, hashInboundSecret, markdownToTelegramHtml } from '../src/chat/adapters/telegram.adapter.js';
+import { TELEGRAM_COMMANDS, TelegramAdapter, hashInboundSecret, markdownToTelegramHtml } from '../src/chat/adapters/telegram.adapter.js';
 import { cutAnswer } from '../src/chat/adapters/chat-markdown.js';
 import { ChatPlatformError } from '../src/chat/adapters/chat-adapter.types.js';
 
@@ -322,9 +324,11 @@ describe('Bot API calls', () => {
   });
 
   it('registers the webhook for questions, edits (#339), button presses and reactions', async () => {
-    const fetchMock = stubFetch({ status: 200, body: { ok: true, result: true } });
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true, result: true })));
+    vi.stubGlobal('fetch', fetchMock);
     await adapter.registerWebhook({ token: 'T', botUsername: BOT, serverUrl: null, actionUrl: '' }, 'https://kn.test/hook', 's');
-    expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toMatchObject({
+    const setWebhook = (fetchMock.mock.calls as unknown as [string, RequestInit][]).find(([url]) => url.endsWith('/setWebhook'));
+    expect(JSON.parse(setWebhook?.[1].body as string)).toMatchObject({
       allowed_updates: ['message', 'edited_message', 'callback_query', 'message_reaction'],
     });
   });
@@ -342,5 +346,53 @@ describe('Bot API calls', () => {
     await expect(
       adapter.editMessage({ token: 'T', botUsername: BOT, serverUrl: null, actionUrl: '' }, { chatId: '1', messageId: '2' }, { text: 'a', plain: 'a', buttons: [] }),
     ).resolves.toBeUndefined();
+  });
+});
+
+describe('command menu (#1223)', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  const ctx = { token: 'T', botUsername: BOT, serverUrl: null, actionUrl: '', locale: 'ru' as const };
+
+  /** Every Bot API call the registration made, by method, with its parsed body. */
+  async function register(refuseCommands = false) {
+    const fetchMock = vi.fn(async (url: string, _init: RequestInit) => {
+      const refused = refuseCommands && url.endsWith('/setMyCommands');
+      return new Response(JSON.stringify(refused ? { ok: false, description: 'Bad Request' } : { ok: true, result: true }), { status: refused ? 400 : 200 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    await adapter.registerWebhook(ctx, 'https://kn.test/hook', 'secret');
+    return fetchMock.mock.calls.map(([url, init]) => ({
+      method: String(url).split('/').pop(),
+      body: JSON.parse(init.body as string) as Record<string, unknown>,
+    }));
+  }
+
+  it('lists each scope in every language plus a fallback in the bot’s own', async () => {
+    const calls = (await register()).filter((c) => c.method === 'setMyCommands');
+    const sent = calls.map((c) => `${(c.body.scope as { type: string }).type}:${(c.body.language_code as string | undefined) ?? '-'}`);
+    expect(sent.sort()).toEqual(
+      ['all_private_chats', 'all_group_chats', 'all_chat_administrators'].flatMap((s) => [`${s}:en`, `${s}:ru`, `${s}:-`]).sort(),
+    );
+    const privateDefault = calls.find((c) => (c.body.scope as { type: string }).type === 'all_private_chats' && !c.body.language_code);
+    expect(privateDefault?.body.commands).toEqual(
+      TELEGRAM_COMMANDS.all_private_chats.map((command) => ({ command, description: `chat.commands.${command}` })),
+    );
+  });
+
+  it('a refused menu still registers the webhook', async () => {
+    const calls = await register(true);
+    expect(calls.filter((c) => c.method === 'setWebhook')).toHaveLength(1);
+  });
+
+  it('lists exactly the commands the dispatcher handles, each described in en and ru', () => {
+    const source = readFileSync(join(import.meta.dirname, '../src/chat/chat-answers.service.ts'), 'utf8');
+    const block = source.slice(source.indexOf('switch (command.name)'), source.indexOf('default:', source.indexOf('switch (command.name)')));
+    const handled = new Set([...block.matchAll(/case '([a-z]+)':/g)].map((m) => m[1]));
+    const listed = new Set<string>([...Object.values(TELEGRAM_COMMANDS).flat(), 'start']);
+    expect([...listed].sort()).toEqual([...handled].sort());
+    for (const lang of ['en', 'ru']) {
+      const { commands } = JSON.parse(readFileSync(join(import.meta.dirname, `../src/i18n/${lang}/chat.json`), 'utf8')) as { commands: Record<string, string> };
+      for (const name of listed) if (name !== 'start') expect(commands[name], `${lang} chat.commands.${name}`).toMatch(/\S/);
+    }
   });
 });

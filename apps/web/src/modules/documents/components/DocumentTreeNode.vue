@@ -105,7 +105,7 @@ const dnd = useTreeDndRow({
       <button
         v-if="hasChildren"
         data-no-drag
-        class="grid size-5 shrink-0 place-items-center rounded text-muted-foreground hover:bg-muted"
+        class="relative grid size-5 shrink-0 place-items-center rounded text-muted-foreground after:absolute after:-inset-0.5 hover:bg-muted"
         :aria-label="open ? t('tree.collapse') : t('tree.expand')"
         :aria-expanded="open"
         @click="toggle"
@@ -125,7 +125,7 @@ const dnd = useTreeDndRow({
       />
       <RouterLink
         :to="`/documents/${node.documentId}`"
-        class="truncate text-sm font-medium transition-colors hover:text-primary"
+        class="truncate text-sm font-medium transition-colors hover:text-primary max-sm:min-w-[8ch] max-sm:flex-1"
         :class="archived ? 'text-muted-foreground line-through decoration-muted-foreground/40' : ''"
         draggable="false"
       >
@@ -139,7 +139,8 @@ const dnd = useTreeDndRow({
         :title="t('access.draft.hint')"
       >
         <NotepadTextDashed class="size-3" aria-hidden="true" />
-        {{ t('access.draft.label') }}
+        <!-- Icon only on a phone, but the name stays for screen readers (#1039). -->
+        <span class="sr-only sm:not-sr-only">{{ t('access.draft.label') }}</span>
       </Badge>
       <!-- Restricted (#76): this page, an ancestor or the project is not open
            to the whole workspace. -->
@@ -176,14 +177,15 @@ const dnd = useTreeDndRow({
       <span v-if="hasChildren" class="shrink-0 text-xs tabular-nums text-muted-foreground">
         {{ node.childCount }}
       </span>
-      <span class="ml-auto shrink-0 text-xs text-muted-foreground">{{ formatDate(node.createdAt) }}</span>
+      <!-- Dropped below sm: on a phone the title needs the room more than the date (#1039). -->
+      <span class="ml-auto hidden shrink-0 text-xs text-muted-foreground sm:inline">{{ formatDate(node.createdAt) }}</span>
       <TreeRowMenu
         v-if="auth.canEdit"
         :document-id="node.documentId"
         :title="node.title"
         :disabled="dnd.isLocked.value"
         :restricted="node.restricted"
-        class="opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100"
+        class="transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 [@media(hover:hover)]:opacity-0"
       />
     </div>
 

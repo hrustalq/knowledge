@@ -35,6 +35,7 @@ import {
 } from 'rxjs'
 import { docToMarkdown as docToMarkdownIn } from '@knowledge/editor-schema/serialize'
 import { canIndent, canOutdent } from '../components/extensions/list-indent'
+import { canMoveBlock, selectedBlockPos } from '../components/extensions/drag-handle'
 
 /** A Tiptap event as a stream. Listener attached on subscribe, removed on unsubscribe. */
 export function fromEditorEvent<K extends keyof EditorEvents>(
@@ -70,6 +71,9 @@ export interface FormatState {
   canRedo: boolean
   canIndent: boolean
   canOutdent: boolean
+  /** Whether the block holding the caret has a neighbour above / below (#1063). */
+  canMoveUp: boolean
+  canMoveDown: boolean
 }
 
 export const EMPTY_FORMAT: FormatState = {
@@ -88,6 +92,8 @@ export const EMPTY_FORMAT: FormatState = {
   canRedo: false,
   canIndent: false,
   canOutdent: false,
+  canMoveUp: false,
+  canMoveDown: false,
 }
 
 const HEADING_LEVELS = [1, 2, 3, 4] as const
@@ -96,6 +102,7 @@ const HEADING_LEVELS = [1, 2, 3, 4] as const
 export function readFormatState(editor: Editor): FormatState {
   if (editor.isDestroyed) return EMPTY_FORMAT
   const inList = editor.isActive('listItem') || editor.isActive('taskItem')
+  const block = selectedBlockPos(editor.state)
   return {
     bold: editor.isActive('bold'),
     italic: editor.isActive('italic'),
@@ -113,6 +120,8 @@ export function readFormatState(editor: Editor): FormatState {
     // Each is up to two dry-run commands; outside a list the answer is known.
     canIndent: inList && canIndent(editor),
     canOutdent: inList && canOutdent(editor),
+    canMoveUp: block !== null && canMoveBlock(editor.state, block, -1),
+    canMoveDown: block !== null && canMoveBlock(editor.state, block, 1),
   }
 }
 

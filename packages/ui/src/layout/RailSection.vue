@@ -56,7 +56,7 @@ const { t } = useI18n()
       <Transition name="kn-fade">
         <button
           v-if="open && expandable"
-          class="mr-1.5 shrink-0 rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          class="kn-hit mr-1.5 shrink-0 rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           :title="t('ui.common.openLarger', { title })"
           :aria-label="t('ui.common.openLarger', { title })"
           @click="emit('expand')"
@@ -71,7 +71,9 @@ const { t } = useI18n()
          The rule and the padding sit *inside* the collapse, so a closed widget
          is one row and not one row plus a stray hairline. -->
     <Collapse :open="open">
-      <div class="max-h-[26rem] overflow-auto border-t p-3 lg:max-h-[32rem]">
+      <!-- Capped only beside the content (xl, #1047): stacked under it below that,
+           where the page already scrolls, and a nested scroller gave less room (#1054). -->
+      <div class="border-t p-3 xl:max-h-[32rem] xl:overflow-auto">
         <slot />
       </div>
     </Collapse>

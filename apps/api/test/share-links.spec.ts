@@ -15,6 +15,7 @@ import { PublicSharesController } from '../src/public/public-shares.controller.j
 import { PublicSharesService } from '../src/public/public-shares.service.js';
 import { PublicStore, type PublicKeyValueStore } from '../src/public/public-store.js';
 import { ShareUnlockService } from '../src/public/share-unlock.service.js';
+import { ImageSigner } from '../src/public/image-signer.js';
 
 /**
  * Share links (docs/features/43, issue #77 phase 1). What is pinned:
@@ -263,6 +264,7 @@ function harness(envOverrides: Record<string, unknown> = {}) {
     exports,
     embeds as never,
     config as never,
+    new ImageSigner({ get: () => 'test-key' } as never),
   );
   return { embeds, prisma, settings, shares, reader, kv, store, limiter, unlocks, documents, attachments, activity, config, exportScope, producer, storage };
 }
@@ -377,7 +379,7 @@ describe('PublicSharesService (the anonymous reader)', () => {
     const view = await h.reader.view(h.token, undefined);
     expect(view).toMatchObject({ locked: false, rootDocumentId: ROOT, title: 'Guide', tree: [{ documentId: ROOT, parentId: null }] });
     const page = await h.reader.page(h.token, ROOT, undefined);
-    expect(page).toEqual({ documentId: ROOT, title: 'Guide', markdown: `# body of ${ROOT}`, updatedAt: '2026-10-01T00:00:00.000Z' });
+    expect(page).toEqual({ documentId: ROOT, title: 'Guide', markdown: `# body of ${ROOT}`, imageProxy: {}, updatedAt: '2026-10-01T00:00:00.000Z' });
     expect(JSON.stringify(page)).not.toContain('alice');
     // Without includeSubtree even a child is out of scope.
     await expect(h.reader.page(h.token, CHILD, undefined)).rejects.toMatchObject({ status: 404 });

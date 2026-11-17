@@ -93,7 +93,7 @@ watch(() => route.fullPath, () => ui.close())
       <button
         v-if="search.hasSearched.value"
         type="button"
-        class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+        class="kn-hit flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
         @click="openFullPage"
       >
         {{ t('search.openAsPage') }}

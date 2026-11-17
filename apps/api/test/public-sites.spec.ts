@@ -13,6 +13,7 @@ import { PublishingSettingsService } from '../src/publishing/publishing-settings
 import { SitesService } from '../src/publishing/sites.service.js';
 import { PublicSitesService } from '../src/public/public-sites.service.js';
 import { PublicSiteFilesService } from '../src/public/public-site-files.service.js';
+import { ImageSigner } from '../src/public/image-signer.js';
 
 /**
  * Published sites, read and managed (docs/features/44, issue #77 phase 2a).
@@ -188,6 +189,7 @@ function reader(envOverrides: Record<string, unknown> = {}) {
     config as never,
     sessions as never,
     { publicMarkdown: vi.fn(async (md: string) => md), exportSnapshots: vi.fn(async () => []) } as never,
+    new ImageSigner({ get: () => 'test-key' } as never),
   );
   return { prisma, service, documents, attachments, sessions };
 }

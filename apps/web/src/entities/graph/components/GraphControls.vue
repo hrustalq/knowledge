@@ -12,9 +12,9 @@
  * Legend rows are the filter. A separate list of checkboxes duplicating the
  * colors would be two things to keep in sync and one more thing to read.
  */
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ChevronRight, Search, X } from 'lucide-vue-next'
+import { ChevronRight, Search, SlidersHorizontal, X } from 'lucide-vue-next'
 import { formatDayMonth } from '@/shared/utils/format'
 import { Checkbox } from '@knowledge/ui/checkbox'
 import { labelFor } from '@/shared/i18n/labels'
@@ -40,10 +40,28 @@ const emit = defineEmits<{
   'update:query': [string]
 }>()
 
+defineOptions({ inheritAttrs: false })
+
 const { t } = useI18n()
 
 const open = ref<Record<string, boolean>>({ filters: true, groups: true, time: false, forces: false })
 const toggle = (k: string) => (open.value[k] = !open.value[k])
+
+/**
+ * Below `sm` the panel is a chip that opens the card. The card is hidden until
+ * then, so the canvas keeps its width for the graph. Desktop never reads this.
+ */
+const expanded = ref(false)
+
+onMounted(() => {
+  // Phones start with every section closed; the list of sections is too tall for a 360px canvas.
+  if (window.matchMedia('(width < 40rem)').matches) {
+    open.value.filters = false
+    open.value.groups = false
+    open.value.time = false
+    open.value.forces = false
+  }
+})
 
 function set<K extends keyof GraphOptions>(key: K, value: GraphOptions[K]) {
   emit('update:options', { ...props.options, [key]: value })
@@ -84,8 +102,22 @@ const inPast = computed(() => !!props.time?.point.value)
 </script>
 
 <template>
+  <!-- #1052: desktop is `contents`, so the card is the flex child it always was and takes the passed-in classes. -->
+  <div class="flex flex-col items-start gap-1.5 sm:contents max-sm:pointer-events-auto max-sm:max-h-full max-sm:overflow-y-auto">
+    <button
+      class="pointer-events-auto inline-flex h-9 items-center gap-2 rounded-lg border bg-card/90 px-3 text-sm shadow-xs backdrop-blur-md transition-colors hover:bg-muted/50 sm:hidden"
+      :aria-expanded="expanded"
+      @click="expanded = !expanded"
+    >
+      <SlidersHorizontal class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      <span class="font-medium">{{ t('graph.filters') }}</span>
+      <span v-if="activeFilters" class="text-xs text-muted-foreground">{{ t('graph.nActive', { n: activeFilters }) }}</span>
+    </button>
+
   <div
+    v-bind="$attrs"
     class="pointer-events-auto w-62 overflow-hidden rounded-xl border bg-card/90 shadow-[0_16px_48px_-12px] shadow-foreground/15 backdrop-blur-md dark:shadow-black/50"
+    :class="expanded ? '' : 'max-sm:hidden'"
   >
     <!-- Filters ------------------------------------------------------------->
     <button
@@ -264,5 +296,6 @@ const inPast = computed(() => !!props.time?.point.value)
         />
       </label>
     </div>
+  </div>
   </div>
 </template>

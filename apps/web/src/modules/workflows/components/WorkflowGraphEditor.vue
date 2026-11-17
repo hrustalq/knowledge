@@ -403,6 +403,12 @@ watch(
   color: var(--destructive);
   border-color: var(--destructive);
 }
+/* No hover on touch screens, so the disconnect control stays visible (#1049). */
+@media (hover: none) {
+  .kn-wf-cut {
+    opacity: 1;
+  }
+}
 
 .vue-flow__handle {
   width: 9px;

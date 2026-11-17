@@ -3,7 +3,9 @@ import { AI_PANEL_SECTIONS, DEFAULT_AI_SECTION, isAiSection } from './model/ai-s
 
 export const routes: RouteRecordRaw[] = [
   // meta.fill: the chat owns the viewport — see app/App.vue's two content modes.
-  { path: '/assistant', component: () => import('./pages/AssistantPage.vue'), meta: { fill: true, feature: 'assistant' } },
+  // meta.trail 'lg': below lg the breadcrumb only repeated "Assistant" above the
+  // chat header and cost a short screen 36px of transcript (#1067).
+  { path: '/assistant', component: () => import('./pages/AssistantPage.vue'), meta: { fill: true, feature: 'assistant', trail: 'lg' } },
 ]
 
 // AI (issue #182): Connect AI plus the assistant's provider config,

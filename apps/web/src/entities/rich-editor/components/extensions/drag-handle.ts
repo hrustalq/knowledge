@@ -9,7 +9,7 @@
  * behaviour, so reordering behaves exactly like a native selection drag.
  */
 import { Extension } from '@tiptap/core'
-import { NodeSelection, Plugin, PluginKey } from '@tiptap/pm/state'
+import { NodeSelection, Plugin, PluginKey, TextSelection, type EditorState } from '@tiptap/pm/state'
 import type { EditorView } from '@tiptap/pm/view'
 
 export interface DragHandleEvents {
@@ -130,6 +130,43 @@ export function duplicateBlock(view: EditorView, pos: number): void {
   if (!node) return
   const end = pos + node.nodeSize
   view.dispatch(view.state.tr.insert(end, node.copy(node.content)))
+  view.focus()
+}
+
+/**
+ * The top-level block holding the selection — what the toolbar's block actions
+ * act on when there is no gutter to point at one (#1063: touch has no hover).
+ */
+export function selectedBlockPos(state: EditorState): number | null {
+  const { selection } = state
+  if (selection instanceof NodeSelection && selection.$from.depth === 0) return selection.from
+  return selection.$from.depth >= 1 ? selection.$from.before(1) : null
+}
+
+/** Whether the block at `pos` has a sibling to swap with in that direction. */
+export function canMoveBlock(state: EditorState, pos: number, dir: -1 | 1): boolean {
+  const index = state.doc.resolve(pos).index(0)
+  return dir < 0 ? index > 0 : index < state.doc.childCount - 1
+}
+
+/**
+ * Swap the block at `pos` with its neighbour, keeping the caret where it was
+ * inside the block so a second tap moves it again.
+ */
+export function moveBlock(view: EditorView, pos: number, dir: -1 | 1): void {
+  const { state } = view
+  const node = state.doc.nodeAt(pos)
+  if (!node || !canMoveBlock(state, pos, dir)) return
+  const index = state.doc.resolve(pos).index(0)
+  const neighbour = state.doc.child(index + dir)
+  const to = dir < 0 ? pos - neighbour.nodeSize : pos + neighbour.nodeSize
+  const offset = state.selection.from - pos
+  const tr = state.tr.delete(pos, pos + node.nodeSize).insert(to, node)
+  const selection =
+    state.selection instanceof NodeSelection
+      ? NodeSelection.create(tr.doc, to)
+      : TextSelection.near(tr.doc.resolve(Math.min(to + offset, to + node.nodeSize - 1)))
+  view.dispatch(tr.setSelection(selection).scrollIntoView())
   view.focus()
 }
 

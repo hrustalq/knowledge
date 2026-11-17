@@ -24,7 +24,7 @@
  * thumbnail, because the shape is now one click away at full size instead of
  * 56px tall in a list you have to scroll.
  */
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
@@ -35,6 +35,7 @@ import { apiQueryOptions } from '@/shared/api/queries'
 import { getProjectId, getWorkspaceId } from '@/shared/api/api'
 import { useAuthStore } from '@/stores/auth'
 import { useWorkflowsStore } from '@/entities/workflow'
+import { revealStackedPane } from '@/shared/utils/reveal-pane'
 import { Button } from '@knowledge/ui/button'
 import { Input } from '@knowledge/ui/input'
 import { Skeleton } from '@knowledge/ui/skeleton'
@@ -87,13 +88,28 @@ const visible = computed(() => {
 function problems(workflow: WorkflowDefinitionInfo): number {
   return validateGraph(workflow.graph).filter((i) => i.severity === 'error').length
 }
+/**
+ * #1061: the builder is a full-screen surface, and below xl the stacked rail
+ * took its height — while editing, the trail is the way back to the list.
+ */
+const editing = computed(() => route.path.endsWith('/edit'))
+/** #1071: below xl (#1046) the rail stacks above the detail, so a pick would otherwise change nothing on screen. */
+const detailEl = ref<HTMLElement | null>(null)
+watch(
+  () => route.params.id,
+  (id) => {
+    if (id) void nextTick(() => revealStackedPane(detailEl.value))
+  },
+)
 </script>
 
 <template>
   <!-- Bleed out of the settings column's padding so this rail sits flush too -->
-  <div class="-mx-4 -my-6 flex min-h-0 flex-1 flex-col lg:-mx-8 lg:flex-row">
+  <div class="-mx-4 -my-6 flex min-h-0 flex-1 flex-col lg:-mx-8 xl:flex-row">
+    <!-- #1071: cap the stacked rail (below xl, #1046) so the detail stays in view -->
     <div
-      class="flex h-72 shrink-0 flex-col border-b bg-background lg:sticky lg:top-0 lg:h-[calc(100vh-5.75rem)] lg:w-64 lg:self-start lg:border-b-0 lg:border-r"
+      :class="{ 'max-xl:hidden': editing }"
+      class="flex max-h-[40dvh] shrink-0 flex-col border-b bg-background xl:sticky xl:top-0 xl:max-h-none xl:h-[calc(100vh-5.75rem)] xl:w-64 xl:self-start xl:border-b-0 xl:border-r"
     >
       <div class="flex items-center gap-2 border-b px-3 py-2">
         <p class="text-muted-foreground min-w-0 flex-1 truncate text-xs font-medium uppercase">
@@ -165,7 +181,7 @@ function problems(workflow: WorkflowDefinitionInfo): number {
          it was picked from stays put. No padding, unlike the project rail's
          pane — its one child is a canvas, and the states that are not a canvas
          carry their own. -->
-    <div data-kn-pane="3" class="flex min-h-0 min-w-0 flex-1 flex-col">
+    <div ref="detailEl" data-kn-pane="3" class="flex min-h-0 min-w-0 flex-1 flex-col">
       <RouterView />
     </div>
   </div>

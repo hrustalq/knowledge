@@ -82,6 +82,30 @@
 }
 
 /*
+ * iOS Safari zooms the page into any focused field drawn under 16px and never
+ * zooms back (#1048). The kit Input is 16px below md, but call sites shrink
+ * fields with text-xs / text-ui / text-sm, and a phone in landscape is past md.
+ * So on a coarse pointer every field is 16px, whatever its class: unlayered,
+ * so it beats every Tailwind size utility, yet only element-weight, so a
+ * deliberate class rule (the editor title, larger) still wins. The small
+ * fields drawn by a class rule are named, one notch heavier than their own
+ * rule; the Mermaid source sizes its container, so the line gutter keeps pace
+ * with the text.
+ */
+@media (pointer: coarse) {
+  input,
+  textarea,
+  select,
+  [contenteditable="true"],
+  .kn-prose[contenteditable="true"],
+  select.kn-api-method,
+  select.kn-setup-select,
+  .kn-mermaid-code {
+    font-size: 16px;
+  }
+}
+
+/*
  * Scrollbars: one system, three scenarios.
  *
  * The browser's own bar is 15px of grey that belongs to no design system, and
@@ -251,6 +275,34 @@
 }
 .kn-shell:has(.kn-trail > nav, .kn-page-actions > *) {
   --kn-trail-h: 2.25rem;
+}
+/* `meta.trail: 'lg'` (#1067): below lg the strip of a surface that names
+   itself (the assistant's chat header) gives its 36px back to the content,
+   unless the page put actions in it. Both halves, so the fill height follows. */
+@media (max-width: 1023.98px) {
+  .kn-trail[data-trail-lg]:not(:has(.kn-page-actions > *)) {
+    display: none;
+  }
+  .kn-shell:has(.kn-trail[data-trail-lg]):not(:has(.kn-page-actions > *)) {
+    --kn-trail-h: 0rem;
+  }
+}
+/* `meta.focusWhenShort` (#1062): a writing surface on a short viewport below
+   lg (a landscape phone, or a keyboard up) loses the top bar and the trail, as
+   a `bare` route does, so the text keeps the height; the surface's own bar
+   stays and is its way out. Both custom properties follow, so fill heights and
+   `--kn-chrome-h` do. A trail holding page actions stays. */
+@media (max-height: 30rem) and (max-width: 63.98rem) {
+  .kn-shell[data-focus-short] .kn-topbar,
+  .kn-shell[data-focus-short] .kn-trail:not(:has(.kn-page-actions > *)) {
+    display: none;
+  }
+  .kn-shell[data-focus-short] {
+    --kn-topbar-h: 0rem;
+  }
+  .kn-shell[data-focus-short]:not(:has(.kn-page-actions > *)) {
+    --kn-trail-h: 0rem;
+  }
 }
 @media (min-width: 1024px) {
   .kn-trail {
@@ -608,8 +660,11 @@
  *
  * `max-height`, not `height`: a rail with two widgets open should end where its
  * cards end, not reserve a screen of nothing under them.
+ *
+ * Beside the content only from 1280px (#1047): between 1024 and 1279 the rail
+ * stacks under the content, where a sticky, bounded column would be clipped.
  */
-@media (min-width: 1024px) {
+@media (min-width: 1280px) {
   .kn-widget-rail {
     position: sticky;
     top: 1.5rem;
@@ -1674,6 +1729,13 @@ body.kn-tree-dragging a {
   );
   --kn-gap: calc(var(--kn-cell) / 4);
   --kn-pitch: calc(var(--kn-cell) + var(--kn-gap));
+}
+/* A day is a button, and a 12px one at a 15px pitch is a guess under a
+   finger: on touch every cell is 24px and the year scrolls instead (#1049). */
+@media (pointer: coarse) {
+  .kn-ledger {
+    --kn-cell: 24px;
+  }
 }
 .kn-ledger-grid {
   width: calc(var(--kn-weeks, 53) * var(--kn-pitch) - var(--kn-gap));

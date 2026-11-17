@@ -26,7 +26,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
-import { FilePlus2, LayoutTemplate, Search } from 'lucide-vue-next'
+import { ChevronLeft, FilePlus2, LayoutTemplate, Search } from 'lucide-vue-next'
 import type { Locale, TemplateDetail, TemplateValues } from '@knowledge/contracts'
 import { api } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
@@ -85,6 +85,8 @@ const loadingDetail = ref(false)
 const creating = ref(false)
 /** Required fields are marked once Create has been tried, not while the form is still being read. */
 const triedCreate = ref(false)
+/** Below md: true once a pick has been made, so the form shows instead of the list (#1060). */
+const phoneForm = ref(false)
 
 // Reset per opening: a template and its values from last time are a trap.
 // Immediate, because AppShell mounts this on its first opening.
@@ -100,6 +102,7 @@ watch(
     describe.value = ''
     triedCreate.value = false
     selectedRef.value = target.value.ref ?? null
+    phoneForm.value = selectedRef.value !== null
   },
   { immediate: true },
 )
@@ -115,6 +118,12 @@ const blankMatches = computed(
     t('templates.gallery.blank').toLocaleLowerCase().includes(query.value.trim().toLocaleLowerCase()),
 )
 const selected = computed(() => templates.byRef(selectedRef.value))
+
+/** Below md the picker and the form are two steps, not two panes (#1060). */
+function pick(ref: string | null) {
+  selectedRef.value = ref
+  phoneForm.value = true
+}
 
 // The detail carries the body and placeholders; fetched per pick, newest pick
 // wins. Immediate for the same first-mount reason as the opening reset.
@@ -246,9 +255,12 @@ function scopeLabel(scope: string): string {
         <DialogDescription>{{ where }}</DialogDescription>
       </DialogHeader>
 
-      <div class="grid min-h-0 flex-1 grid-rows-[minmax(0,12rem)_minmax(0,1fr)] md:grid-cols-[17rem_minmax(0,1fr)] md:grid-rows-1">
+      <!-- minmax(0,1fr) on both axes: with no column track below md, the implicit
+           auto track grew to the category label's width and pushed the panes past
+           the dialog edge (#1060). -->
+      <div class="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] md:grid-cols-[17rem_minmax(0,1fr)] md:grid-rows-1">
         <!-- The roster ------------------------------------------------- -->
-        <div class="flex min-h-0 flex-col border-b md:border-r md:border-b-0">
+        <div :class="['flex min-h-0 flex-col border-b md:border-r md:border-b-0', phoneForm && 'max-md:hidden']">
           <div class="px-3 py-2">
             <div class="relative">
               <Search class="text-muted-foreground pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2" />
@@ -268,7 +280,7 @@ function scopeLabel(scope: string): string {
               :aria-selected="selectedRef === null"
               class="kn-tpl-row"
               :data-selected="selectedRef === null || undefined"
-              @click="selectedRef = null"
+              @click="pick(null)"
             >
               <FilePlus2 class="text-muted-foreground size-4 shrink-0" />
               <span class="truncate">{{ t('templates.gallery.blank') }}</span>
@@ -289,7 +301,7 @@ function scopeLabel(scope: string): string {
                 :aria-selected="selectedRef === tpl.ref"
                 class="kn-tpl-row"
                 :data-selected="selectedRef === tpl.ref || undefined"
-                @click="selectedRef = tpl.ref"
+                @click="pick(tpl.ref)"
               >
                 <span v-if="tpl.icon" class="w-4 shrink-0 text-center text-sm leading-none" aria-hidden="true">{{ tpl.icon }}</span>
                 <LayoutTemplate v-else class="text-muted-foreground size-4 shrink-0" />
@@ -307,7 +319,15 @@ function scopeLabel(scope: string): string {
         </div>
 
         <!-- The pick ---------------------------------------------------- -->
-        <div class="min-h-0 overflow-y-auto px-5 py-4">
+        <div :class="['min-h-0 overflow-y-auto px-5 py-4', !phoneForm && 'max-md:hidden']">
+          <button
+            type="button"
+            class="text-muted-foreground hover:text-foreground mb-3 flex items-center gap-1 text-sm md:hidden"
+            @click="phoneForm = false"
+          >
+            <ChevronLeft class="size-4" />
+            {{ t('common.back') }}
+          </button>
           <div v-if="selectedRef === null" class="text-muted-foreground text-sm">
             {{ inserting ? t('templates.gallery.insertPick') : t('templates.gallery.blankDescription') }}
           </div>

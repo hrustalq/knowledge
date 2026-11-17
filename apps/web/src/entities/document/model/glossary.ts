@@ -8,7 +8,8 @@
  * every page that mentions the term follows on its next render — and what
  * makes retiring a term a one-row change instead of a mass edit.
  *
- * Matching is deterministic (whole-word, longest term first) and deliberately
+ * Matching is deterministic (whole-word with inflected forms — `termBody`,
+ * #1210 — longest term first) and deliberately
  * conservative: it links only the first few occurrences of a term, because a
  * page where every instance of a word is a link is a page nobody can read.
  *
@@ -22,6 +23,7 @@ import {
   effectiveGlossary,
   GLOSSARY_BOUNDARY_AFTER,
   GLOSSARY_BOUNDARY_BEFORE,
+  termBody,
   type GlossaryTerm,
 } from '@knowledge/contracts'
 import { plainText } from '../../../core/markdown/plain'
@@ -42,7 +44,7 @@ export function linkCap(term: GlossaryTerm): number {
  * and a merge pass over two result sets.
  */
 export function spellingMatches(candidate: Candidate, matched: string): boolean {
-  return !candidate.term.caseSensitive || candidate.pattern === matched
+  return !candidate.term.caseSensitive || candidate.pattern.trim() === matched
 }
 
 /**
@@ -81,20 +83,28 @@ export interface AmbiguousSpelling {
 }
 
 export interface Matcher {
-  /** null when no spelling survived; `ambiguous` says why. */
+  /** null when no spelling survived; `ambiguous` says why. One capture group per entry of `groups`. */
   re: RegExp | null
-  byPattern: Map<string, Candidate>
+  /** The spelling behind each capture group of `re`, in order. */
+  groups: Candidate[]
   ambiguous: AmbiguousSpelling[]
 }
 
-function escapeRe(raw: string): string {
-  return raw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+/**
+ * The spelling a match of `matcher.re` came from. The matched text may be an
+ * inflected form (`Веги` for `Вега`), so it is found by capture group, never
+ * by looking the text up.
+ */
+export function candidateFor(matcher: Matcher, match: RegExpExecArray): Candidate | undefined {
+  const at = match.findIndex((group, i) => i > 0 && group !== undefined)
+  return at > 0 ? matcher.groups[at - 1] : undefined
 }
 
 /**
  * One alternation over every spelling in the glossary, longest first so
- * "merge base" wins over "merge" where both are defined. The boundaries come
- * from contracts because the API's occurrence counter has to agree with them.
+ * "merge base" wins over "merge" where both are defined. Each spelling's
+ * pattern comes from contracts because the API's occurrence counter and
+ * `knowledge_context` have to agree with it.
  */
 export function buildMatcher(terms: GlossaryTerm[]): Matcher | null {
   const claims = new Map<string, Candidate[]>()
@@ -121,15 +131,15 @@ export function buildMatcher(terms: GlossaryTerm[]): Matcher | null {
     if (winner) byPattern.set(key, winner)
     else ambiguous.push({ spelling: bucket[0]!.pattern, terms: bucket.map((c) => c.term) })
   }
-  if (byPattern.size === 0) return { re: null, byPattern, ambiguous }
+  if (byPattern.size === 0) return { re: null, groups: [], ambiguous }
 
-  const alternation = [...byPattern.keys()]
-    .sort((a, b) => b.length - a.length)
-    .map(escapeRe)
-    .join('|')
+  const groups = [...byPattern.entries()].sort(([a], [b]) => b.length - a.length).map(([, c]) => c)
+  // Boundaries once around the group, not per spelling: a lookbehind in every
+  // alternative runs at every position (`termBody`).
+  const alternation = groups.map((c) => `(${termBody(c.pattern, { caseSensitive: c.term.caseSensitive })})`).join('|')
   return {
-    re: new RegExp(`${GLOSSARY_BOUNDARY_BEFORE}(${alternation})${GLOSSARY_BOUNDARY_AFTER}`, 'giu'),
-    byPattern,
+    re: new RegExp(`${GLOSSARY_BOUNDARY_BEFORE}(?:${alternation})${GLOSSARY_BOUNDARY_AFTER}`, 'giu'),
+    groups,
     ambiguous,
   }
 }

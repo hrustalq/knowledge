@@ -1115,9 +1115,9 @@ watch(
        re-flow the moment the real thing lands on top of it. -->
   <div v-else-if="!detail" class="space-y-4">
     <Skeleton class="h-8 w-1/2" />
-    <div :class="railShown ? 'grid gap-6 lg:grid-cols-[minmax(0,1fr)_24rem] xl:grid-cols-[minmax(0,1fr)_28rem]' : ''">
+    <div :class="railShown ? 'grid gap-6 xl:grid-cols-[minmax(0,1fr)_28rem]' : ''">
       <Skeleton class="h-96 w-full" />
-      <Skeleton v-if="railShown" class="hidden h-72 w-full lg:block" />
+      <Skeleton v-if="railShown" class="hidden h-72 w-full xl:block" />
     </div>
   </div>
 
@@ -1125,13 +1125,13 @@ watch(
     <PageLayout variant="detail" :title="detail.document.title">
       <!-- The rail's switch (#698) on the title's row, at its far end: above
            the rail's corner when the rail is there, so it reads as that
-           panel's control. A column only exists from `lg`; below it ⋯ → View
+           panel's control. A column only exists from `xl` (#1047); below it ⋯ → View
            and the phone aside carry the same switch. -->
       <template #actions>
         <Button
           variant="ghost"
           size="icon-lg"
-          class="hidden lg:inline-flex"
+          class="hidden xl:inline-flex"
           :class="railShown ? 'bg-accent text-accent-foreground' : 'text-muted-foreground'"
           :aria-pressed="railShown"
           :aria-label="t('documents.pageRail')"
@@ -1174,7 +1174,7 @@ watch(
           <!-- Above the stack and outside it: the contents belong to the page
                being read, not to the facts about it. -->
           <template #before>
-            <TocRail v-if="!isSpec && !isFixture && headings.length > 1" :headings="headings" />
+            <TocRail v-if="!isSpec && !isFixture && headings.length > 1" class="hidden xl:block" :headings="headings" />
           </template>
 
           <!-- Hidden while reading an old revision: the stamp is about the head. -->
@@ -1380,6 +1380,15 @@ watch(
         </p>
         <!-- About the head, like the verification stamp. -->
         <ComponentDeclarationNotice v-if="!viewingRevision" :document-id="documentId" />
+        <!-- Below xl (#1047) the rail sits under the whole body, after the text its
+             contents list navigates: offer the list first, folded (#1053). -->
+        <details
+          v-if="content && !isSpec && !isFixture && !contentError && headings.length > 1"
+          class="rounded-md border px-3 py-2 text-sm xl:hidden"
+        >
+          <summary class="cursor-pointer font-medium">{{ t('tree.onThisPage') }}</summary>
+          <TocRail bare class="mt-2" :headings="headings" />
+        </details>
         <ApiReferenceView v-if="isSpec" :state="apiRef" :workspace-id="detail.document.workspaceId" />
         <TestFixtureView v-else-if="isFixture" :document-id="documentId" :revision-id="viewingRevision" />
         <PageState v-else-if="contentError" state="error" :description="contentError" />
@@ -1416,11 +1425,13 @@ watch(
       :open="expanded !== null && expanded !== 'graph'"
       @update:open="(v: boolean) => !v && (expanded = null)"
     >
-      <DialogContent class="max-w-5xl">
+      <!-- On a phone the widget is a full-screen sheet; the body takes the
+           rest of it and scrolls (#1054). From sm up nothing changes. -->
+      <DialogContent class="max-w-5xl max-sm:inset-0 max-sm:top-0 max-sm:left-0 max-sm:h-dvh max-sm:w-screen max-sm:max-h-dvh max-sm:translate-none max-sm:grid-rows-[auto_minmax(0,1fr)] max-sm:rounded-none max-sm:p-4">
         <DialogHeader>
           <DialogTitle>{{ expandedWidget?.label }} — {{ detail.document.title }}</DialogTitle>
         </DialogHeader>
-        <div class="max-h-[70vh] overflow-auto pr-1">
+        <div class="max-h-[70vh] max-sm:max-h-none max-sm:min-h-0 overflow-auto pr-1">
           <RevisionsView v-if="expanded === 'revisions'" :document-id="documentId" :source-backed="sourceBacked && auth.canEdit && !archived" @restored="load()" />
           <MergeRequestList v-else-if="expanded === 'merge-requests'" :document-id="documentId" />
           <!-- Sized under the dialog's own 70vh so the feed keeps the scroll,

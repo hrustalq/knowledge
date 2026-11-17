@@ -94,6 +94,8 @@ in the pull request that introduces them — see
   longer pops the keyboard up over it, and tapping a numbered source under an answer opens its card (with an Open page
   link) instead of leaving the chat. A chat opened from a link now loads the chat list too, which stayed on
   placeholders before. (#1066)
+- Assistant on a phone (keyboard open, or in landscape): the breadcrumb row that only repeated "Assistant" is gone
+  below 1024px, giving the conversation that height back. (#1067)
 
 ## [0.56.0] — 2026-11-16
 

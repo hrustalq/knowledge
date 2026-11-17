@@ -1617,6 +1617,14 @@ export const BUILT_IN_AGENT_KEYS = [
 export type BuiltInAgentKey = (typeof BUILT_IN_AGENT_KEYS)[number];
 
 /**
+ * A class of model, smallest first (#1121). An admin assigns one to a model; a
+ * methodology's agent asks for a minimum instead of naming a model it cannot
+ * know the workspace has. Order matters: "at least `medium`" reads this list.
+ */
+export const MODEL_TIERS = ['small', 'medium', 'large'] as const;
+export type ModelTier = (typeof MODEL_TIERS)[number];
+
+/**
  * Agents whose run is scoped to one repository connector (docs/features/31).
  *
  * One predicate for the API, which refuses to start such a run without a

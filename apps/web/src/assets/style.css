@@ -1699,6 +1699,13 @@ body.kn-tree-dragging a {
   --kn-gap: calc(var(--kn-cell) / 4);
   --kn-pitch: calc(var(--kn-cell) + var(--kn-gap));
 }
+/* A day is a button, and a 12px one at a 15px pitch is a guess under a
+   finger: on touch every cell is 24px and the year scrolls instead (#1049). */
+@media (pointer: coarse) {
+  .kn-ledger {
+    --kn-cell: 24px;
+  }
+}
 .kn-ledger-grid {
   width: calc(var(--kn-weeks, 53) * var(--kn-pitch) - var(--kn-gap));
 }

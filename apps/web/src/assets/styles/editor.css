@@ -263,6 +263,13 @@
   background-position: center;
   background-repeat: no-repeat;
 }
+/* Task checkboxes grow to a 20px touch target on touch screens (#1049). */
+@media (pointer: coarse) {
+  .kn-prose ul[data-type='taskList'] input[type='checkbox'] {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+}
 
 /* Panels ------------------------------------------------------------------ */
 
@@ -1321,6 +1328,20 @@ select.kn-api-method:focus-visible { outline: 2px solid var(--ring); outline-off
 .kn-block > .kn-resize-grip { z-index: 1; }
 .kn-block > .kn-resize-grip[data-side='left'] { left: 0.2rem; }
 .kn-block > .kn-resize-grip[data-side='right'] { right: 0.2rem; }
+/* On touch a grip is a 24px target drawn at the same 0.4rem: the padding is
+   hit area, not paint. The offsets keep each one centred on its edge (#1049). */
+@media (pointer: coarse) {
+  .kn-resize-grip {
+    width: 1.5rem;
+    padding-inline: 0.55rem;
+    background-clip: content-box;
+    touch-action: none;
+  }
+  .kn-resize-grip[data-side='left'] { left: -0.75rem; }
+  .kn-resize-grip[data-side='right'] { right: -0.75rem; }
+  .kn-block > .kn-resize-grip[data-side='left'] { left: -0.35rem; }
+  .kn-block > .kn-resize-grip[data-side='right'] { right: -0.35rem; }
+}
 
 /* ---------------------------------------------------------------- editor */
 
@@ -1371,6 +1392,13 @@ select.kn-api-method:focus-visible { outline: 2px solid var(--ring); outline-off
 .kn-tb-btn:hover:not(:disabled) { background: var(--accent); color: var(--accent-foreground); }
 .kn-tb-btn[aria-pressed='true'] { background: color-mix(in oklch, var(--primary) 14%, transparent); color: var(--primary); }
 .kn-tb-btn:disabled { opacity: 0.35; cursor: default; }
+/* Toolbar buttons grow to a 36px thumb target on touch screens (#1049). */
+@media (pointer: coarse) {
+  .kn-tb-btn {
+    height: 2.25rem;
+    min-width: 2.25rem;
+  }
+}
 .kn-tb-select {
   display: inline-flex;
   align-items: center;
@@ -1482,6 +1510,14 @@ select.kn-api-method:focus-visible { outline: 2px solid var(--ring); outline-off
 .kn-bubble button:hover,
 .kn-table-bar button:hover { background: var(--accent); color: var(--accent-foreground); }
 .kn-bubble button[aria-pressed='true'] { background: color-mix(in oklch, var(--primary) 16%, transparent); color: var(--primary); }
+/* Bubble and table-bar buttons grow to a 36px thumb target on touch screens (#1049). */
+@media (pointer: coarse) {
+  .kn-bubble button,
+  .kn-table-bar button {
+    height: 2.25rem;
+    min-width: 2.25rem;
+  }
+}
 .kn-bubble-sep { width: 1px; height: 1.1rem; margin: 0 0.2rem; background: var(--border); }
 .kn-bubble-status { width: 1.1rem; min-width: 1.1rem; height: 1.1rem; border-radius: 999px; padding: 0; }
 /*
@@ -1873,6 +1909,17 @@ select.kn-api-method:focus-visible { outline: 2px solid var(--ring); outline-off
 }
 .kn-unstaged-chip:hover { background: var(--muted); color: var(--foreground); }
 .kn-unstaged-chip:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+/* The chip is ~10px tall; an invisible layer grows its hit area to ~44px on touch screens (#1049). */
+@media (pointer: coarse) {
+  .kn-unstaged-chip {
+    position: relative;
+  }
+  .kn-unstaged-chip::after {
+    content: "";
+    position: absolute;
+    inset: -17px -11px;
+  }
+}
 /* Not stored: the dot turns from "pending" to "at risk". */
 .kn-unstaged-chip[data-failed] { color: var(--destructive); }
 .kn-unstaged-chip[data-failed] .kn-dirty-dot { background: var(--destructive); }

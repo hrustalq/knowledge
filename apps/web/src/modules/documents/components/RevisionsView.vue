@@ -162,6 +162,7 @@ watch(branchFilter, () => void load())
             <td class="px-2 py-2">
               <RadioGroup v-if="r.contentHash" v-model="from">
                 <RadioGroupItem
+                  class="relative after:absolute after:-inset-1"
                   :value="r.revisionId"
                   :aria-label="t('revisions.compareFrom', { n: r.revisionNumber })"
                 />
@@ -170,6 +171,7 @@ watch(branchFilter, () => void load())
             <td class="px-2 py-2">
               <RadioGroup v-if="r.contentHash" v-model="to">
                 <RadioGroupItem
+                  class="relative after:absolute after:-inset-1"
                   :value="r.revisionId"
                   :aria-label="t('revisions.compareTo', { n: r.revisionNumber })"
                 />

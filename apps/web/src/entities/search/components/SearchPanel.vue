@@ -134,7 +134,7 @@ function clearLabel() {
           <button
             v-if="$slots.filters"
             type="button"
-            class="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground lg:hidden"
+            class="kn-hit flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground lg:hidden"
             :aria-expanded="filtersOpen"
             @click="filtersOpen = !filtersOpen"
           >

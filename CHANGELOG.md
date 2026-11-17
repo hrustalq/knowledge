@@ -81,6 +81,11 @@ in the pull request that introduces them — see
 - On a phone or tablet, focusing a search box, filter, comment composer, the editor body or a settings field no
   longer makes iOS Safari zoom the page and leave it scrolled sideways: every text field is 16px on a touch screen.
   Desktop sizes are unchanged. (#1048)
+- Small buttons and checkboxes are easier to hit on a phone or tablet: comment Reply / Edit / Delete (now spaced
+  apart), checkboxes, dialog close, the merge request sidebar pencils, filter clears, Copy, search Filters, the page
+  tree and revision pickers, activity-heatmap days (24px; the year scrolls), and the editor toolbar, selection bubble,
+  resize handles and task checkboxes. The workflow builder shows its disconnect control without hover. Desktop is
+  unchanged. (#1049)
 
 ## [0.56.0] — 2026-11-16
 

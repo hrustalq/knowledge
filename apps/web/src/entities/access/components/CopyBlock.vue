@@ -21,7 +21,7 @@ const { state, copy } = useCopy()
       <span class="min-w-0 truncate font-mono text-caption text-muted-foreground">{{ props.label }}</span>
       <button
         type="button"
-        class="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-caption text-muted-foreground hover:bg-muted hover:text-foreground"
+        class="kn-hit inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-caption text-muted-foreground hover:bg-muted hover:text-foreground"
         @click="copy(props.code)"
       >
         <Check v-if="state === 'copied'" class="size-3" />

@@ -105,7 +105,7 @@ const dnd = useTreeDndRow({
       <button
         v-if="hasChildren"
         data-no-drag
-        class="grid size-5 shrink-0 place-items-center rounded text-muted-foreground hover:bg-muted"
+        class="relative grid size-5 shrink-0 place-items-center rounded text-muted-foreground after:absolute after:-inset-0.5 hover:bg-muted"
         :aria-label="open ? t('tree.collapse') : t('tree.expand')"
         :aria-expanded="open"
         @click="toggle"

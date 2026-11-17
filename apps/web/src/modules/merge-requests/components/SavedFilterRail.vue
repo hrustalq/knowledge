@@ -309,7 +309,7 @@ function summaryOf(filter: SavedFilter): string {
       <button
         v-if="narrowed"
         type="button"
-        class="ml-auto rounded px-1 text-caption text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        class="kn-hit ml-auto rounded px-1 text-caption text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
         @click="emit('clear')"
       >
         {{ t('common.clear') }}
@@ -338,7 +338,7 @@ function summaryOf(filter: SavedFilter): string {
              what they can undo. -->
         <button
           type="button"
-          class="mr-1.5 shrink-0 rounded p-1 text-muted-foreground/70 transition-colors hover:bg-background hover:text-foreground"
+          class="kn-hit mr-1.5 shrink-0 rounded p-1 text-muted-foreground/70 transition-colors hover:bg-background hover:text-foreground"
           :aria-label="t('filters.removeNamed', { name: row.label })"
           @click="row.remove()"
         >

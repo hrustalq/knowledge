@@ -397,12 +397,12 @@ const replyTarget = computed(() =>
                      a discussion is read far more often than it is corrected. -->
                 <span
                   v-if="(canAct || canTeach(comment)) && editing !== comment.commentId"
-                  class="kn-comment-actions ml-auto flex shrink-0 items-center gap-0.5"
+                  class="kn-comment-actions ml-auto flex shrink-0 items-center gap-0.5 pointer-coarse:gap-3"
                 >
                   <button
                     v-if="canTeach(comment)"
                     type="button"
-                    class="rounded p-1 hover:bg-accent hover:text-foreground"
+                    class="kn-hit rounded p-1 hover:bg-accent hover:text-foreground"
                     :title="t('ai.learnings.teach')"
                     :aria-label="t('ai.learnings.teach')"
                     @click="teaching = comment.agentKey"
@@ -412,7 +412,7 @@ const replyTarget = computed(() =>
                   <button
                     v-if="canAct"
                     type="button"
-                    class="rounded p-1 hover:bg-accent hover:text-foreground"
+                    class="kn-hit rounded p-1 hover:bg-accent hover:text-foreground"
                     :title="t('mr.replyToName', { name: nameOf(comment.authorId) })"
                     :aria-label="t('mr.replyToName', { name: nameOf(comment.authorId) })"
                     @click="focusReply(comment.commentId)"
@@ -422,7 +422,7 @@ const replyTarget = computed(() =>
                   <button
                     v-if="isMine(comment.authorId)"
                     type="button"
-                    class="rounded p-1 hover:bg-accent hover:text-foreground"
+                    class="kn-hit rounded p-1 hover:bg-accent hover:text-foreground"
                     :title="t('mr.editComment')"
                     :aria-label="t('mr.editComment')"
                     @click="startEdit(comment.commentId)"
@@ -432,7 +432,7 @@ const replyTarget = computed(() =>
                   <button
                     v-if="isMine(comment.authorId)"
                     type="button"
-                    class="rounded p-1 hover:bg-destructive/10 hover:text-destructive"
+                    class="kn-hit rounded p-1 hover:bg-destructive/10 hover:text-destructive"
                     :title="t('mr.deleteComment')"
                     :aria-label="t('mr.deleteComment')"
                     @click="deleting = comment.commentId"
@@ -501,7 +501,7 @@ const replyTarget = computed(() =>
             <span class="min-w-0 flex-1 truncate opacity-85">{{ excerpt(replyTarget.body, 70) }}</span>
             <button
               type="button"
-              class="shrink-0 rounded p-0.5 hover:bg-accent hover:text-foreground"
+              class="kn-hit shrink-0 rounded p-0.5 hover:bg-accent hover:text-foreground"
               :title="t('mr.replyToThread')"
               :aria-label="t('mr.replyToThread')"
               @click="replyTo = null"

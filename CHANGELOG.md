@@ -103,6 +103,8 @@ in the pull request that introduces them — see
 - Settings pages with a list and a detail (projects, docs, templates, blueprints, workflows) on a phone: the list
   takes at most 40% of the screen, and picking an item scrolls its details into view instead of changing nothing
   visible. (#1071)
+- The navigation drawer in phone landscape (or at large text sizes) scrolls, and the project and page list keeps a
+  usable height instead of a one-row window. (#1041)
 
 ## [0.56.0] — 2026-11-16
 

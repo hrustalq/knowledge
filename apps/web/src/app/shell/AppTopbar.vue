@@ -27,7 +27,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 </script>
 
 <template>
-  <header class="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-3 border-b bg-background/90 px-4 backdrop-blur">
+  <header class="kn-topbar sticky top-0 z-30 flex h-14 shrink-0 items-center gap-3 border-b bg-background/90 px-4 backdrop-blur">
     <Button variant="ghost" size="icon-sm" :aria-label="t('nav.toggleSidebar')" @click="$emit('toggle-sidebar')">
       <PanelLeft class="size-4" />
     </Button>

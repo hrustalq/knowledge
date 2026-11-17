@@ -115,6 +115,8 @@ in the pull request that introduces them — see
   than squeezing the text. (#1047)
 - Wide settings tables on a phone (members, accounts, AI feedback) keep the person's name (or the time) in view
   while you scroll to the row's actions, so Disable or Revoke admin is never tapped on an unnamed row. (#1070)
+- Editing in phone landscape (or with the keyboard up): the top bar and breadcrumb row step aside, leaving the
+  editor's own bar and the formatting toolbar, so about 100px more of the page is on screen. (#1062)
 
 ## [0.56.0] — 2026-11-16
 

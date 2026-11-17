@@ -5,15 +5,18 @@ export const routes: RouteRecordRaw[] = [
   // Not `bare` (#441): the trail names the project and the page, and the
   // editor's actions stand in the page bar beneath it, where the page
   // view's do — so reading and writing share one chrome stack.
+  // `focusWhenShort` (#1062): on a short phone-landscape viewport the top bar
+  // and the trail give way, leaving the editor's own bar (Cancel, Publish)
+  // and the formatting toolbar above the text.
   {
     path: '/documents/:id/edit',
     component: () => import('./pages/EditorPage.vue'),
-    meta: { fill: true },
+    meta: { fill: true, focusWhenShort: true },
   },
   {
     path: '/create',
     component: () => import('./pages/EditorPage.vue'),
-    meta: { fill: true },
+    meta: { fill: true, focusWhenShort: true },
   },
   // /upload keeps its path so every existing link, bookmark and sidebar
   // shortcut still lands; /import is the name the flow now goes by.

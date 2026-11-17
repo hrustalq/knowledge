@@ -61,6 +61,35 @@ which is where it showed. The two lookarounds live in `@knowledge/contracts` as
 `GLOSSARY_BOUNDARY_BEFORE`/`AFTER`, because "both sides use the same rule" was
 prose until one of them was fixed alone.
 
+**A term matches its inflected forms (#1210).** `termPattern` in
+`@knowledge/contracts` turns a spelling into its pattern, and it is the whole
+rule for all three matchers — the read-side linker, `countOccurrences`
+(grounding for AI proposals) and `matchTerms` (`knowledge_context`, doc 81) —
+pinned to one table, `@knowledge/contracts/content/term-cases`, that each of
+their specs runs.
+
+- Each Russian word matches its case and number forms: `заморозка выкладок`
+  links `заморозкой выкладок`, `Вега` links `Веги` and `Вегой`. The word is cut
+  at every ending it carries from a closed list of noun and adjective endings
+  and may take any ending from that list back; the stem keeps at least three
+  letters. A closed list rather than "any few letters", so `Вега` never
+  reaches `Вегас` — `ас` is not an ending.
+- Each English word (three letters or more) takes `s`, `es` and `'s`.
+- Words may be split by spaces, a non-breaking space or a hyphen: `code freeze`
+  links `code-freeze`, and `Вега-сервис` links `Веги-сервиса`.
+- Code-like spellings stay exact: a case-sensitive term, or one holding `.`,
+  `_`, `@`, `+`, `/` or a digit (`.env`, `C++`, `@Access`, `customer_id`, `S3`).
+- The boundaries are unchanged, so a term never matches inside a longer word
+  (`заморозка` ≠ `разморозка`) but does match one part of a hyphenated compound
+  (`Вега` in `Вега-сервис`, `заморозка` in `микро-заморозка`). To link the whole
+  compound, add it as an alias.
+
+An alias is still the answer for what endings cannot reach: a vowel that drops
+or alternates (`выкладка` → `выкладок`, `день` → `дня`), a suppletive form, an
+abbreviation. The linker puts the boundaries once around its alternation
+(`termBody`), not once per spelling: a lookbehind in every alternative runs at
+every position and made it ~30× slower.
+
 **A suggestion is a proposal, never a fact.** `POST /v1/glossary/suggest`
 persists nothing. Proposals whose term does not literally appear in the source
 are dropped, and the occurrence counts are computed here against the text
@@ -189,7 +218,7 @@ the prose is already on screen by then.
   — so `@Access(…, 'document')` resolves the workspace from `:id` and no new
   `WorkspaceSource` was needed. Reading is `viewer`: whoever may read a page may
   see which of its words are not vocabulary.
-- **Web** — `modules/documents/model/glossary.ts` (the matcher only — the DOM-walking pass and the
+- **Web** — `entities/document/model/glossary.ts` (the matcher only — the DOM-walking pass and the
   `MarkdownView` prop that was its only entry point are deleted),
   `entities/rich-editor/components/extensions/glossary-terms.ts` (the decorations),
   `entities/document/model/glossary.store.ts` (the roster), `entities/document/components/GlossaryCard.vue`
@@ -213,8 +242,11 @@ the prose is already on screen by then.
 
 ## Limits
 
-- Aliases are literal spellings, not morphology: a Russian term needs its
-  inflections listed as aliases, and there is no stemmer.
+- Inflection is a closed ending list, not morphology (#1210): Russian and
+  English only, no dictionary, so an alternating stem still needs an alias and
+  a non-word built from a stem and a stray ending (`Вегых`) would match too.
+  On a 200 KB page with 200 terms the linker takes ~8 ms against ~2 ms for
+  literal spellings.
 - The linker runs per render over the page's text nodes. That is fine for
   documentation-sized pages and a normal glossary; a roster in the thousands
   would want an index rather than one alternation.

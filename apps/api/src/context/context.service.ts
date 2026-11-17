@@ -4,13 +4,12 @@ import {
   CONTEXT_BUDGET,
   CONTEXT_EXCERPT_CHARS,
   CONTEXT_LIMITS,
-  GLOSSARY_BOUNDARY_AFTER,
-  GLOSSARY_BOUNDARY_BEFORE,
   effectiveGlossary,
   type ContextPage,
   type ContextRequest,
   type ContextResponse,
   type ContextTerm,
+  termPattern,
 } from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -178,7 +177,7 @@ export function clip(text: string): string {
 
 /**
  * The terms whose name — or alias, where the term links them — occurs in
- * `query` as a word (the glossary's own boundaries), longest spelling first so
+ * `query` as a word, inflected forms included (`termPattern`), longest spelling first so
  * a longer term claims its words before a shorter one inside it. In the order
  * the query names them.
  */
@@ -195,8 +194,7 @@ export function matchTerms<T extends { id: string; term: string; aliases: string
   const found = new Map<string, { t: T; at: number }>();
   for (const { t, s } of spellings) {
     if (found.has(t.id)) continue;
-    const escaped = s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    for (const m of query.matchAll(new RegExp(`${GLOSSARY_BOUNDARY_BEFORE}${escaped}${GLOSSARY_BOUNDARY_AFTER}`, t.caseSensitive ? 'gu' : 'giu'))) {
+    for (const m of query.matchAll(new RegExp(termPattern(s, { caseSensitive: t.caseSensitive }), t.caseSensitive ? 'gu' : 'giu'))) {
       const [from, to] = [m.index, m.index + m[0].length];
       if (taken.some(([a, b]) => from < b && a < to)) continue;
       taken.push([from, to]);

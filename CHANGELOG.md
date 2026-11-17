@@ -15,6 +15,16 @@ in the pull request that introduces them — see
 
 ## [Unreleased]
 
+### Changed
+
+- A glossary term now matches its inflected forms, so it is linked in Russian prose without listing every case form
+  as an alias: `заморозка выкладок` links `заморозкой выкладок` and `заморозки выкладок`, `Вега` links `Веги` and
+  `Вегой` (but never `Вегас`), English words take plural and possessive endings (`deploy freezes`, `Orion's`), and the
+  words of a term may be split by spaces or hyphens (`code freeze` = `code-freeze`). The same rule decides what a
+  reader sees linked, which AI-suggested terms count as grounded, and which terms `knowledge_context` offers for a
+  ticket. Code-like and case-sensitive terms (`.env`, `C++`, `@Access`, `customer_id`) still match exactly as written.
+  Pages may show more glossary links than before. (#1210)
+
 ### Fixed
 
 - An agent mentioned in a page or merge-request comment answered without project memory: nothing was recalled before

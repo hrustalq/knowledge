@@ -1,5 +1,6 @@
 export { default as ActivityFeed } from './components/ActivityFeed.vue'
 export { default as DiffView } from './components/DiffView.vue'
+export { default as DocumentPreviewSheet } from './components/DocumentPreviewSheet.vue'
 export { default as ExportDialog } from './components/ExportDialog.vue'
 export { default as ExportFormatPicker } from './components/ExportFormatPicker.vue'
 export { default as GlossaryCard } from './components/GlossaryCard.vue'

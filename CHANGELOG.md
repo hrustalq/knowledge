@@ -110,6 +110,9 @@ in the pull request that introduces them — see
 - Settings at 1024–1279px wide (a tablet in landscape, a small laptop): the AI sections, projects, docs, templates,
   blueprints and workflows lists sit above the content instead of squeezing it into a narrow column beside three
   navigation columns. (#1046)
+- Reading a page, a merge request or a project at 1024–1279px wide: the side panel moves under the content instead
+  of leaving the text a column narrower than on a phone, and the editor's assistant opens over the page there rather
+  than squeezing the text. (#1047)
 
 ## [0.56.0] — 2026-11-16
 

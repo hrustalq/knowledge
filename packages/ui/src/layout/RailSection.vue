@@ -71,9 +71,9 @@ const { t } = useI18n()
          The rule and the padding sit *inside* the collapse, so a closed widget
          is one row and not one row plus a stray hairline. -->
     <Collapse :open="open">
-      <!-- Capped only beside the content (lg): stacked under it on a phone the
-           page already scrolls, and a nested scroller gave less room (#1054). -->
-      <div class="border-t p-3 lg:max-h-[32rem] lg:overflow-auto">
+      <!-- Capped only beside the content (xl, #1047): stacked under it below that,
+           where the page already scrolls, and a nested scroller gave less room (#1054). -->
+      <div class="border-t p-3 xl:max-h-[32rem] xl:overflow-auto">
         <slot />
       </div>
     </Collapse>

@@ -643,8 +643,11 @@
  *
  * `max-height`, not `height`: a rail with two widgets open should end where its
  * cards end, not reserve a screen of nothing under them.
+ *
+ * Beside the content only from 1280px (#1047): between 1024 and 1279 the rail
+ * stacks under the content, where a sticky, bounded column would be clipped.
  */
-@media (min-width: 1024px) {
+@media (min-width: 1280px) {
   .kn-widget-rail {
     position: sticky;
     top: 1.5rem;

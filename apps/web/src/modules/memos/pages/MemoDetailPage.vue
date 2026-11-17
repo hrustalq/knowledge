@@ -299,8 +299,9 @@ const retry = () => act(() => request('post', '/v1/memos/{id}/retry', { path: { 
 
     <template #rail>
       <!-- Sticky, and scrolling on its own once taller than the viewport, so
-           the dropped list is reachable without reaching the transcript's end. -->
-      <aside class="order-first space-y-5 lg:sticky lg:top-6 lg:order-none lg:max-h-[calc(100dvh-7rem)] lg:overflow-y-auto lg:pr-1">
+           the dropped list is reachable without reaching the transcript's end.
+           Beside the content only from xl (#1047); below it stays first, as on a phone. -->
+      <aside class="order-first space-y-5 xl:sticky xl:top-6 xl:order-none xl:max-h-[calc(100dvh-7rem)] xl:overflow-y-auto xl:pr-1">
         <div class="space-y-2">
           <audio
             v-if="memo.audioAvailable"

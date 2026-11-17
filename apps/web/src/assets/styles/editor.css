@@ -2740,6 +2740,11 @@ select.kn-api-method:focus-visible { outline: 2px solid var(--ring); outline-off
  * over it as a drawer from the same edge, and the scrim is the way back. */
 .kn-ai-scrim { display: none; }
 @media (max-width: 1023.98px) {
+  /* #1058: the closed drawer is parked past the right edge, and an
+   * overflow:hidden <main> is still scrollable by script (ProseMirror's
+   * scroll-into-view moved it), with no way back by touch. `clip` makes the
+   * parked drawer add no scrollable overflow at all. */
+  .kn-page-editor { overflow: clip; }
   .kn-ai-slot {
     position: absolute;
     inset-block: 0;

@@ -98,6 +98,8 @@ in the pull request that introduces them — see
   below 1024px, giving the conversation that height back. (#1067)
 - The Pages graph on a phone: the controls start as one Filters button and the graph uses the whole canvas, instead
   of most of it sitting under the controls panel. (#1052)
+- Editing on a phone or tablet: the page can no longer slide sideways under the closed assistant panel, which cut
+  off the toolbar, title and text on the left with no way to swipe back. (#1058)
 
 ## [0.56.0] — 2026-11-16
 

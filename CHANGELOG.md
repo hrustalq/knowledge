@@ -128,6 +128,20 @@ in the pull request that introduces them — see
 - Revisions on a phone: each revision is a compact two-line row that fits the panel, and a person's working branch
   shows as "Draft" with their avatar instead of a long draft/… identifier (also in the desktop table). (#1054)
 
+### Security
+
+- Share links and published sites no longer load a page's external images straight from their hosts, so an anonymous
+  reader is no longer a tracking-pixel target. Each external image now loads through the API, by a URL the API signed
+  when it served the page (`GET /v1/public/images`). An unsigned or altered URL is refused, so the route is not an
+  open relay. Public pages now send `img-src 'self' data: blob:` plus the storage origins in their
+  Content-Security-Policy. An image that was never written into the page does not load at all. (#1146)
+
+### Operations
+
+- Signed image URLs use a key derived from `SETTINGS_ENCRYPTION_KEY`. Without that key, each API process signs with
+  its own random key: after a restart, or across several API replicas, a cached published-site render shows broken
+  external images until the page is re-rendered. No new env var, no migration. (#1146)
+
 ## [0.56.0] — 2026-11-16
 
 ### Added

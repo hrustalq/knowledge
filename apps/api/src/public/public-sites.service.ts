@@ -33,13 +33,14 @@ import { PublishingSettingsService } from '../publishing/publishing-settings.ser
 import { SiteSessionService } from './site-session.service.js';
 import { UUID_RE } from '@knowledge/contracts';
 import { publicEmbedUrl } from '../embeds/embed-access.js';
+import { ImageSigner } from './image-signer.js';
 
 
 /** Longest path a resolve will look at; anything longer is no page of ours. */
 const MAX_PATH_CHARS = 2000;
 
 /** Bumped when the resolve answer changes shape, so every cached render goes stale. */
-const RESOLVE_FORMAT_VERSION = 5;
+const RESOLVE_FORMAT_VERSION = 6;
 
 /**
  * A snapshot row without its search text (up to 100k characters a page),
@@ -180,6 +181,7 @@ export class PublicSitesService {
     private readonly config: ConfigService<Env, true>,
     private readonly sessions: SiteSessionService,
     private readonly embeds: EmbedsService,
+    private readonly images: ImageSigner,
   ) {}
 
   /** Who the request's site cookie says is reading. */
@@ -261,6 +263,7 @@ export class PublicSitesService {
       const content = await this.documents.getContent(page.documentId, page.revisionId).catch(() => null);
       if (content) {
         body.page.markdown = await this.embeds.publicMarkdown(content.markdown, page.revisionId, publicEmbeds);
+        body.page.imageProxy = this.images.signAll(body.page.markdown);
         body.page.links = this.pageLinks(content.markdown, byId);
       } else body.page = null;
     }
@@ -576,6 +579,7 @@ export class PublicSitesService {
       title: row.title,
       slugPath: row.slugPath,
       markdown: '',
+      imageProxy: {},
       updatedAt: revision?.finalizedAt?.toISOString() ?? null,
       alternates: await this.alternates(row.documentId, site, version, viewer),
       prev: at > 0 ? ref(order[at - 1]) : null,

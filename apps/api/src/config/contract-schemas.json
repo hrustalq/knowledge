@@ -20089,6 +20089,12 @@
       "markdown": {
         "type": "string"
       },
+      "imageProxy": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "string"
+        }
+      },
       "updatedAt": {
         "type": "string",
         "nullable": true
@@ -20098,6 +20104,7 @@
       "documentId",
       "title",
       "markdown",
+      "imageProxy",
       "updatedAt"
     ]
   },

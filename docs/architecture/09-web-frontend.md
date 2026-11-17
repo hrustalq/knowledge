@@ -112,9 +112,20 @@ names no `script-src` (the inline state script needs nonces, #277). Public
 paths and site hosts never get it: their HTML goes out with
 `publicResponseHeaders` instead (#1142), which adds
 `X-Content-Type-Options: nosniff` and the same three directives, and keeps the
-render's own `frame-ancestors` (the widget's list) or states `'none'`. They
-have no `img-src`: their readers have no session for the proxy. On a site's own host `object-src` also names the
-app's origin (`WEB_BASE_URL`), where its PDF previews are presigned. Model output is guarded in the renderer instead:
+render's own `frame-ancestors` (the widget's list) or states `'none'`, plus
+`img-src 'self' data: blob:` and the asset origins (#1146). Their readers have
+no session, so their external images use a signed route instead:
+`PublicSharesService`/`PublicSitesService` answer a page with `imageProxy`,
+the `ImageSigner` HMAC of every key `publicImageKeys` finds in the public
+markdown (`@knowledge/contracts/publishing`, keyed by `imageProxyKey` so the
+raw text and markdown-it's encoded `src` agree), and the public renderer's
+`externalImageSrc` swaps each external `<img>` for
+`/api/v1/public/images?url=…&sig=…` (`@Public()`, under the anonymous per-IP
+budget, same fetch as the member proxy) and drops one nobody signed. The key
+is derived from `SETTINGS_ENCRYPTION_KEY`; signatures do not expire, so a
+site's ETag-cached render stays valid. On a site's own host `object-src` and
+`img-src` also name the app's origin (`WEB_BASE_URL`), where its PDF previews,
+attachments and logo are presigned. Model output is guarded in the renderer instead:
 `MarkdownView`'s `untrusted` (and `SiteAsk`) goes through
 `shared/utils/untrusted-markdown.ts`, which drops everything that fetches on render
 and keeps an `<img>` only for an attachment path or a `data:` image, before

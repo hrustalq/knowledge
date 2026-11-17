@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { imageProxyKey, publicImageKeys, publicImagePath } from '@knowledge/contracts/publishing'
 import { renderPublicMarkdown, type PublicRenderOptions } from './public-render.server'
 
 /**
@@ -28,6 +29,38 @@ const options: PublicRenderOptions = {
 }
 
 describe('renderPublicMarkdown', () => {
+  // #1146: the API signs `publicImageKeys` of the body; the renderer must find
+  // every external image it draws among them, however the URL was spelled.
+  it('sends every external image through the signed proxy, and drops one nobody signed', () => {
+    const md = [
+      '![a](https://cdn.example.com/a.png "title")',
+      '![b](https://cdn.example.com/ä/(1).png)',
+      '![c](<https://cdn.example.com/c d.png>)',
+      '![d](//cdn.example.com/d.png?x=1&y=2)',
+      '![e](https://cdn.example.com/e\\_f.png)',
+      '![f](https://cdn.example.com/f.png?q={x}%20y)',
+      '<img src="https://cdn.example.com/g.png?a=1&amp;b=2" srcset="https://cdn.example.com/g2.png 2x">',
+      '[ref-image]: https://cdn.example.com/h.png',
+      '![h][ref-image]',
+      '![data](data:image/png;base64,AAAA)',
+    ].join('\n\n')
+    const signed = new Set(publicImageKeys(md))
+    const proxy = (src: string) => {
+      const key = imageProxyKey(src)
+      return key && signed.has(key) ? `/api${publicImagePath(key, 'sig')}` : null
+    }
+    const { html } = renderPublicMarkdown(md, { ...options, externalImageSrc: proxy })
+    const srcs = [...html.matchAll(/<img[^>]* src="([^"]*)"/g)].map((m) => m[1])
+    expect(srcs).toHaveLength(9)
+    expect(srcs.filter((s) => !s.startsWith('/api/v1/public/images?url=') && !s.startsWith('data:'))).toEqual([])
+    expect(html).not.toContain('srcset')
+
+    const unsigned = renderPublicMarkdown('![x](https://tracker.example.com/p.gif)', { ...options, externalImageSrc: () => null })
+    expect(unsigned.html).not.toContain('<img')
+    // Without the option (an export), external images stay as written.
+    expect(renderPublicMarkdown('![x](https://cdn.example.com/a.png)', options).html).toContain('src="https://cdn.example.com/a.png"')
+  })
+
   it('renders the body and gives headings the same ids the app does', () => {
     const { html, headings } = renderPublicMarkdown('# Install\n\nFirst step.\n\n## Install\n\n## Настройка', options)
     expect(html).toContain('<h1 id="install">Install</h1>')

@@ -23,6 +23,8 @@ import { PublicSharesService } from './public-shares.service.js';
 import { RedisModule } from '../redis/redis.module.js';
 import { ShareUnlockService } from './share-unlock.service.js';
 import { SiteSessionService } from './site-session.service.js';
+import { ImageSigner } from './image-signer.js';
+import { PublicImagesController } from './public-images.controller.js';
 import { SiteSignInController } from './site-sign-in.controller.js';
 
 /**
@@ -52,7 +54,14 @@ import { SiteSignInController } from './site-sign-in.controller.js';
     // Public pages carry embeds without their Figma links, and serve snapshots by opaque id (#470).
     EmbedsCoreModule,
   ],
-  controllers: [PublicSharesController, PublicSitesController, PublicSiteFilesController, PublicDomainsController, SiteSignInController],
+  controllers: [
+    PublicSharesController,
+    PublicSitesController,
+    PublicSiteFilesController,
+    PublicDomainsController,
+    SiteSignInController,
+    PublicImagesController,
+  ],
   providers: [
     PublicRateLimiter,
     PublicRateLimitGuard,
@@ -63,6 +72,7 @@ import { SiteSignInController } from './site-sign-in.controller.js';
     PublicSiteSearchService,
     PublicAskService,
     SiteSessionService,
+    ImageSigner,
   ],
 })
 export class PublicModule {}

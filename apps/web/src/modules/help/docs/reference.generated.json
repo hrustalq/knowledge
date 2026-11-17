@@ -5082,6 +5082,16 @@
     },
     {
       "method": "GET",
+      "path": "/v1/public/images",
+      "tag": "public",
+      "summary": "An external image from a shared or published page, by the URL the page's answer signed",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/public/shares/{token}",
       "tag": "public",
       "summary": "A shared page: its title and the pages the link reaches, or `locked` when a password is needed",

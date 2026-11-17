@@ -2620,7 +2620,9 @@ select.kn-api-method:focus-visible { outline: 2px solid var(--ring); outline-off
   overflow: hidden;
 }
 [data-ai-open='true'] > .kn-ai-slot { width: var(--kn-ai-w); }
-@media (min-width: 1024px) {
+/* #1047: inline beside the page only from 1280px; at 1024-1279 the app rail
+ * and a 24rem panel left the text a 352px column, so it stays a drawer. */
+@media (min-width: 1280px) {
   .kn-ai-slot { transition-property: width; transition-duration: 0s; transition-delay: var(--rail-duration); }
   [data-ai-open='true'] > .kn-ai-slot { transition: none; }
   .kn-ai-slot .kn-ai-panel { transition: transform var(--rail-duration) var(--pane-ease); }
@@ -2736,10 +2738,10 @@ select.kn-api-method:focus-visible { outline: 2px solid var(--ring); outline-off
 .kn-ai-dock-enter-from,
 .kn-ai-dock-leave-to { opacity: 0; transform: translateY(0.5rem); }
 
-/* Below the shell's hinge the page has no width to give: the panel floats
+/* Below 1280px (#1047) the page has no width to give: the panel floats
  * over it as a drawer from the same edge, and the scrim is the way back. */
 .kn-ai-scrim { display: none; }
-@media (max-width: 1023.98px) {
+@media (max-width: 1279.98px) {
   /* #1058: the closed drawer is parked past the right edge, and an
    * overflow:hidden <main> is still scrollable by script (ProseMirror's
    * scroll-into-view moved it), with no way back by touch. `clip` makes the

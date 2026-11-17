@@ -505,6 +505,46 @@ export function getLocale(): Locale {
   return (import.meta.env.SSR ? ssrContext()?.locale : clientLocale) ?? DEFAULT_LOCALE
 }
 
+/**
+ * #1040: whether this browser holds a language someone chose. Without one the
+ * language follows the device: the server renders by Accept-Language, and the
+ * Automatic choice in profile settings resolves `navigator.languages` the same
+ * way (primary subtag, first supported wins).
+ */
+export function hasLocaleChoice(): boolean {
+  if (import.meta.env.SSR) return false
+  try {
+    return isLocale(localStorage.getItem(LANG_KEY))
+  } catch {
+    return false
+  }
+}
+
+/** The device's language among the supported ones — what Accept-Language resolves to on the server. */
+export function deviceLocale(): Locale {
+  if (import.meta.env.SSR) return getLocale()
+  const tags = navigator.languages?.length ? navigator.languages : [navigator.language]
+  for (const tag of tags) {
+    const primary = (tag ?? '').toLowerCase().split('-')[0]
+    if (isLocale(primary)) return primary
+  }
+  return DEFAULT_LOCALE
+}
+
+/** #1040: forget the stored choice, so the language follows the device again. */
+export function clearLocale(): Locale {
+  const resolved = deviceLocale()
+  if (import.meta.env.SSR) return resolved
+  clientLocale = resolved
+  try {
+    localStorage.removeItem(LANG_KEY)
+    document.cookie = `${LANG_KEY}=; path=/; max-age=0; samesite=lax`
+  } catch {
+    /* ignore */
+  }
+  return resolved
+}
+
 export function setLocale(locale: Locale): void {
   if (import.meta.env.SSR) return
   clientLocale = locale

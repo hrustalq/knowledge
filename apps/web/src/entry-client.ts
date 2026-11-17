@@ -4,6 +4,7 @@ import { createApp } from './main'
 import { installNavigation } from './app/router/navigation'
 import { ensureLocaleMessages } from './shared/i18n'
 import { hydration } from './shared/utils/hydration'
+import { followSystemTheme } from './shared/utils/theme'
 import { getLocale, getProjectId, getWorkspaceId, setActiveProject, setActiveWorkspace } from './shared/api/api'
 import { useProjectsStore } from './stores/projects'
 import { useWorkspacesStore } from './stores/workspaces'
@@ -47,4 +48,6 @@ Promise.all([router.isReady(), messagesReady]).then(() => {
   hydration.active = false
   // Route prefetch and the pending-navigation state (#627): after hydration.
   installNavigation(router, pinia, queryClient)
+  // #1040: on the `system` theme an open page follows the device's dark mode.
+  followSystemTheme()
 })

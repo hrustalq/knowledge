@@ -73,8 +73,6 @@
   },
   "nav": {
     "toggleSidebar": "Toggle navigation",
-    "toggleTheme": "Toggle theme",
-    "language": "Language",
     "searchPages": "Search pages",
     "searchPagesPlaceholder": "Search pages…",
     "logOut": "Log out",
@@ -4484,7 +4482,15 @@
     },
     "language": {
       "title": "Language",
-      "hint": "Applies to the interface and to what the API says back. Page content is never translated."
+      "hint": "Applies to the interface and to what the API says back. Automatic follows your device's language. Page content is never translated.",
+      "automatic": "Automatic"
+    },
+    "theme": {
+      "title": "Theme",
+      "hint": "Applies in this browser. System follows the light or dark setting of your device.",
+      "system": "System",
+      "light": "Light",
+      "dark": "Dark"
     },
     "password": {
       "title": "Password",

@@ -225,7 +225,8 @@ const isActive = computed(() => projectId.value === projects.activeId)
       />
     </header>
 
-    <div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_24rem] xl:grid-cols-[minmax(0,1fr)_28rem]">
+    <!-- Rail beside the content only from xl, as on the document page (#1047). -->
+    <div class="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_28rem]">
       <div class="min-w-0 space-y-6">
         <!-- What this project is for. The column exists in the database and
              was displayed nowhere; markdown because the field has always
@@ -273,7 +274,7 @@ const isActive = computed(() => projectId.value === projects.activeId)
       </div>
 
       <!-- Same rail, same bound as the document page's: sticky and
-           self-scrolling above `lg`, so a stack taller than the viewport is
+           self-scrolling above `xl` (#1047), so a stack taller than the viewport is
            reachable without scrolling the page out from under it. -->
       <aside class="kn-widget-rail space-y-3">
         <RailSection

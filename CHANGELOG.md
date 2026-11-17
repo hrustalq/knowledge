@@ -107,6 +107,19 @@ in the pull request that introduces them — see
   usable height instead of a one-row window. (#1041)
 - Choosing another project in the phone navigation drawer keeps the drawer open on that project's pages, instead of
   closing it. (#1076)
+- Settings at 1024–1279px wide (a tablet in landscape, a small laptop): the AI sections, projects, docs, templates,
+  blueprints and workflows lists sit above the content instead of squeezing it into a narrow column beside three
+  navigation columns. (#1046)
+- Reading a page, a merge request or a project at 1024–1279px wide: the side panel moves under the content instead
+  of leaving the text a column narrower than on a phone, and the editor's assistant opens over the page there rather
+  than squeezing the text. (#1047)
+- Wide settings tables on a phone (members, accounts, AI feedback) keep the person's name (or the time) in view
+  while you scroll to the row's actions, so Disable or Revoke admin is never tapped on an unnamed row. (#1070)
+- Editing in phone landscape (or with the keyboard up): the top bar and breadcrumb row step aside, leaving the
+  editor's own bar and the formatting toolbar, so about 100px more of the page is on screen. (#1062)
+- Language and theme moved from the top bar to Profile settings, and both follow your device unless you choose:
+  Language has Automatic (your browser's language), Theme has System, Light and Dark, and System switches with the
+  device. The top bar keeps every control on screen at large text sizes. (#1040)
 
 ## [0.56.0] — 2026-11-16
 

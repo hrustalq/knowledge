@@ -1115,9 +1115,9 @@ watch(
        re-flow the moment the real thing lands on top of it. -->
   <div v-else-if="!detail" class="space-y-4">
     <Skeleton class="h-8 w-1/2" />
-    <div :class="railShown ? 'grid gap-6 lg:grid-cols-[minmax(0,1fr)_24rem] xl:grid-cols-[minmax(0,1fr)_28rem]' : ''">
+    <div :class="railShown ? 'grid gap-6 xl:grid-cols-[minmax(0,1fr)_28rem]' : ''">
       <Skeleton class="h-96 w-full" />
-      <Skeleton v-if="railShown" class="hidden h-72 w-full lg:block" />
+      <Skeleton v-if="railShown" class="hidden h-72 w-full xl:block" />
     </div>
   </div>
 
@@ -1125,13 +1125,13 @@ watch(
     <PageLayout variant="detail" :title="detail.document.title">
       <!-- The rail's switch (#698) on the title's row, at its far end: above
            the rail's corner when the rail is there, so it reads as that
-           panel's control. A column only exists from `lg`; below it ⋯ → View
+           panel's control. A column only exists from `xl` (#1047); below it ⋯ → View
            and the phone aside carry the same switch. -->
       <template #actions>
         <Button
           variant="ghost"
           size="icon-lg"
-          class="hidden lg:inline-flex"
+          class="hidden xl:inline-flex"
           :class="railShown ? 'bg-accent text-accent-foreground' : 'text-muted-foreground'"
           :aria-pressed="railShown"
           :aria-label="t('documents.pageRail')"
@@ -1174,7 +1174,7 @@ watch(
           <!-- Above the stack and outside it: the contents belong to the page
                being read, not to the facts about it. -->
           <template #before>
-            <TocRail v-if="!isSpec && !isFixture && headings.length > 1" class="hidden lg:block" :headings="headings" />
+            <TocRail v-if="!isSpec && !isFixture && headings.length > 1" class="hidden xl:block" :headings="headings" />
           </template>
 
           <!-- Hidden while reading an old revision: the stamp is about the head. -->
@@ -1380,11 +1380,11 @@ watch(
         </p>
         <!-- About the head, like the verification stamp. -->
         <ComponentDeclarationNotice v-if="!viewingRevision" :document-id="documentId" />
-        <!-- Below lg the rail sits under the whole body, after the text its
+        <!-- Below xl (#1047) the rail sits under the whole body, after the text its
              contents list navigates: offer the list first, folded (#1053). -->
         <details
           v-if="content && !isSpec && !isFixture && !contentError && headings.length > 1"
-          class="rounded-md border px-3 py-2 text-sm lg:hidden"
+          class="rounded-md border px-3 py-2 text-sm xl:hidden"
         >
           <summary class="cursor-pointer font-medium">{{ t('tree.onThisPage') }}</summary>
           <TocRail bare class="mt-2" :headings="headings" />

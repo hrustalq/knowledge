@@ -101,7 +101,8 @@ const showVerifyBanner = computed(
 )
 
 /**
- * `h-14` topbar and `h-10` verify banner, in the unit the consumers want. The
+ * `h-14` topbar and `h-10` verify banner, in the unit the consumers want (the
+ * topbar through `--kn-topbar-h`, which a short viewport zeroes, #1062). The
  * trail row adds `--kn-trail-h` and the editor's bar under it (#441)
  * `--kn-toolbar-h`, both set by the stylesheet: the trail row is drawn for a
  * trail *or* for page actions, and only the page knows whether it has those,
@@ -111,7 +112,7 @@ const TOPBAR_REM = 3.5
 const BANNER_REM = 2.5
 const chromeHeight = computed(
   () =>
-    `calc(${TOPBAR_REM + (showVerifyBanner.value ? BANNER_REM : 0)}rem + var(--kn-trail-h, 0rem) + var(--kn-toolbar-h, 0rem))`,
+    `calc(var(--kn-topbar-h, ${TOPBAR_REM}rem) + ${showVerifyBanner.value ? BANNER_REM : 0}rem + var(--kn-trail-h, 0rem) + var(--kn-toolbar-h, 0rem))`,
 )
 
 /**
@@ -194,6 +195,7 @@ function skipToMain() {
     class="kn-shell relative flex h-dvh overflow-hidden bg-background text-foreground"
     :class="sidebar.resizing ? 'kn-resizing' : ''"
     :style="{ '--kn-rail-w': sidebar.widthPx, '--kn-chrome-h': chromeHeight }"
+    :data-focus-short="route.meta.focusWhenShort || undefined"
     :data-rail-open="railOpen"
     :data-measure="layout.fullWidth ? undefined : 'narrow'"
   >

@@ -287,6 +287,23 @@
     --kn-trail-h: 0rem;
   }
 }
+/* `meta.focusWhenShort` (#1062): a writing surface on a short viewport below
+   lg (a landscape phone, or a keyboard up) loses the top bar and the trail, as
+   a `bare` route does, so the text keeps the height; the surface's own bar
+   stays and is its way out. Both custom properties follow, so fill heights and
+   `--kn-chrome-h` do. A trail holding page actions stays. */
+@media (max-height: 30rem) and (max-width: 63.98rem) {
+  .kn-shell[data-focus-short] .kn-topbar,
+  .kn-shell[data-focus-short] .kn-trail:not(:has(.kn-page-actions > *)) {
+    display: none;
+  }
+  .kn-shell[data-focus-short] {
+    --kn-topbar-h: 0rem;
+  }
+  .kn-shell[data-focus-short]:not(:has(.kn-page-actions > *)) {
+    --kn-trail-h: 0rem;
+  }
+}
 @media (min-width: 1024px) {
   .kn-trail {
     padding-inline: 2rem;
@@ -643,8 +660,11 @@
  *
  * `max-height`, not `height`: a rail with two widgets open should end where its
  * cards end, not reserve a screen of nothing under them.
+ *
+ * Beside the content only from 1280px (#1047): between 1024 and 1279 the rail
+ * stacks under the content, where a sticky, bounded column would be clipped.
  */
-@media (min-width: 1024px) {
+@media (min-width: 1280px) {
   .kn-widget-rail {
     position: sticky;
     top: 1.5rem;

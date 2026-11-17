@@ -88,7 +88,7 @@ watch(() => route.query.tab, applyUrlTab)
 </script>
 
 <template>
-  <!-- `kn-widget-rail` makes the stack sticky *and* self-scrolling above `lg`:
+  <!-- `kn-widget-rail` makes the stack sticky *and* self-scrolling above `xl` (#1047):
        bounded to the viewport, so a rail taller than the screen is reachable
        without scrolling the document out from under it. See style.css. -->
   <aside class="kn-widget-rail space-y-3">

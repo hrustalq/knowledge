@@ -193,10 +193,19 @@ module.exports = {
       comment:
         'The browser bundle must never reach into apps/api — that is how a Prisma client or a ' +
         'server secret ends up shipped to a user. Types cross through @knowledge/contracts, and ' +
-        'the REST surface through the generated src/shared/api/schema.d.ts.',
+        'the REST surface through @knowledge/api-client.',
       severity: 'error',
       from: { path: '^src' },
       to: { path: '^\\.\\./api/' },
+    },
+    {
+      name: 'web-imports-no-admin',
+      comment:
+        'The admin console (#1236) is its own app so that nothing of it ships in a member\'s ' +
+        'bundle. What the two share is a package: @knowledge/ui, @knowledge/api-client, contracts.',
+      severity: 'error',
+      from: { path: '^src' },
+      to: { path: '^\\.\\./admin/' },
     },
     {
       name: 'web-imports-no-server-only',

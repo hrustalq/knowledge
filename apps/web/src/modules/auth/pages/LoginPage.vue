@@ -25,6 +25,7 @@ import { useAuthStore } from '@/stores/auth'
 import { isApiRequestError } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
 import { ownPath, reauthKindOf, ssoErrorOf, ssoStartUrl } from '@/modules/auth/model/sso'
+import { isOtherApp } from '@/shared/utils/own-path'
 import { Button } from '@knowledge/ui/button'
 import { Card, CardContent, CardDescription, CardHeader } from '@knowledge/ui/card'
 import { Input } from '@knowledge/ui/input'
@@ -39,6 +40,8 @@ const password = ref('')
 const busy = ref(false)
 
 const redirect = computed(() => ownPath(route.query.redirect))
+/** Back where the sign-in started; the admin console is another app, so a full load. */
+const follow = (path: string) => (isOtherApp(path) ? window.location.assign(path) : router.push(path))
 const callbackError = computed(() => ssoErrorOf(route.query.error))
 const reauth = computed(() => reauthKindOf(route.query.reauth))
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -98,7 +101,7 @@ async function submit() {
       void nextTick(() => document.getElementById('password')?.focus())
       return
     }
-    await router.push(redirect.value)
+    await follow(redirect.value)
   } catch (e) {
     formError.value = (e as Error).message
   } finally {
@@ -141,7 +144,7 @@ async function submitLdap() {
   busy.value = true
   try {
     await auth.ldapLogin(ldapProvider.value.id, username.value, password.value)
-    await router.push(redirect.value)
+    await follow(redirect.value)
   } catch (e) {
     // A refusal after the directory accepted the password names its reason the way a failed redirect does.
     const reason = isApiRequestError(e) ? ssoErrorOf(e.details?.loginError) : null

@@ -76,6 +76,10 @@ export default defineConfig(({ isSsrBuild }) => ({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
       },
+      // The admin console's dev server (#1236, apps/admin on :5174), so dev has
+      // production's shape: one host, one session cookie, /login in this app.
+      // Caddy does the same in production.
+      '/admin': { target: 'http://localhost:5174', ws: true },
     },
   },
 }))

@@ -4,8 +4,11 @@
 
 The web app never hand-writes a request shape and never branches on an error
 message. One OpenAPI document is emitted from the API's own route metadata,
-`openapi-typescript` turns it into `apps/web/src/shared/api/schema.d.ts`, and a thin
-axios layer is typed against it — so a renamed route, a dropped query parameter
+`openapi-typescript` turns it into `packages/api-client/src/schema.d.ts`, and a thin
+axios layer is typed against it (`@knowledge/api-client`, shared by `apps/web` and
+`apps/admin` since #1236; each app binds it to its own axios instance with
+`createApiClient(http)`, and the vue-query builders in
+`@knowledge/api-client/vue-query` to that client with `createQueryHelpers`) — so a renamed route, a dropped query parameter
 or a changed request body is a compile error in the browser bundle rather than a
 404 at runtime.
 
@@ -22,11 +25,11 @@ in the app.
 | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | `make api-schema`      | `apps/api` builds, then `node --env-file=apps/api/.env apps/api/dist/scripts/generate-openapi.main.js --out apps/api/openapi.json` |
 | `make docs-reference`  | `pnpm --filter @knowledge/web run generate:docs` → `apps/web/scripts/generate-docs-reference.mjs` → `apps/web/src/modules/help/docs/reference.generated.json` |
-| `generate:api`         | `openapi-typescript ../api/openapi.json -o src/shared/api/schema.d.ts`                                                               |
-| `typecheck`            | `vue-tsc -b` over the web app, against the schema that was just emitted                                                       |
+| `generate`             | `pnpm --filter @knowledge/api-client run generate` → `openapi-typescript ../../apps/api/openapi.json -o src/schema.d.ts`              |
+| `typecheck`            | `vue-tsc` over both web apps, against the schema that was just emitted                                                        |
 
 All three generated artifacts — `apps/api/openapi.json`,
-`apps/web/src/shared/api/schema.d.ts` and `reference.generated.json` — are committed.
+`packages/api-client/src/schema.d.ts` and `reference.generated.json` — are committed.
 The typecheck is part of the target rather than a separate courtesy: the point
 of regenerating is to find out immediately which call sites the API change
 broke.
@@ -130,7 +133,7 @@ from `@knowledge/contracts`:
 
 ## statusCode 0: a network failure is an error with a code
 
-`toApiRequestError` in `apps/web/src/shared/api/http.ts` is the client-side twin. A
+`toApiRequestError` in `packages/api-client/src/index.ts` is the client-side twin. A
 conforming body (`isApiErrorPayload`) passes through verbatim; a non-conforming
 one — a proxy error page, a legacy shape — is synthesized from the status. What
 matters is the third case: a failure that never produced a response becomes

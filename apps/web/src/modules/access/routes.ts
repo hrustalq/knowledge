@@ -17,7 +17,6 @@ export const routes: RouteRecordRaw[] = [
   { path: '/u/:userId', component: () => import('./pages/ProfilePage.vue') },
   // Legacy top-level paths → their settings home
   { path: '/access', redirect: '/settings/access' },
-  { path: '/admin/users', redirect: '/settings/access?tab=accounts' },
 ]
 
 export const settingsRoutes: RouteRecordRaw[] = [

@@ -67,7 +67,7 @@ const I18N_LOCALE_DIR = ['./src/shared/i18n/messages/*.json', './src/shared/i18n
 export default [
   // Pre-existing disable comments belong to no configured rule here.
   { linterOptions: { reportUnusedDisableDirectives: 'off' } },
-  { ignores: ['dist/**', 'node_modules/**', 'src/shared/api/schema.d.ts', 'src/modules/help/docs/content/**'] },
+  { ignores: ['dist/**', 'node_modules/**', 'src/modules/help/docs/content/**'] },
   {
     files: ['src/**/*.vue'],
     languageOptions: {

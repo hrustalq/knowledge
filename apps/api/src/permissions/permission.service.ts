@@ -41,6 +41,16 @@ export interface BranchRefs {
 
 export type { AccessResource, ResolvedChain } from './acl-read.js';
 
+/** A guard's verdict as a boolean: a refusal is `false`, anything else (a 404, an outage) still throws. */
+export const allowed = (check: Promise<unknown>): Promise<boolean> =>
+  check.then(
+    () => true,
+    (error: unknown) => {
+      if (error instanceof ForbiddenException) return false;
+      throw error;
+    },
+  );
+
 /** One `acl.bypass` audit row per admin, resource and window — a page view is a dozen requests. */
 const BYPASS_AUDIT_WINDOW_MS = 60_000;
 
@@ -379,6 +389,18 @@ export class PermissionService {
     throw new ForbiddenException({ statusCode: 403, message: t('error.access.historyRestricted'), reason: 'history-restricted' });
   }
 
+  /**
+   * May this person write a published page's default branch without a merge
+   * request (#958): any writer in a `direct` workspace, a workspace or platform
+   * admin in a `review` one. The publish mode half of `assertMayWrite` in the
+   * documents service; the caller has already passed `requireRole('editor')`.
+   */
+  async mayPublishDirect(principal: Principal, workspaceId: string): Promise<boolean> {
+    if (principal.mode === 'dev') return true;
+    if ((await this.editing.policy(workspaceId)).publishMode.effective === 'direct') return true;
+    return (await this.scopeFor(principal, workspaceId)).bypass;
+  }
+
   /** `requireHistory` for a principal: the scope is built only when the workspace restricts history. */
   async requireHistoryAs(principal: Principal, workspaceId: string, documentId?: string, revisionIds?: readonly string[]): Promise<void> {
     if (principal.mode === 'dev') return;
@@ -420,14 +442,6 @@ export class PermissionService {
 
   /** What the caller may change on a project's settings page (#928): the answers of the two guards, asked without throwing. */
   async projectSettingsAccess(principal: Principal, projectId: string): Promise<{ canWrite: boolean; canWriteGates: boolean }> {
-    const allowed = (check: Promise<void>) =>
-      check.then(
-        () => true,
-        (error: unknown) => {
-          if (error instanceof ForbiddenException) return false;
-          throw error;
-        },
-      );
     const { workspaceId } = await this.resolveChain({ type: 'project', id: projectId });
     const [canWrite, canWriteGates] = await Promise.all([
       allowed(this.requireProjectManage(principal, projectId)),

@@ -17,6 +17,13 @@ in the pull request that introduces them — see
 
 ### Added
 
+- **What may I do here: `GET /v1/me/permissions?workspaceId=`.** One boolean per action of the new permission
+  catalogue (`@knowledge/contracts/permissions`): `platform:admin`, `workspace:create`, `workspace:view`,
+  `workspace:contribute`, `workspace:admin`, `workspace:history`, `workspace:publish-direct`,
+  `api-test-suites:generate` and `api-test-suites:run`. Each answer comes from the check that enforces the action,
+  so API-key narrowing, enforced SSO and the publish mode count exactly as they do on a write. A guest gets an
+  answer (mostly `false`) rather than a 403, and a read-only key gets `false` for every write. The web now reads its
+  workspace-level edit, comment, admin and capability checks from this answer; nothing it shows changes. (#1296)
 - **C4 architecture diagrams.** Write a C4 model in Structurizr DSL inside a ```` ```structurizr ```` fence, or
   insert one with **C4 diagram** from the slash menu or the toolbar. It holds people, software systems,
   containers and components, their relationships, and system context, container and component views. Each block has

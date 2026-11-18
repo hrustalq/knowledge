@@ -6,6 +6,7 @@ import { PermissionService } from './permission.service.js';
 import { ResourceAccessService } from './resource-access.service.js';
 import { AclEventsService } from './acl-events.service.js';
 import { AccessRequestsService } from './access-requests.service.js';
+import { PermissionsResolver } from './permissions.resolver.js';
 import { EventsModule } from '../events/events.module.js';
 import { NotificationsCoreModule } from '../notifications/notifications-core.module.js';
 
@@ -23,7 +24,7 @@ import { NotificationsCoreModule } from '../notifications/notifications-core.mod
   // cycle — the notifications side reads permissions through the plain
   // functions in acl-read.ts, never through this module.
   imports: [PrismaModule, AuthCoreModule, EventsModule, NotificationsCoreModule],
-  providers: [GroupsService, PermissionService, ResourceAccessService, AclEventsService, AccessRequestsService],
-  exports: [GroupsService, PermissionService, ResourceAccessService, AclEventsService, AccessRequestsService],
+  providers: [GroupsService, PermissionService, ResourceAccessService, AclEventsService, AccessRequestsService, PermissionsResolver],
+  exports: [GroupsService, PermissionService, ResourceAccessService, AclEventsService, AccessRequestsService, PermissionsResolver],
 })
 export class PermissionsCoreModule {}

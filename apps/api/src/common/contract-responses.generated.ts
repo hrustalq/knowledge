@@ -253,6 +253,7 @@ import type {
   LogoutResponse,
   MarkNotificationsReadResponse,
   McpConnectionInfo,
+  MePermissionsResponse,
   MeResponse,
   MemoDetailResponse,
   MemoListResponse,
@@ -644,6 +645,7 @@ export interface ContractResponses {
   LogoutResponse: LogoutResponse;
   MarkNotificationsReadResponse: MarkNotificationsReadResponse;
   McpConnectionInfo: McpConnectionInfo;
+  MePermissionsResponse: MePermissionsResponse;
   MeResponse: MeResponse;
   MemoDetailResponse: MemoDetailResponse;
   MemoListResponse: MemoListResponse;

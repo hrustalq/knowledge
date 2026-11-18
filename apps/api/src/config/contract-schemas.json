@@ -18103,6 +18103,49 @@
       "key-toolsets"
     ]
   },
+  "MePermissionsResponse": {
+    "type": "object",
+    "properties": {
+      "platform:admin": {
+        "type": "boolean"
+      },
+      "workspace:create": {
+        "type": "boolean"
+      },
+      "workspace:view": {
+        "type": "boolean"
+      },
+      "workspace:contribute": {
+        "type": "boolean"
+      },
+      "workspace:admin": {
+        "type": "boolean"
+      },
+      "workspace:history": {
+        "type": "boolean"
+      },
+      "workspace:publish-direct": {
+        "type": "boolean"
+      },
+      "api-test-suites:generate": {
+        "type": "boolean"
+      },
+      "api-test-suites:run": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "platform:admin",
+      "workspace:create",
+      "workspace:view",
+      "workspace:contribute",
+      "workspace:admin",
+      "workspace:history",
+      "workspace:publish-direct",
+      "api-test-suites:generate",
+      "api-test-suites:run"
+    ]
+  },
   "MeResponse": {
     "type": "object",
     "properties": {

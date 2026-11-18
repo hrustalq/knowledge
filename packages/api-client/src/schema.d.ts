@@ -242,6 +242,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/me/permissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What the caller may do in a workspace: every workspace action of the permission catalogue (#1296) */
+        get: operations["MeController_grants"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/me/api-key": {
         parameters: {
             query?: never;
@@ -15960,6 +15977,17 @@ export interface components {
         McpToolset: "core" | "authoring" | "quality" | "review" | "graph" | "conflicts" | "captures" | "qa" | "api-reference" | "code" | "connectors" | "workflows" | "agents" | "insights" | "memos" | "sharing" | "embeds" | "chat" | "projects" | "drafts";
         /** @enum {string} */
         McpToolsetOffReason: "section-off" | "key-toolsets";
+        MePermissionsResponse: {
+            "platform:admin": boolean;
+            "workspace:create": boolean;
+            "workspace:view": boolean;
+            "workspace:contribute": boolean;
+            "workspace:admin": boolean;
+            "workspace:history": boolean;
+            "workspace:publish-direct": boolean;
+            "api-test-suites:generate": boolean;
+            "api-test-suites:run": boolean;
+        };
         MeResponse: {
             userId: string;
             email: string;
@@ -19030,6 +19058,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResetPasswordResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    MeController_grants: {
+        parameters: {
+            query: {
+                workspaceId: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MePermissionsResponse"];
                 };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */

@@ -1,4 +1,3 @@
-import { EditingPolicyService } from '../auth/editing-policy.service.js';
 import type { WriteAuthority } from './write-authority.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { BadRequestException, ConflictException, Injectable, NotFoundException, PayloadTooLargeException } from '@nestjs/common';
@@ -149,7 +148,6 @@ export class DocumentsService {
     private readonly aclEvents: AclEventsService,
     private readonly cache: ReadCache,
     private readonly commits: ProjectCommitsService,
-    private readonly editing: EditingPolicyService,
   ) {}
 
   async createDocument(input: CreateDocumentDto, authorId?: string): Promise<CreateDocumentResponse>;
@@ -2505,8 +2503,7 @@ export class DocumentsService {
     if ('internal' in by || !by.person || by.person.mode === 'dev') return;
     if (branch.name !== document.defaultBranch || document.draftOwnerId) return;
     if (!branch.headRevisionId && !document.pendingMergeRequestId) return;
-    if ((await this.editing.policy(document.workspaceId)).publishMode.effective === 'direct') return;
-    if ((await this.permissions.scopeFor(by.person, document.workspaceId)).bypass) return;
+    if (await this.permissions.mayPublishDirect(by.person, document.workspaceId)) return;
     throw new ConflictException({ statusCode: 409, message: t('error.document.reviewRequired'), reason: 'review-required' });
   }
 

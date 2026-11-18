@@ -9,6 +9,7 @@ import {
 import type { Pinia } from 'pinia'
 import { useAuthStore } from '@/stores/auth'
 import { useFeaturesStore } from '@/stores/features'
+import { usePermissionsStore } from '@/stores/permissions'
 import { isWorkspaceFeature } from '@knowledge/contracts'
 import { reauthKindOf } from '@/modules/auth'
 import * as access from '@/modules/access/routes'
@@ -110,7 +111,7 @@ export function installAuthGuard(router: Router, pinia: Pinia) {
     // Before the features read: a gated account would only collect a 403 for it.
     if (auth.verificationPending) return { path: '/verify-email' }
     const features = useFeaturesStore(pinia)
-    await features.ensureLoaded()
+    await Promise.all([features.ensureLoaded(), usePermissionsStore(pinia).ensureLoaded(auth.me?.userId)])
     return refusal(to, auth, features) ?? true
   })
 }

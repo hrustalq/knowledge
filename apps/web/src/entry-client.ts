@@ -44,7 +44,9 @@ if (window.__PINIA__) {
 Promise.all([router.isReady(), messagesReady]).then(() => {
   // Hydration is synchronous: the flag covers exactly the render that adopts the server's DOM.
   hydration.active = !!window.__PINIA__
+  performance.mark('knowledge:hydration-start')
   app.mount('#app')
+  performance.measure('knowledge:hydration', 'knowledge:hydration-start')
   hydration.active = false
   // Route prefetch and the pending-navigation state (#627): after hydration.
   installNavigation(router, pinia, queryClient)

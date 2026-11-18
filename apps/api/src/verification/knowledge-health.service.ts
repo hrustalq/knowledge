@@ -170,10 +170,12 @@ export class KnowledgeHealthService {
     );
     const [row] = await this.prisma.$queryRaw<Array<Record<string, number>>>`
       WITH r AS (${this.rowsCte(access, { projectId }, settings, now)})
-      SELECT count(*) FILTER (WHERE r.archived_at IS NULL)::int AS total, ${Prisma.join(counted)} FROM r
+      SELECT count(*) FILTER (WHERE r.archived_at IS NULL)::int AS total,
+             count(*) FILTER (WHERE r.archived_at IS NULL AND r.status = 'verified')::int AS verified,
+             ${Prisma.join(counted)} FROM r
     `;
     const counts = Object.fromEntries(HEALTH_FILTERS.map((f) => [f, row?.[f] ?? 0])) as Record<HealthFilter, number>;
-    return { workspaceId, total: row?.total ?? 0, counts };
+    return { workspaceId, total: row?.total ?? 0, verified: row?.verified ?? 0, counts };
   }
 
   /**

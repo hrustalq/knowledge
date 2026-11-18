@@ -4296,6 +4296,8 @@ model WorkspaceSettings {
   historyAudience         String?  @map("history_audience")
   /// Non-author approvals a merge needs; null is MR_REQUIRED_APPROVALS (a default, not a ceiling).
   requiredApprovals       Int?     @map("required_approvals")
+  /// #1243 workspace home: the shown HOME_WIDGETS keys, in order; null is the built-in layout (`homeLayoutOf`).
+  homeWidgets             Json?    @map("home_widgets")
   updatedAt               DateTime @updatedAt @map("updated_at") @db.Timestamptz
   updatedBy               String?  @map("updated_by") @db.Uuid
 

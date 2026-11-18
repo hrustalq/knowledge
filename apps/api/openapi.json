@@ -21920,6 +21920,144 @@
         ]
       }
     },
+    "/v1/workspaces/{id}/home": {
+      "get": {
+        "operationId": "HomeController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HomeResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The workspace home: the layout and the data of every widget the caller may read",
+        "tags": [
+          "workspaces"
+        ]
+      }
+    },
+    "/v1/workspaces/{id}/home/layout": {
+      "put": {
+        "operationId": "HomeController_setLayout",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateHomeLayoutDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HomeLayoutResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Set which home widgets show and in what order (workspace admin)",
+        "tags": [
+          "workspaces"
+        ]
+      }
+    },
     "/v1/connectors": {
       "get": {
         "operationId": "ConnectorsController_list",
@@ -50087,6 +50225,27 @@
           "workspaceId"
         ]
       },
+      "UpdateHomeLayoutDto": {
+        "type": "object",
+        "properties": {
+          "widgets": {
+            "type": "array",
+            "nullable": true,
+            "description": "The widgets to show, in order; one left out is hidden. Null (or omitted) goes back to the built-in layout.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "metrics",
+                "actions",
+                "needs-you",
+                "recent",
+                "activity",
+                "agents"
+              ]
+            }
+          }
+        }
+      },
       "CreateConnectorDto": {
         "type": "object",
         "properties": {
@@ -68683,6 +68842,264 @@
           "editors"
         ]
       },
+      "HomeAgentRun": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "agentName": {
+            "type": "string"
+          },
+          "stage": {
+            "type": "string",
+            "nullable": true
+          },
+          "startedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "agentName",
+          "stage",
+          "startedAt"
+        ]
+      },
+      "HomeLayoutResponse": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string"
+          },
+          "layout": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HomeWidget"
+            }
+          },
+          "custom": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "workspaceId",
+          "layout",
+          "custom"
+        ]
+      },
+      "HomeMetrics": {
+        "type": "object",
+        "properties": {
+          "pages": {
+            "type": "number"
+          },
+          "verified": {
+            "type": "number",
+            "nullable": true
+          },
+          "stale": {
+            "type": "number",
+            "nullable": true
+          },
+          "openMergeRequests": {
+            "type": "number",
+            "nullable": true
+          },
+          "unansweredSearches": {
+            "type": "number",
+            "nullable": true
+          },
+          "searchDays": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "pages",
+          "verified",
+          "stale",
+          "openMergeRequests",
+          "unansweredSearches",
+          "searchDays"
+        ]
+      },
+      "HomeNeedsYou": {
+        "type": "object",
+        "properties": {
+          "reviews": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/HomeReview"
+                }
+              }
+            ],
+            "nullable": true
+          },
+          "reviewCount": {
+            "type": "number"
+          },
+          "notifications": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HomeNotification"
+            }
+          },
+          "unreadCount": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "reviews",
+          "reviewCount",
+          "notifications",
+          "unreadCount"
+        ]
+      },
+      "HomeNotification": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "documentId": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "documentId",
+          "createdAt"
+        ]
+      },
+      "HomeRecentPage": {
+        "type": "object",
+        "properties": {
+          "documentId": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "documentId",
+          "title",
+          "updatedAt"
+        ]
+      },
+      "HomeResponse": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string"
+          },
+          "layout": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HomeWidget"
+            }
+          },
+          "custom": {
+            "type": "boolean"
+          },
+          "widgets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HomeWidget"
+            }
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/HomeMetrics"
+          },
+          "needsYou": {
+            "$ref": "#/components/schemas/HomeNeedsYou"
+          },
+          "recent": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HomeRecentPage"
+            }
+          },
+          "activity": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActivityEntry"
+            }
+          },
+          "agents": {
+            "type": "object",
+            "properties": {
+              "runs": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/HomeAgentRun"
+                }
+              },
+              "queued": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "runs",
+              "queued"
+            ]
+          }
+        },
+        "required": [
+          "workspaceId",
+          "layout",
+          "custom",
+          "widgets"
+        ]
+      },
+      "HomeReview": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "authorId": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "authorId",
+          "createdAt"
+        ]
+      },
+      "HomeWidget": {
+        "type": "string",
+        "enum": [
+          "metrics",
+          "actions",
+          "needs-you",
+          "recent",
+          "activity",
+          "agents"
+        ]
+      },
       "IdentityProviderView": {
         "type": "object",
         "properties": {
@@ -69696,6 +70113,9 @@
           "total": {
             "type": "number"
           },
+          "verified": {
+            "type": "number"
+          },
           "counts": {
             "type": "object",
             "properties": {
@@ -69771,6 +70191,7 @@
         "required": [
           "workspaceId",
           "total",
+          "verified",
           "counts"
         ]
       },

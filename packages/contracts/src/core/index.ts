@@ -977,6 +977,8 @@ export interface KnowledgeHealthListResponse {
 export interface KnowledgeHealthSummaryResponse {
   workspaceId: string;
   total: number;
+  /** Pages in `total` whose verification holds (#1243): the share the home shows. */
+  verified: number;
   counts: Record<HealthFilter, number>;
 }
 

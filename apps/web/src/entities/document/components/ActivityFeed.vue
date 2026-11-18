@@ -50,6 +50,14 @@ const props = withDefaults(
     limit?: number
     /** Start folded to the newest entry, expandable. */
     collapsible?: boolean
+    /** Entries the caller already read (the home's, #1243): drawn on the server, no first fetch. */
+    initial?: ActivityEntry[]
+    /**
+     * Two lines at any width, for a column too narrow for one (the home's side
+     * column, #1243). Capped feeds only: rows grow to fit a long verb, and the
+     * way on to the full feed is left to the frame around it.
+     */
+    stacked?: boolean
   }>(),
   { pageSize: 50, height: '60vh' },
 )
@@ -62,10 +70,10 @@ const ROW_HEIGHT = 34
  * the sentence — was cut to a few letters.
  */
 const compact = useHydratedMediaQuery('(max-width: 639.98px)')
-const rowHeight = computed(() => (compact.value ? 54 : ROW_HEIGHT))
+const rowHeight = computed(() => (props.stacked || compact.value ? 54 : ROW_HEIGHT))
 
-const entries = ref<ActivityEntry[]>([])
-const loaded = ref(false)
+const entries = ref<ActivityEntry[]>(props.initial ?? [])
+const loaded = ref(props.initial !== undefined)
 const busy = ref(false)
 const nextCursor = ref<string | null>(null)
 const events = useEventsStore()
@@ -212,7 +220,9 @@ useInfiniteScroll(containerProps.ref, () => loadMore(), {
   canLoadMore: () => !capped.value && nextCursor.value !== null && !busy.value,
 })
 
-onMounted(() => void reload())
+onMounted(() => {
+  if (props.initial === undefined) void reload()
+})
 watch([() => props.documentId, () => props.projectId], () => void reload())
 watch(() => events.revision, () => void refreshHead())
 </script>
@@ -263,8 +273,9 @@ watch(() => events.revision, () => void refreshHead())
             <div
               v-for="{ data: e, index } in visible"
               :key="e.id ?? index"
-              class="flex flex-wrap content-center items-baseline gap-x-2 gap-y-0.5 rounded-md px-2 text-sm hover:bg-muted/50 sm:flex-nowrap"
-              :style="{ height: `${rowHeight}px` }"
+              class="flex flex-wrap content-center items-baseline gap-x-2 gap-y-0.5 rounded-md px-2 text-sm hover:bg-muted/50"
+              :class="stacked ? 'py-1' : 'sm:flex-nowrap'"
+              :style="stacked ? { minHeight: `${rowHeight}px` } : { height: `${rowHeight}px` }"
             >
               <UserChip
                 v-if="isPerson(e)"
@@ -277,18 +288,20 @@ watch(() => events.revision, () => void refreshHead())
                    shrinks it, so a long verb (ru) took a line of its own and the
                    row grew past its fixed height (#1033). From zero it always
                    fits beside the actor and the time, and truncates there. -->
-              <span class="min-w-0 flex-1 truncate text-muted-foreground sm:flex-none sm:overflow-visible">{{ label(e) }}</span>
+              <span class="min-w-0 flex-1 text-muted-foreground" :class="stacked ? '' : 'truncate sm:flex-none sm:overflow-visible'">{{ label(e) }}</span>
               <RouterLink
                 v-if="e.documentId"
                 :to="`/documents/${e.documentId}`"
-                class="order-last basis-full truncate font-medium hover:underline sm:order-none sm:basis-auto"
+                class="order-last basis-full truncate font-medium hover:underline"
+                :class="stacked ? '' : 'sm:order-none sm:basis-auto'"
               >
                 {{ title(e) }}
               </RouterLink>
               <!-- A push (#636) names a branch, not a page. -->
               <span
                 v-else-if="e.metadata.branch"
-                class="order-last basis-full truncate font-mono text-xs sm:order-none sm:basis-auto"
+                class="order-last basis-full truncate font-mono text-xs"
+                :class="stacked ? '' : 'sm:order-none sm:basis-auto'"
               >{{ e.metadata.branch }}</span>
               <span class="ml-auto shrink-0 text-xs text-muted-foreground">{{ relativeTime(e.createdAt) }}</span>
             </div>
@@ -297,7 +310,7 @@ watch(() => events.revision, () => void refreshHead())
 
         <!-- Capped: the feed ends here, so the way on is the full page. Otherwise
              scrolling pages in automatically and the button is the keyboard path. -->
-        <div class="flex items-center gap-3 px-2 text-xs text-muted-foreground">
+        <div v-if="!stacked" class="flex items-center gap-3 px-2 text-xs text-muted-foreground">
           <template v-if="capped">
             <span>{{ t('activity.mostRecent', { n: entries.length }) }}</span>
             <RouterLink to="/activity" class="underline underline-offset-2 hover:text-foreground">

@@ -14684,6 +14684,264 @@
       "editors"
     ]
   },
+  "HomeAgentRun": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "agentName": {
+        "type": "string"
+      },
+      "stage": {
+        "type": "string",
+        "nullable": true
+      },
+      "startedAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id",
+      "agentName",
+      "stage",
+      "startedAt"
+    ]
+  },
+  "HomeLayoutResponse": {
+    "type": "object",
+    "properties": {
+      "workspaceId": {
+        "type": "string"
+      },
+      "layout": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/HomeWidget"
+        }
+      },
+      "custom": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "workspaceId",
+      "layout",
+      "custom"
+    ]
+  },
+  "HomeMetrics": {
+    "type": "object",
+    "properties": {
+      "pages": {
+        "type": "number"
+      },
+      "verified": {
+        "type": "number",
+        "nullable": true
+      },
+      "stale": {
+        "type": "number",
+        "nullable": true
+      },
+      "openMergeRequests": {
+        "type": "number",
+        "nullable": true
+      },
+      "unansweredSearches": {
+        "type": "number",
+        "nullable": true
+      },
+      "searchDays": {
+        "type": "number"
+      }
+    },
+    "required": [
+      "pages",
+      "verified",
+      "stale",
+      "openMergeRequests",
+      "unansweredSearches",
+      "searchDays"
+    ]
+  },
+  "HomeNeedsYou": {
+    "type": "object",
+    "properties": {
+      "reviews": {
+        "anyOf": [
+          {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HomeReview"
+            }
+          }
+        ],
+        "nullable": true
+      },
+      "reviewCount": {
+        "type": "number"
+      },
+      "notifications": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/HomeNotification"
+        }
+      },
+      "unreadCount": {
+        "type": "number"
+      }
+    },
+    "required": [
+      "reviews",
+      "reviewCount",
+      "notifications",
+      "unreadCount"
+    ]
+  },
+  "HomeNotification": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "title": {
+        "type": "string",
+        "nullable": true
+      },
+      "documentId": {
+        "type": "string",
+        "nullable": true
+      },
+      "createdAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id",
+      "title",
+      "documentId",
+      "createdAt"
+    ]
+  },
+  "HomeRecentPage": {
+    "type": "object",
+    "properties": {
+      "documentId": {
+        "type": "string"
+      },
+      "title": {
+        "type": "string"
+      },
+      "updatedAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "documentId",
+      "title",
+      "updatedAt"
+    ]
+  },
+  "HomeResponse": {
+    "type": "object",
+    "properties": {
+      "workspaceId": {
+        "type": "string"
+      },
+      "layout": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/HomeWidget"
+        }
+      },
+      "custom": {
+        "type": "boolean"
+      },
+      "widgets": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/HomeWidget"
+        }
+      },
+      "metrics": {
+        "$ref": "#/components/schemas/HomeMetrics"
+      },
+      "needsYou": {
+        "$ref": "#/components/schemas/HomeNeedsYou"
+      },
+      "recent": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/HomeRecentPage"
+        }
+      },
+      "activity": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/ActivityEntry"
+        }
+      },
+      "agents": {
+        "type": "object",
+        "properties": {
+          "runs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HomeAgentRun"
+            }
+          },
+          "queued": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "runs",
+          "queued"
+        ]
+      }
+    },
+    "required": [
+      "workspaceId",
+      "layout",
+      "custom",
+      "widgets"
+    ]
+  },
+  "HomeReview": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "title": {
+        "type": "string"
+      },
+      "authorId": {
+        "type": "string"
+      },
+      "createdAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id",
+      "title",
+      "authorId",
+      "createdAt"
+    ]
+  },
+  "HomeWidget": {
+    "type": "string",
+    "enum": [
+      "metrics",
+      "actions",
+      "needs-you",
+      "recent",
+      "activity",
+      "agents"
+    ]
+  },
   "IdentityProviderView": {
     "type": "object",
     "properties": {
@@ -15697,6 +15955,9 @@
       "total": {
         "type": "number"
       },
+      "verified": {
+        "type": "number"
+      },
       "counts": {
         "type": "object",
         "properties": {
@@ -15772,6 +16033,7 @@
     "required": [
       "workspaceId",
       "total",
+      "verified",
       "counts"
     ]
   },

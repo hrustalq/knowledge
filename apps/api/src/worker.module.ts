@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { BootstrapModule } from './config/bootstrap.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
+import { OpsBeaconModule } from './observability/ops-beacon.js';
 import { IngestionWorkerModule } from './ingestion/ingestion-worker.module.js';
 import { ImportWorkerModule } from './import/import-worker.module.js';
 import { WorkflowWorkerModule } from './workflows/workflow-worker.module.js';
@@ -20,6 +21,7 @@ import { MemoryWorkerModule } from './memory/memory-worker.module.js';
 @Module({
   imports: [
     BootstrapModule,
+    OpsBeaconModule.forProcess('worker'),
     PrismaModule,
     IngestionWorkerModule,
     ImportWorkerModule,

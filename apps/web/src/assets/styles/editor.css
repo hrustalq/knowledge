@@ -11,13 +11,8 @@
  */
 
 :root {
-  /* Panel accents. Distinct hues at equal weight so no callout out-shouts
-     another; the semantics come from the icon, not from loudness. */
-  --kn-panel-note: oklch(0.55 0.13 250);
-  --kn-panel-tip: oklch(0.55 0.13 155);
-  --kn-panel-important: oklch(0.52 0.14 300);
-  --kn-panel-warning: oklch(0.62 0.13 75);
-  --kn-panel-caution: oklch(0.56 0.17 25);
+  /* The panel ramp (--kn-panel-*) lives in @knowledge/ui's tokens.css: it is
+     also the UI's state colour, in both apps. */
 
   /* Diagram palette. Scenes store the *key*, never the value, so a diagram
      drawn in light mode stays legible in dark mode. */
@@ -54,12 +49,6 @@
 }
 
 .dark {
-  --kn-panel-note: oklch(0.72 0.11 250);
-  --kn-panel-tip: oklch(0.72 0.11 155);
-  --kn-panel-important: oklch(0.72 0.12 300);
-  --kn-panel-warning: oklch(0.78 0.11 75);
-  --kn-panel-caution: oklch(0.7 0.14 25);
-
   --kn-draw-ink: oklch(0.88 0.01 265);
   --kn-draw-blue: oklch(0.72 0.12 255);
   --kn-draw-green: oklch(0.73 0.11 155);

@@ -713,6 +713,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every store probed (status, latency), BullMQ counts per queue, process heartbeats and each sweeper's last tick (platform admin) */
+        get: operations["AdminHealthController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workspaces": {
         parameters: {
             query?: never;
@@ -11839,6 +11856,55 @@ export interface components {
             version: string;
             entries: components["schemas"]["AdminConfigEntry"][];
         };
+        AdminDependency: {
+            name: components["schemas"]["AdminDependencyName"];
+            /** @enum {string} */
+            status: "up" | "down" | "off";
+            latencyMs: number | null;
+            error: string | null;
+        };
+        /** @enum {string} */
+        AdminDependencyName: "postgres" | "redis" | "minio" | "arcadedb" | "opensearch" | "searxng";
+        AdminHealthResponse: {
+            checkedAt: string;
+            version: string;
+            dependencies: components["schemas"]["AdminDependency"][];
+            queues: components["schemas"]["AdminQueue"][];
+            processes: components["schemas"]["AdminProcess"][] | null;
+            ticks: components["schemas"]["AdminTick"][] | null;
+        };
+        AdminProcess: {
+            kind: components["schemas"]["OpsProcessKind"];
+            expected: boolean;
+            instances: components["schemas"]["AdminProcessInstance"][];
+        };
+        AdminProcessInstance: {
+            host: string;
+            pid: number;
+            version: string;
+            startedAt: string;
+            lastSeenAt: string;
+            live: boolean;
+        };
+        AdminQueue: {
+            name: string;
+            counts: {
+                waiting: number;
+                active: number;
+                delayed: number;
+                failed: number;
+            } | null;
+        };
+        AdminTick: {
+            process: components["schemas"]["OpsProcessKind"];
+            name: string;
+            host: string;
+            intervalMs: number | null;
+            lastAt: string;
+            ok: boolean;
+            ms: number;
+            late: boolean;
+        };
         /** @enum {string} */
         AgentCapability: "tools" | "vision" | "json";
         AgentFinding: {
@@ -16152,6 +16218,8 @@ export interface components {
             clientId: string;
             scopes: string[];
         };
+        /** @enum {string} */
+        OpsProcessKind: "api" | "worker" | "learner" | "git";
         "OverrideSetting<number>": {
             requested: number | null;
             effective: number;
@@ -20305,6 +20373,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminConfigResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AdminHealthController_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminHealthResponse"];
                 };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */

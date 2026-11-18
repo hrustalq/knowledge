@@ -57,3 +57,22 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
 }
+
+@theme inline {
+  /* The panel ramp (tokens.css) as utilities: the colours a new state takes,
+     since emerald/amber/red are spoken for by the indexing dot. */
+  --color-panel-note: var(--kn-panel-note);
+  --color-panel-tip: var(--kn-panel-tip);
+  --color-panel-important: var(--kn-panel-important);
+  --color-panel-warning: var(--kn-panel-warning);
+  --color-panel-caution: var(--kn-panel-caution);
+  /* The ramp is tuned as a rule and a glyph (3:1), not as text: light warning
+     is 3.6:1 on the page. `-ink` pulls each hue 30% toward the foreground, so
+     it darkens in light and lightens in dark from one declaration — every ink
+     clears 5.2:1 on the page and on its own 10% wash in both themes. */
+  --color-panel-note-ink: color-mix(in oklab, var(--kn-panel-note) 70%, var(--foreground));
+  --color-panel-tip-ink: color-mix(in oklab, var(--kn-panel-tip) 70%, var(--foreground));
+  --color-panel-important-ink: color-mix(in oklab, var(--kn-panel-important) 70%, var(--foreground));
+  --color-panel-warning-ink: color-mix(in oklab, var(--kn-panel-warning) 70%, var(--foreground));
+  --color-panel-caution-ink: color-mix(in oklab, var(--kn-panel-caution) 70%, var(--foreground));
+}

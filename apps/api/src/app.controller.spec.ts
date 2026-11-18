@@ -19,4 +19,8 @@ describe('AppController', () => {
       expect(appController.getHello()).toBe('Hello World!');
     });
   });
+
+  it('answers liveness with no detail', () => {
+    expect(appController.health()).toEqual({ status: 'ok' });
+  });
 });

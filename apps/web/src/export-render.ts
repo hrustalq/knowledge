@@ -63,6 +63,11 @@ function labelsFor(locale: Locale): PublicRenderOptions['labels'] {
   }
 }
 
+function c4Level(locale: Locale): NonNullable<PublicRenderOptions['staticC4']> {
+  const { level } = (locale === 'ru' ? ru : en).c4
+  return (type) => level[type]
+}
+
 function pageCount(locale: Locale, n: number): string {
   const forms = messages(locale).exp.pageCount
   const form = pluralCategory(n, locale) as keyof typeof forms
@@ -149,6 +154,7 @@ function renderPdf(req: ExportRenderRequest, deps: ExportRenderDeps): ExportRend
       // Pages share one document: `#install` on two pages must not collide.
       idPrefix: `p${i}-`,
       labels,
+      staticC4: c4Level(req.locale),
     })
     return `<article class="kn-export-page" id="${anchor(p.documentId)}">
       <h1 class="kn-export-page-title">${escapeHtml(p.title)}</h1>
@@ -228,6 +234,7 @@ function renderBundle(req: ExportRenderRequest, deps: ExportRenderDeps): ExportR
       attachmentHref: (id) => (req.assets[id] ? relativeHref(page.path, req.assets[id]) : null),
       embedSrc: (id) => (req.assets[id] ? relativeHref(page.path, req.assets[id]) : null),
       labels,
+      staticC4: c4Level(req.locale),
     }),
   )
   const mermaid = rendered.some((r) => hasMermaid(r.html))

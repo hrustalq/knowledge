@@ -52,13 +52,17 @@ import {
   Type,
   Workflow,
   LayoutTemplate,
+  Boxes,
 } from 'lucide-vue-next'
+import { starterModel } from '@/core/markdown/structurizr-edit'
 import { markdownToHtml } from '@/core/markdown/render'
 import { hydration, inertDocument } from '@/shared/utils/hydration'
 import { staticBodyHtml } from '../model/static-body'
 import { api } from '@/shared/api/client'
 import { getWorkspaceId } from '@/shared/api/api'
 import type { EmbedAttributes } from './extensions/media'
+import { withC4CodeBlocks } from './extensions/c4'
+import C4StudioHost from './nodes/C4StudioHost.vue'
 import type {
   AssistantDraftEdit,
   GlossaryExclusion,
@@ -472,6 +476,7 @@ const SLASH_ITEMS: (CommandItem & { run: (e: CoreEditor) => void })[] = [
   // `/энд` gets an empty menu.
   { id: 'api', group: t('toolbar.group.structure'), label: t('toolbar.apiContract'), icon: Route, keywords: 'endpoint http rest request response openapi swagger эндпоинт запрос', run: (e) => e.chain().focus().setApiContract().run() },
   { id: 'mermaid', group: t('toolbar.group.media'), label: t('toolbar.mermaid'), icon: Workflow, keywords: 'graph flowchart sequence', run: (e) => e.chain().focus().setMermaid().run() },
+  { id: 'c4', group: t('toolbar.group.media'), label: t('toolbar.c4'), icon: Boxes, keywords: 'architecture structurizr context container component', run: (e) => e.chain().focus().setC4(starterModel({ user: t('c4.starter.user'), system: t('c4.starter.system'), uses: t('c4.starter.uses') })).run() },
   { id: 'drawing', group: t('toolbar.group.media'), label: t('toolbar.whiteboard'), icon: PenLine, keywords: 'draw sketch excalidraw diagram', run: (e) => e.chain().focus().setDrawing().run() },
   { id: 'image', group: t('toolbar.group.media'), label: t('toolbar.image'), icon: ImageIcon, keywords: 'picture photo upload', run: (e) => pickFiles(e, 'image/*') },
   { id: 'embed', group: t('toolbar.group.media'), label: t('toolbar.figmaEmbed'), icon: Frame, keywords: 'figma design mockup frame prototype figjam макет фрейм дизайн прототип', run: () => openEmbedPicker(null) },
@@ -740,7 +745,8 @@ onMounted(() => {
     extensions: [
       // Shared with the API's headless schema (@knowledge/editor-schema).
       // A shared draft brings its own per-person undo.
-      ...baseExtensions(lowlight, { undoRedo: !props.collab }),
+      // Its code block also draws ```structurizr C4 models (#1244).
+      ...withC4CodeBlocks(baseExtensions(lowlight, { undoRedo: !props.collab })),
       ...(props.collab?.extensions() ?? []),
       Placeholder.configure({
         placeholder: ({ node }) =>
@@ -1127,6 +1133,9 @@ defineExpose({
         @pick="pick"
       />
     </Teleport>
+
+    <!-- A C4 block full screen (#1244): the editor's, so a node-view rebuild cannot take it down. -->
+    <C4StudioHost v-if="editor" :editor="editor" />
 
     <!-- Upload progress: inline, near the work, not a corner toast stack. -->
     <div v-if="uploads.length" class="kn-uploads" aria-live="polite">

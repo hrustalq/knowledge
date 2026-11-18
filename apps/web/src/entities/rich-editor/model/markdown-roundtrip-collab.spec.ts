@@ -23,6 +23,8 @@ const FIXTURES: Record<string, string> = {
   mermaid: '```mermaid\ngraph TD; A-->B\n```\n',
   // Size and placement ride in the info string (#476).
   mermaidLaidOut: '```mermaid width=480 wrap=right\ngraph TD; A-->B\n```\n',
+  // A C4 model (#1244) is an ordinary code block in the editor: indentation, blank lines and comments are kept.
+  c4: '```structurizr\nworkspace {\n  model {\n    # the people\n    u = person "User" "Buys \\"things\\""\n\n    s = softwareSystem "Shop" {\n      w = container "Web" "Storefront" "Vue"\n    }\n    u -> w "Buys" "HTTPS"\n  }\n}\n```\n',
   drawingLaidOut: '```drawing wrap=left\n{"v":1,"w":720,"h":300,"els":[]}\n```\n',
   drawing:
     '```drawing\n{"type":"excalidraw","version":2,"elements":[{"id":"r1","type":"rectangle","x":1,"y":2}],"appState":{}}\n```\n',
@@ -86,6 +88,11 @@ describe('markdown through a shared draft', () => {
     expect(md(doc)).toContain('```mermaid width=480 wrap=right\n')
     expect(md(toDoc(FIXTURES.drawingLaidOut!))).toContain('```drawing wrap=left\n')
     expect(md(toDoc(FIXTURES.mermaid!))).toContain('```mermaid\n')
+  })
+
+  it('saves a C4 model byte for byte', () => {
+    // The serializer ends a document without its final newline, whatever the last block.
+    expect(md(toDoc(FIXTURES.c4!))).toBe(FIXTURES.c4!.trimEnd())
   })
 
   it('concurrent edits in one table cell and a panel merge into markdown that re-parses to itself', () => {

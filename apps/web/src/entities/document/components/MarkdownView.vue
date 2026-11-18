@@ -11,7 +11,7 @@
  *
  * SSR renders nothing (DOMPurify needs a DOM); the client fills in on mount.
  */
-import { nextTick, onMounted, ref, watch } from 'vue'
+import { nextTick, onMounted, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import DOMPurify from 'dompurify'
 import { markdownToHtml, SANITIZE_CONFIG, slugifyHeading } from '@/core/markdown/render'
@@ -28,6 +28,8 @@ import { resolveAssetUrl } from '@/shared/api/api'
 import { useTheme } from '@/shared/utils/theme'
 import { mermaidConfig, mermaidSvg } from '@/shared/utils/mermaid'
 import { createRevealTracker, wrapRuns } from '@/shared/utils/stream-reveal'
+import { takeC4Blocks, type C4Block } from '../model/c4-blocks'
+import C4Diagram from './C4Diagram.vue'
 import { DiagramLightbox, ImageLightbox, markDiagrams, markZoomable } from '@knowledge/ui/lightbox'
 
 // Several roots (the body and the lightboxes), so a parent's class lands on the body by hand.
@@ -87,10 +89,15 @@ async function pageRefResolver(markdown: string) {
  */
 const reveal = createRevealTracker()
 
+/** C4 models (#1244): their hosts in the rendered markup, each with a C4Diagram teleported in. */
+const c4 = shallowRef<C4Block[]>([])
+
 async function render() {
   const markdown = props.markdown ?? ''
   const resolvePage = await pageRefResolver(markdown)
   const raw = markdownToHtml(markdown, { resolvePage })
+  // Unmounted in the same patch that replaces the markup holding their hosts.
+  c4.value = []
   // Stripped and its images pointed home (attachments, the image proxy) before
   // it reaches the DOM: an image starts loading the moment it is inserted.
   html.value = proxyImages(props.untrusted ? sanitizeUntrusted(raw) : DOMPurify.sanitize(raw, { ...SANITIZE_CONFIG }))
@@ -113,6 +120,7 @@ async function render() {
   renderFiles()
   renderEmbeds()
   renderToc(headings)
+  if (host.value) c4.value = takeC4Blocks(host.value)
   await renderMermaid()
   if (!host.value) return
   // Last, once every diagram is drawn: DiagramLightbox reads the marks as "done".
@@ -320,4 +328,7 @@ watch([() => props.markdown, () => props.streaming, theme.isDark], () => void re
   />
   <ImageLightbox :root="host" />
   <DiagramLightbox :root="host" />
+  <Teleport v-for="(block, i) in c4" :key="i" :to="block.el">
+    <C4Diagram :source="block.source" :untrusted="untrusted" />
+  </Teleport>
 </template>

@@ -26,7 +26,7 @@ import { getProjectId, getWorkspaceId } from '@/shared/api/api'
 import { api, fetchApi, isApiRequestError } from '@/shared/api/queries'
 import { errorMessage } from '@/shared/api/errors'
 import { saveStructuredRevision } from '@/modules/api-reference/model/save-structured'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { useFeaturesStore } from '@/stores/features'
 import { Button } from '@knowledge/ui/button'
 import { Input } from '@knowledge/ui/input'
@@ -36,7 +36,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { PageLayout, PageState } from '@knowledge/ui/layout'
 
 const { t } = useI18n()
-const auth = useAuthStore()
+const isWorkspaceAdmin = usePermission('workspace:admin')
 const features = useFeaturesStore()
 const route = useRoute()
 const router = useRouter()
@@ -173,7 +173,7 @@ async function saveRevision(documentId: string): Promise<string> {
     filename: `source.${syntax.value}`,
     text: text.value,
     pending: pendingRevision,
-    viaReview: features.publishMode === 'review' && !auth.canAdminWorkspace,
+    viaReview: features.publishMode === 'review' && !isWorkspaceAdmin.value,
     title: title.value.trim(),
   })
   if (heldBy) {

@@ -2353,7 +2353,13 @@
     "copyReply": "Копировать ответ",
     "dictateMessage": "Надиктовать сообщение",
     "modelDefault": "По умолчанию",
-    "fromChat": "Из чатов"
+    "fromChat": "Из чатов",
+    "slash": {
+      "label": "Команды",
+      "noMatch": "Ничего не найдено",
+      "loading": "Загрузка…",
+      "keys": "↑↓ выбор · Enter или Tab применить · Esc закрыть"
+    }
   },
   "ai": {
     "excludesCalls": "не включает {calls} без цены",

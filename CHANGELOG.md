@@ -114,6 +114,12 @@ in the pull request that introduces them — see
   now reads `LOG_DIR` when it is set, as the writers do, rather than always `<repo>/logs`.
   `apps/api/scripts/measure-api.mjs` is a repeatable API session to run before reading the report. The first
   baseline is `docs/performance/2026-11-18-api.md`. (#1242)
+- **`/` commands in the chat composer.** Typing `/` at the start of the assistant's message box opens a menu:
+  `/new`, `/ask`, `/agent` (editors), `/model`, `/agent-key`, `/skill` and `/page` (each opens its list after a
+  space), `/capture` (save the latest reply to the knowledge base, editors) and `/help`. Arrow keys choose, Enter or
+  Tab apply, Esc closes. A command sets what the toolbar pickers set and is never sent to the model; a message that
+  matches no command is sent as typed. Command descriptions now come from one catalogue shared with Telegram's `/`
+  menu, so the wording of `/ask` and `/capture` there changed slightly. (#1249)
 
 ### Operations
 

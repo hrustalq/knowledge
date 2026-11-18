@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { CHAT_COMMANDS } from '@knowledge/contracts';
 import { TELEGRAM_COMMANDS, TelegramAdapter, hashInboundSecret, markdownToTelegramHtml } from '../src/chat/adapters/telegram.adapter.js';
 import { cutAnswer } from '../src/chat/adapters/chat-markdown.js';
 import { ChatPlatformError } from '../src/chat/adapters/chat-adapter.types.js';
@@ -367,7 +368,7 @@ describe('command menu (#1223)', () => {
     }));
   }
 
-  it('lists each scope in every language plus a fallback in the bot’s own', async () => {
+  it('lists each scope in every language plus a fallback in the bot’s own (ru here)', async () => {
     const calls = (await register()).filter((c) => c.method === 'setMyCommands');
     const sent = calls.map((c) => `${(c.body.scope as { type: string }).type}:${(c.body.language_code as string | undefined) ?? '-'}`);
     expect(sent.sort()).toEqual(
@@ -375,7 +376,7 @@ describe('command menu (#1223)', () => {
     );
     const privateDefault = calls.find((c) => (c.body.scope as { type: string }).type === 'all_private_chats' && !c.body.language_code);
     expect(privateDefault?.body.commands).toEqual(
-      TELEGRAM_COMMANDS.all_private_chats.map((command) => ({ command, description: `chat.commands.${command}` })),
+      TELEGRAM_COMMANDS.all_private_chats.map((command) => ({ command, description: CHAT_COMMANDS[command].description.ru })),
     );
   });
 
@@ -390,9 +391,8 @@ describe('command menu (#1223)', () => {
     const handled = new Set([...block.matchAll(/case '([a-z]+)':/g)].map((m) => m[1]));
     const listed = new Set<string>([...Object.values(TELEGRAM_COMMANDS).flat(), 'start']);
     expect([...listed].sort()).toEqual([...handled].sort());
-    for (const lang of ['en', 'ru']) {
-      const { commands } = JSON.parse(readFileSync(join(import.meta.dirname, `../src/i18n/${lang}/chat.json`), 'utf8')) as { commands: Record<string, string> };
-      for (const name of listed) if (name !== 'start') expect(commands[name], `${lang} chat.commands.${name}`).toMatch(/\S/);
-    }
+    // The shared catalogue (#1249) marks exactly these as bot commands.
+    const bot = Object.entries(CHAT_COMMANDS).filter(([, c]) => (c.surfaces as readonly string[]).includes('bot')).map(([name]) => name);
+    expect([...bot, 'start'].sort()).toEqual([...listed].sort());
   });
 });

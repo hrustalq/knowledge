@@ -450,7 +450,10 @@ list `/ask`, `/new`, `/capture`, `/forget` and `/help`, plus `/bind` and
 `/unbind` for group admins only. Each scope is sent in en and ru, plus a
 fallback in the bot's `locale`. `TELEGRAM_COMMANDS` in `telegram.adapter.ts` is
 the list, and `chat-telegram.spec.ts` fails when it and the dispatcher's
-command switch disagree. A refused menu is logged and never marks the webhook
+command switch disagree. The descriptions are `CHAT_COMMANDS` in
+`@knowledge/contracts/chat` (#1249), the catalogue the web chat composer's `/`
+menu reads too ([09](09-ai-assistant.md#slash-commands-in-the-composer)), and the
+spec also fails when a dispatched command is not marked `bot` there. A refused menu is logged and never marks the webhook
 failed.
 
 On Time the commands are the same words **without the slash** — `help`, `new`,

@@ -43,6 +43,29 @@ instruction }` → `{ enabled, suggestion }` (outline, continuation,
   Suggest appends the model's text below the cursor. Disabled-provider state
   shows a hint about `ASSISTANT_PROVIDER`.
 
+## Slash commands in the composer
+
+Typing `/` at the start of the chat composer opens a menu (#1249): arrow keys
+choose, Enter or Tab apply, Esc closes and keeps the draft. `/new` starts a
+thread, `/ask` and `/agent` switch the mode, `/model`, `/agent-key`, `/skill`
+and `/page` open a list of values after a space, `/capture` saves the latest
+reply to the knowledge base (the reply's bookmark button, so both read
+`capturedReplies` in the store), and `/help` lists the commands.
+
+- **A command sets what the pickers set and never reaches the model.** The menu
+  (`ComposerCommandMenu.vue`) only reads the draft and emits; `ChatComposer`
+  applies through the same refs and store actions as the pickers.
+- **A command is offered exactly when its control is**: `/agent` to editors,
+  `/model` when the model picker shows, `/agent-key` when the workspace has its
+  own agents, `/skill` when it has enabled skills, `/capture` to editors when the
+  latest reply cites a page and is not saved yet.
+- **Anything else is sent as typed.** `slashState` (`model/slash-commands.ts`)
+  returns null for a second line, a name no offered command starts with, or
+  text after a command that takes none.
+- **Names and descriptions are `CHAT_COMMANDS`** in `@knowledge/contracts/chat`,
+  shared with the bots' `/` menu ([47](47-chat-bots.md)): a name both offer
+  (`new`, `ask`, `capture`, `help`) is described once.
+
 ## Ask harness & access control
 
 `POST /v1/assistant/ask` runs a bounded agentic loop (`ASSISTANT_MAX_TOOL_CALLS`,

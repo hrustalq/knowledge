@@ -2353,7 +2353,13 @@
     "copyReply": "Copy reply",
     "dictateMessage": "Dictate a message",
     "modelDefault": "Default",
-    "fromChat": "From chat"
+    "fromChat": "From chat",
+    "slash": {
+      "label": "Commands",
+      "noMatch": "Nothing matches",
+      "loading": "Loading…",
+      "keys": "↑↓ choose · Enter or Tab apply · Esc close"
+    }
   },
   "ai": {
     "excludesCalls": "excludes {calls} with no price",

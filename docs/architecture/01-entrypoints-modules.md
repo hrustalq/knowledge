@@ -152,6 +152,39 @@ holds its rules instead: nothing from an app, no other `@knowledge/*` package.
 The price is that **no Node process may ever import it** — not the API, not the
 worker, not `apps/web/server.js`.
 
+**`@knowledge/api-client`** (#1236) is what both web apps need to talk to the
+API: the generated REST schema (`schema.d.ts`, written by `make api-client`), the
+typed request core and error contract (`.`), and the vue-query option builders
+(`./vue-query`: `createQueryClient`, `apiQueryOptions`, `fetchApi`,
+`useApiMutation`, …). It follows the buildless rules — self-referenced entries,
+no relative imports — though only Vite consumes it today. Each app binds it to
+its own axios instance (`createApiClient(http)`) and its own freshness table
+(`createQueryHelpers(client, { times })`), because the base URL, the credential,
+what a refusal does and how long a query stays fresh belong to the app.
+
+## The admin console is a second web app
+
+`apps/admin` (#1236) is the platform admin console: a client-only Vite SPA built
+for the `/admin/` base and shipped as its own image (`Dockerfile.admin`, static
+files behind Caddy). The front `Caddyfile` routes `/admin` and `/admin/*` on the
+app's own host to it, so the member app's HttpOnly session cookie reaches it and
+`/login` stays the member app's. In dev it runs on :5174 and `apps/web`'s Vite
+proxy forwards `/admin` to it, which reproduces the production shape.
+
+Inside, it is laid out in `apps/web`'s layers (`app → modules → entities →
+stores → shared`, [11](11-web-modules.md)), with the same layer rules copied into
+its dependency-cruiser config: a console section is a module with a `routes.ts`,
+who is signed in is a Pinia `stores/auth`, and the client and i18n are `shared/`.
+A file goes where it would go in the member app.
+
+It shares code with `apps/web` only through packages (`@knowledge/ui`,
+`@knowledge/api-client`, `@knowledge/contracts`). `web-imports-no-admin` and
+`admin-imports-no-other-app` in the two apps' dependency-cruiser configs hold
+that, which is what keeps the console out of a member's bundle. Its router lets
+nothing render until `GET /v1/me` says platform admin (or the dev principal),
+and the API's `@PlatformAdmin()` guard stays the real door for every
+`/v1/admin/*` route.
+
 ## Contracts as the single vocabulary
 
 `packages/contracts` holds plain request/response types shared by api and web.

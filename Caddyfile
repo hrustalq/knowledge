@@ -96,16 +96,29 @@
 		reverse_proxy git:3002
 	}
 
+	# The platform admin console (#1236): its own static container, on this
+	# host so the member app's session cookie reaches it. `handle`, not
+	# `handle_path`: it is built for the /admin/ base. Every byte of data it
+	# shows comes from /api/v1/admin/* behind @PlatformAdmin(); when the
+	# container is not running, handle_errors below answers 404.
+	@console path /admin /admin/*
+	handle @console {
+		reverse_proxy admin:8080
+	}
+
 	# Everything else is the SSR app.
 	handle {
 		reverse_proxy web:5173
 	}
 
 	# reverse_proxy errors only when it cannot reach its upstream (an upstream's
-	# own 4xx/5xx passes through), so an error on /git/* means no git service.
+	# own 4xx/5xx passes through), so an error on /git/* means no git service,
+	# and one on /admin/* means no admin container.
 	handle_errors {
 		@git path /git/*
 		respond @git "Not found" 404
+		@admin path /admin /admin/*
+		respond @admin "Not found" 404
 	}
 
 	# `?token=` still authenticates SSE and <img> requests (the @QueryTokenOk

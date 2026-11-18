@@ -19,6 +19,8 @@ import reader from './reader/en.json'
  * variable) cannot be resolved statically and is the caller's responsibility.
  */
 const SRC = join(import.meta.dirname, '../..')
+// The shared client reads this app's catalogue too (`errorMessage`, #1236).
+const API_CLIENT_SRC = join(SRC, '../../../packages/api-client/src')
 
 // The public reader's catalog is separate (docs/features/43) but resolves the same way.
 // Merged per namespace: both carry `search`, `export` and `category` for the components they share.
@@ -81,7 +83,7 @@ describe('web i18n message keys', () => {
    * is deleted from both catalogs, never allowlisted here.
    */
   it('every en.json key is referenced from the source', () => {
-    const source = sourceFiles(SRC)
+    const source = [...sourceFiles(SRC), ...sourceFiles(API_CLIENT_SRC)]
       .map((file) => readFileSync(file, 'utf8'))
       .join('\n')
     const literals = new Set(Array.from(source.matchAll(/['"`]([a-zA-Z][\w-]*(?:\.[\w-]+)+)['"`]/g), (m) => m[1]!))

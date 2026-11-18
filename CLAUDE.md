@@ -30,6 +30,7 @@ make dev-worker         # only the BullMQ ingestion worker (already part of `mak
 make dev-mcp            # MCP server on stdio (knowledge_* tools); the API also serves them at POST /v1/mcp
 make dev-learner        # the learner (#305); idles unless LEARNER_ENABLED=true
 make dev-git            # the git remote (#636) on :3002; 404s unless GIT_REMOTE_ENABLED=true
+make dev-admin          # the platform admin console (#1236) on :5174; open it as :5173/admin (part of `make dev`)
 
 make verify             # PRE-PUSH GATE: db-generate + lint + typecheck + deps + test (no build)
 make check              # CI gate: lint + typecheck + deps + test + build
@@ -50,7 +51,7 @@ make env-check                 # compare .env files against .env.example
 make auth-bootstrap email=<e>  # create user + API key + workspace membership (AUTH_MODE=api-key)
 
 make api-schema         # emit apps/api/openapi.json from the Nest app (no server/infra; env file required)
-make api-client         # api-schema + docs-reference + openapi-typescript → apps/web/src/shared/api/schema.d.ts
+make api-client         # api-schema + docs-reference + openapi-typescript → packages/api-client/src/schema.d.ts (both web apps)
 ```
 
 **Use `make verify`, not `make check`, while a dev server is running.** `check` rebuilds `apps/api/dist` under the running `nest start --watch` and takes :3000 and :5173 down with it. `verify` is everything in `check` except `build`, and is what `.husky/pre-push` runs.

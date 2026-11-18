@@ -16,13 +16,13 @@
     "typecheck": "vue-tsc -b",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "generate:api": "openapi-typescript ../api/openapi.json -o src/shared/api/schema.d.ts",
     "generate:docs": "node scripts/generate-docs-reference.mjs",
     "lint:i18n-baseline": "eslint src --prune-suppressions"
   },
   "dependencies": {
     "@floating-ui/vue": "^1.1.11",
     "@hocuspocus/provider": "4.7.1",
+    "@knowledge/api-client": "workspace:*",
     "@knowledge/contracts": "workspace:*",
     "@knowledge/editor-schema": "workspace:*",
     "@knowledge/observability": "workspace:*",
@@ -91,7 +91,6 @@
     "@vue/tsconfig": "^0.9.1",
     "cross-env": "^10.1.0",
     "eslint": "^9.39.5",
-    "openapi-typescript": "^7.13.0",
     "openapi-typescript-helpers": "^0.1.0",
     "tailwindcss": "^4.1.0",
     "typescript": "~6.0.2",

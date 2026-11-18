@@ -5,6 +5,7 @@ SHELL := /bin/bash
 
 API := pnpm --filter @knowledge/api
 WEB := pnpm --filter @knowledge/web
+ADMIN := pnpm --filter @knowledge/admin
 COMPOSE := docker compose
 ENV_FILES := .env apps/api/.env
 
@@ -38,7 +39,7 @@ CA_BUNDLE := $(wildcard certs/extra-ca.pem)
 DEV_ENV := NODE_OPTIONS="$(strip $(DEV_NODE_OPTIONS))" $(if $(CA_BUNDLE),NODE_EXTRA_CA_CERTS="$(CURDIR)/$(CA_BUNDLE)")
 
 .PHONY: dev
-dev: infra-up ## Start EVERYTHING for dev: infra containers + api (:3000) + web (:5173) + worker, watch mode
+dev: infra-up ## Start EVERYTHING for dev: infra containers + api (:3000) + web (:5173) + admin (:5174, open :5173/admin) + worker, watch mode
 	$(DEV_ENV) pnpm exec turbo run dev dev:worker
 
 .PHONY: dev-api
@@ -48,6 +49,10 @@ dev-api: ## Run only the NestJS API in watch mode
 .PHONY: dev-web
 dev-web: ## Run only the SSR frontend in dev mode
 	$(DEV_ENV) $(WEB) run dev
+
+.PHONY: dev-admin
+dev-admin: ## Run only the admin console (#1236) on :5174; open it as :5173/admin (needs dev-web for /login)
+	$(DEV_ENV) $(ADMIN) run dev
 
 .PHONY: dev-worker
 dev-worker: ## Run only the ingestion worker in watch mode (already part of 'make dev')
@@ -75,9 +80,9 @@ ca-add: ## Add a host's missing TLS intermediate to certs/extra-ca.pem: make ca-
 # its --entryFile children run as `dist/worker.main` with no suffix, so the
 # stricter patterns matched only turbo and left every watcher and worker alive.
 # Survivors kept serving stale code and silently re-indexed under an old recipe.
-kill: ## Kill all dev processes of this repo (api, web, worker, mcp, turbo, prisma studio)
+kill: ## Kill all dev processes of this repo (api, web, admin, worker, mcp, turbo, prisma studio)
 	@killed=0; \
-	for pid in $$(pgrep -f 'nest(\.js)? start|turbo|dist/main(\.js)?|dist/worker\.main(\.js)?|dist/mcp\.main(\.js)?|node server|prisma studio' 2>/dev/null); do \
+	for pid in $$(pgrep -f 'nest(\.js)? start|turbo|dist/main(\.js)?|dist/worker\.main(\.js)?|dist/mcp\.main(\.js)?|node server|vite/bin/vite|prisma studio' 2>/dev/null); do \
 	    [ "$$pid" = "$$$$" ] && continue; \
 	    cwd=$$(lsof -a -p $$pid -d cwd -Fn 2>/dev/null | sed -n 's/^n//p'); \
 	    case "$$cwd" in \
@@ -86,7 +91,7 @@ kill: ## Kill all dev processes of this repo (api, web, worker, mcp, turbo, pris
 	    esac; \
 	done; \
 	echo "✔ killed $$killed process(es)"; \
-	for port in 3000 5173; do \
+	for port in 3000 5173 5174; do \
 	    pid=$$(lsof -tiTCP:$$port -sTCP:LISTEN 2>/dev/null | head -1); \
 	    [ -n "$$pid" ] && echo "⚠ port $$port still in use by PID $$pid (not started from this repo — not killed)"; \
 	done; true
@@ -157,7 +162,7 @@ page-links-backfill: ## One-time (#673): record the links on every page's indexe
 
 .PHONY: clean
 clean: ## Remove build artifacts and turbo cache
-	rm -rf .turbo apps/api/dist apps/web/dist
+	rm -rf .turbo apps/api/dist apps/web/dist apps/admin/dist
 	@echo "✔ Cleaned (node_modules kept; use 'make clean-all' to drop them)"
 
 .PHONY: clean-all
@@ -173,10 +178,11 @@ api-schema: ## Generate the OpenAPI schema from the NestJS app -> apps/api/opena
 	node --env-file=apps/api/.env apps/api/dist/scripts/generate-openapi.main.js --out apps/api/openapi.json
 
 .PHONY: api-client
-api-client: api-schema docs-reference ## Regenerate the typed web client: schema -> openapi-typescript -> apps/web/src/shared/api/schema.d.ts
-	$(WEB) run generate:api
+api-client: api-schema docs-reference ## Regenerate the typed client both web apps share: schema -> openapi-typescript -> packages/api-client/src/schema.d.ts
+	pnpm --filter @knowledge/api-client run generate
 	$(WEB) run typecheck
-	@echo "✔ typed client regenerated — commit apps/api/openapi.json + apps/web/src/shared/api/schema.d.ts + reference.generated.json"
+	$(ADMIN) run typecheck
+	@echo "✔ typed client regenerated — commit apps/api/openapi.json + packages/api-client/src/schema.d.ts + reference.generated.json"
 
 .PHONY: docs-reference
 docs-reference: ## Regenerate the docs page's endpoint + MCP tables from openapi.json, the controllers and mcp.service.ts
@@ -342,9 +348,10 @@ env-validate: ## Validate apps/api/.env against the API's zod schema (fail-fast 
 # ---------------------------------------------------------------- smoke / e2e
 
 .PHONY: smoke
-smoke: ## Quick health check: api /docs, web /, arcadedb, minio, postgres, redis, searxng, mailpit
+smoke: ## Quick health check: api /docs, web /, admin, arcadedb, minio, postgres, redis, searxng, mailpit
 	@curl -sfo /dev/null http://localhost:3000/docs   && echo "✔ api      :3000/docs"   || echo "✖ api      :3000 (make dev-api)"
 	@curl -sfo /dev/null http://localhost:5173/       && echo "✔ web      :5173"        || echo "✖ web      :5173 (make dev-web)"
+	@curl -sfo /dev/null http://localhost:5174/admin/ && echo "✔ admin    :5174/admin"  || echo "✖ admin    :5174 (make dev-admin)"
 	@curl -sfo /dev/null http://localhost:2480/api/v1/ready && echo "✔ arcadedb :2480" || echo "✖ arcadedb :2480 (make infra-up)"
 	@curl -sfo /dev/null http://localhost:9000/minio/health/ready && echo "✔ minio    :9000" || echo "✖ minio    :9000 (make infra-up)"
 	@$(COMPOSE) exec -T postgres pg_isready -U knowledge >/dev/null 2>&1 && echo "✔ postgres :5432" || echo "✖ postgres :5432 (make infra-up)"

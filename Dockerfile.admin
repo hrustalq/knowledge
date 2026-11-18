@@ -1,0 +1,86 @@
+# syntax=docker/dockerfile:1.7
+#
+# The platform admin console (#1236): a static SPA, built here and served by
+# Caddy under /admin/. The cluster's front Caddy (Caddyfile, `@console`)
+# routes the app's own host to this container, so the member app's session
+# cookie reaches it and there is no second sign-in. Nothing in it is secret:
+# every byte of data comes from /api/v1/admin/* behind @PlatformAdmin().
+ARG NODE_IMAGE=node:24.21.0-bookworm-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20
+ARG CADDY_IMAGE=caddy:2-alpine@sha256:003a97808e781aa9f7e75cc2f43d34d461099031faf5e20faefb9f61126836f0
+
+# ------------------------------------------------------------------ builder
+FROM ${NODE_IMAGE} AS builder
+ENV PNPM_HOME=/pnpm \
+    PATH=/pnpm:$PATH \
+    COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
+    CI=true
+RUN corepack enable && corepack prepare pnpm@10.30.1 --activate
+WORKDIR /app
+
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+COPY apps/admin/package.json             apps/admin/
+COPY packages/api-client/package.json    packages/api-client/
+COPY packages/contracts/package.json     packages/contracts/
+COPY packages/tsconfig/package.json      packages/tsconfig/
+COPY packages/ui/package.json            packages/ui/
+
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
+    pnpm install --frozen-lockfile --filter "@knowledge/admin..."
+
+COPY packages/ packages/
+COPY apps/admin/ apps/admin/
+
+# VITE_API_URL is inlined at build time; the default /api is the same host,
+# stripped by the front Caddy exactly as for the member app.
+RUN pnpm --filter @knowledge/admin run build
+
+# ------------------------------------------------------------------ runtime
+FROM ${CADDY_IMAGE} AS runtime
+COPY --from=builder /app/apps/admin/dist /srv/admin
+COPY <<'EOF' /etc/caddy/Caddyfile
+{
+	auto_https off
+	admin off
+}
+
+:8080 {
+	encode zstd gzip
+
+	# The console is static and talks only to its own origin, so its policy can
+	# be strict: no inline script, nothing loaded from elsewhere but the fonts.
+	header {
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'"
+		X-Content-Type-Options nosniff
+		Referrer-Policy same-origin
+		X-Robots-Tag noindex
+	}
+
+	@health path /healthz
+	respond @health "ok" 200
+
+	redir /admin /admin/ 308
+
+	handle /admin/assets/* {
+		header Cache-Control "public, max-age=31536000, immutable"
+		root * /srv
+		file_server
+	}
+
+	# Every other path under /admin/ is a route of the SPA.
+	handle /admin/* {
+		header Cache-Control "no-cache"
+		root * /srv
+		try_files {path} /admin/index.html
+		file_server
+	}
+
+	respond 404
+}
+EOF
+
+# Unprivileged: nothing to write but Caddy's own state, which goes to /tmp.
+ENV XDG_CONFIG_HOME=/tmp XDG_DATA_HOME=/tmp
+EXPOSE 8080
+USER 65534
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD \
+  wget -qO- http://127.0.0.1:8080/healthz >/dev/null || exit 1

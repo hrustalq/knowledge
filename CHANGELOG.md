@@ -17,6 +17,13 @@ in the pull request that introduces them — see
 
 ### Added
 
+- A platform admin console at `/admin`, a separate app with its own bundle and image (`knowledge-admin`). It uses
+  the member app's session, so there is no second sign-in, and anyone signed out is sent to `/login` and brought
+  back. Its sections are configuration, monitoring, users and errors, and each one says it is not built yet until
+  its own release fills it. Anyone who is not a platform admin, workspace admins included, gets a "Platform admins
+  only" page, and the console calls no API but `GET /v1/me` before it decides. Locally, `make dev` serves it on :5174;
+  open it at `localhost:5173/admin`, where `/login` works. The old `/admin/users` bookmark now opens the console
+  rather than the Accounts tab. (#1236)
 - The Pages list sorts by created date, last activity or title, either way round. The sort menu sits beside
   **Filters**, and the order is labelled by column ("Newest first", "A → Z"). The choice is remembered per browser,
   and the page loads already in that order. The date on each row is the one the list is sorted by. The filters
@@ -35,6 +42,10 @@ in the pull request that introduces them — see
 
 ### Operations
 
+- New image `ghcr.io/hrustalq/knowledge-admin` (static files served by Caddy on :8080, `/healthz` for probes) and a
+  `/admin` route in `Caddyfile` to `admin:8080`. Until the homelab manifests gain an `admin` Deployment, Service,
+  NetworkPolicy and `knowledge-admin` image entry, `/admin` answers 404 in production and nothing else changes.
+  Rolling back by retag drops the console with no state to undo. (#1236)
 - Migration `20270206100000_agent_run_steps` creates `agent_run_steps` (cascading from `agent_runs`) and indexes
   `ai_usage(agent_run_id)`. It only adds; the previous image never reads the table, so rolling back by retag is safe
   (runs on the old image simply log no steps). (#1247)

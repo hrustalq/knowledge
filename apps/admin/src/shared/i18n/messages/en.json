@@ -1,0 +1,34 @@
+{
+  "common": {
+    "tooLarge": "That is too large to send. Split it up, or attach it as a file instead of pasting it.",
+    "unknownError": "Something went wrong. Try again."
+  },
+  "admin": {
+    "title": "Admin",
+    "nav": {
+      "label": "Console sections",
+      "config": "Configuration",
+      "monitoring": "Monitoring",
+      "users": "Users",
+      "errors": "Errors"
+    },
+    "backToApp": "Back to the app",
+    "signedInAs": "Signed in as {name}",
+    "sections": {
+      "config": "Effective settings of the running API, and where each value came from.",
+      "monitoring": "Health of every store, queue and background process.",
+      "users": "Every account on the platform, and the workspaces each one belongs to.",
+      "errors": "Errors the platform logged, grouped by what they have in common."
+    },
+    "notBuilt": {
+      "title": "Not built yet",
+      "description": "This section arrives in a later release."
+    },
+    "gate": {
+      "forbiddenTitle": "Platform admins only",
+      "forbiddenDescription": "The admin console runs the whole platform, so it is open only to platform admins. A workspace admin manages a workspace from its settings.",
+      "errorTitle": "Could not check who is signed in",
+      "retry": "Try again"
+    }
+  }
+}

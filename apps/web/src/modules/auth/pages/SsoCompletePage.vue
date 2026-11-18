@@ -14,6 +14,7 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { completeSso } from '@/modules/auth/model/sso'
+import { isOtherApp } from '@/shared/utils/own-path'
 import { Button } from '@knowledge/ui/button'
 import { Card, CardContent, CardHeader } from '@knowledge/ui/card'
 
@@ -29,7 +30,8 @@ onMounted(async () => {
     pathname: window.location.pathname,
     replaceUrl: (url) => history.replaceState(history.state, '', url),
     exchange: (code) => auth.exchangeSsoCode(code),
-    navigate: (path) => router.replace(path),
+    // The admin console is another app on this host (#1236): a full load.
+    navigate: async (path) => (isOtherApp(path) ? window.location.replace(path) : router.replace(path)),
   })
   failed.value = outcome === 'no-code'
 })

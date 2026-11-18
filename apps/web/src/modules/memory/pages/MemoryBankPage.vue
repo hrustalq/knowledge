@@ -25,7 +25,7 @@ import { api } from '@/shared/api/client'
 import { apiQueryOptions } from '@/shared/api/queries'
 import { errorMessage } from '@/shared/api/errors'
 import { formatDateTime } from '@/shared/utils/format'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { useProjectsStore } from '@/stores/projects'
 import { Button } from '@knowledge/ui/button'
 import { Input } from '@knowledge/ui/input'
@@ -45,7 +45,7 @@ const SECTION_SCOPE = 'bank'
 
 const { t } = useI18n()
 const route = useRoute()
-const auth = useAuthStore()
+const canContribute = usePermission('workspace:contribute')
 const projects = useProjectsStore()
 const queryClient = useQueryClient()
 const id = computed(() => String(route.params.id))
@@ -156,7 +156,7 @@ watch(section, (now) => {
       <div class="flex flex-wrap items-end gap-3">
         <div class="w-full space-y-1.5 sm:w-64">
           <label for="bank-project" class="text-xs text-muted-foreground">{{ t('memory.bank.project') }}</label>
-          <Select :model-value="boundTo" :disabled="!auth.canEdit || binding" @update:model-value="(v) => bind(String(v))">
+          <Select :model-value="boundTo" :disabled="!canContribute || binding" @update:model-value="(v) => bind(String(v))">
             <SelectTrigger id="bank-project" class="w-full"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem :value="WORKSPACE">{{ t('memory.wholeWorkspace') }}</SelectItem>
@@ -204,7 +204,7 @@ watch(section, (now) => {
                   <span v-if="m.tags.length" class="font-mono">{{ m.tags.join(' ') }}</span>
                 </p>
               </div>
-              <div v-if="auth.canEdit" class="-my-1 flex shrink-0 items-start gap-0.5">
+              <div v-if="canContribute" class="-my-1 flex shrink-0 items-start gap-0.5">
                 <Button size="icon" variant="ghost" class="size-8 text-muted-foreground" :aria-label="t('memory.promote.action')" :title="t('memory.promote.action')" @click="promoting = m">
                   <FileUp class="size-4" />
                 </Button>

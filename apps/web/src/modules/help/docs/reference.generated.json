@@ -162,6 +162,26 @@
     },
     {
       "method": "GET",
+      "path": "/v1/admin/errors",
+      "tag": "admin",
+      "summary": "Error groups (derived fingerprint) in a period, newest first, with count, first and last seen (platform admin)",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/errors/{id}",
+      "tag": "admin",
+      "summary": "One error event with its trace id, context and stack, plus its group (platform admin)",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": true
+    },
+    {
+      "method": "GET",
       "path": "/v1/admin/health",
       "tag": "admin",
       "summary": "Every store probed (status, latency), BullMQ counts per queue, process heartbeats and each sweeper's last tick (platform admin)",

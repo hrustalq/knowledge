@@ -20,10 +20,6 @@
       "users": "Every account on the platform, and the workspaces each one belongs to.",
       "errors": "Errors the platform logged, grouped by what they have in common."
     },
-    "notBuilt": {
-      "title": "Not built yet",
-      "description": "This section arrives in a later release."
-    },
     "gate": {
       "forbiddenTitle": "Platform admins only",
       "forbiddenDescription": "The admin console runs the whole platform, so it is open only to platform admins. A workspace admin manages a workspace from its settings.",
@@ -217,6 +213,83 @@
       "revokeAllTitle": "Sign {name} out everywhere?",
       "revokeAllBody": "Every browser and device they use has to log in again. Their API keys keep working.",
       "revokedAll": "Sessions signed out: {n}"
+    },
+    "errors": {
+      "refresh": "Refresh",
+      "retention": "Kept for {days} days",
+      "notRecording": "Not recording: OPS_SINK_ENABLED is off on this API",
+      "shown": "Groups: {n}",
+      "shownMore": "Groups: {n}, more below",
+      "loadMore": "Load more",
+      "loading": "Loading…",
+      "noneMatch": "No errors match",
+      "noneMatchHint": "Nothing in this period matches the filters. Widen the period or clear a filter.",
+      "none": "No errors in this period",
+      "noneHint": "Nothing was logged at error level. A new error shows up here within seconds.",
+      "noneNotRecording": "This API does not record errors (OPS_SINK_ENABLED is off), so an empty list proves nothing.",
+      "countsInPeriod": "Counts and first seen cover the selected period. An error's own page counts everything still kept.",
+      "noMessage": "(no message)",
+      "workspaces": "Workspaces: {n}",
+      "noWorkspace": "No workspace",
+      "allErrors": "All errors",
+      "notFound": "Error not found",
+      "notFoundHint": "It may have passed the retention window and been deleted.",
+      "copyTrace": "Copy trace id",
+      "traceCopied": "Trace id copied",
+      "copyFailed": "Could not copy. Select the trace id instead.",
+      "seenTimes": "Occurrences: {n}",
+      "firstSeen": "first seen",
+      "lastSeen": "last seen",
+      "details": "Details",
+      "stack": "Stack",
+      "noStack": "No stack was logged with this error.",
+      "fields": "Logged fields",
+      "recent": "Recent occurrences",
+      "filter": {
+        "period": "Period",
+        "process": "Process",
+        "workspace": "Workspace",
+        "text": "Message or trace id",
+        "textPlaceholder": "Text in the message, or a trace id"
+      },
+      "period": {
+        "1": "Last hour",
+        "24": "Last 24 hours",
+        "168": "Last 7 days",
+        "720": "Last 30 days"
+      },
+      "source": {
+        "http": "HTTP request",
+        "job": "Queue job",
+        "ws": "WebSocket",
+        "mcp": "MCP tool call",
+        "cli": "Outside a request or job"
+      },
+      "level": {
+        "warn": "Warning",
+        "error": "Error",
+        "fatal": "Fatal"
+      },
+      "cols": {
+        "error": "Error",
+        "count": "Count",
+        "lastSeen": "Last seen",
+        "firstSeen": "First seen",
+        "where": "Seen in"
+      },
+      "field": {
+        "trace": "Trace id",
+        "message": "Message",
+        "process": "Process",
+        "source": "Source",
+        "context": "Logged by",
+        "route": "Route",
+        "code": "Code",
+        "duration": "Duration",
+        "workspace": "Workspace",
+        "user": "User"
+      },
+      "processNone": "Not recorded"
     }
   }
 }

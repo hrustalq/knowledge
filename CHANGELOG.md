@@ -17,6 +17,14 @@ in the pull request that introduces them — see
 
 ### Added
 
+- The admin console's **Errors** section lists the errors the platform logged, grouped so a repeat shows once with
+  how many times it happened, when it was first and last seen, and which processes and how many workspaces it hit.
+  Two errors are the same when they come from the same place and differ only in ids, numbers or quoted values; a
+  catch-all like "Unhandled exception" is split by the underlying error's own message, which the row also shows.
+  Filter by period (last hour to last 30 days), process, workspace, and message text or a trace id. Opening an error
+  shows its trace id (with a copy button), process, route, workspace, user, stack and every field that was logged,
+  plus the group's 20 most recent occurrences. Platform admins only, through `GET /v1/admin/errors` and
+  `GET /v1/admin/errors/:id`. Errors written before this release show no process. (#1240)
 - The admin console's **Users** section lists every account with its status, platform-admin flag, last sign-in and
   the workspaces it belongs to (with roles), filterable by status, role, workspace and name or email. Each account
   has its own page where a platform admin renames it, sets its password, makes or revokes platform admin, disables
@@ -66,6 +74,11 @@ in the pull request that introduces them — see
 
 ### Operations
 
+- Migration `20270207100000_ops_events_process` adds a nullable `process` column and a `created_at` index to
+  `ops_events`. It is additive and survives a rollback by retag: the previous image neither reads nor writes the
+  column. New env var `OPS_EVENTS_RETENTION_DAYS` (default 30): the worker now deletes `ops_events` rows older than
+  that once an hour, in batches. Nothing deleted them before, so the first passes after deploy clear the backlog
+  over a few hours. Set it in the GitHub production environment only to keep a different window. (#1240)
 - Every long-running process (API, worker, learner, git remote) now writes a heartbeat to Redis every 15 s, and
   every sweeper pass, into two hashes: `ops:processes` and `ops:ticks`. The learner did not use Redis before. Where
   a NetworkPolicy limits its egress, allow learner → redis:6379, or the console reports it as not live. The k3s

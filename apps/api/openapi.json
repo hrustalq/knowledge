@@ -3406,6 +3406,177 @@
         ]
       }
     },
+    "/v1/admin/errors": {
+      "get": {
+        "operationId": "AdminErrorsController_list",
+        "parameters": [
+          {
+            "name": "hours",
+            "required": false,
+            "in": "query",
+            "description": "Hours back from now. Omitted: 24",
+            "schema": {
+              "type": "number",
+              "enum": [
+                1,
+                24,
+                168,
+                720
+              ]
+            }
+          },
+          {
+            "name": "process",
+            "required": false,
+            "in": "query",
+            "description": "Comma-separated processes (api, worker, learner, git)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "workspaceId",
+            "required": false,
+            "in": "query",
+            "description": "Comma-separated workspace ids",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "Text the message contains, or a trace id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "The previous page's nextCursor",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminErrorsResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Error groups (derived fingerprint) in a period, newest first, with count, first and last seen (platform admin)",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/errors/{id}": {
+      "get": {
+        "operationId": "AdminErrorsController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminErrorResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "One error event with its trace id, context and stack, plus its group (platform admin)",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/v1/workspaces": {
       "get": {
         "operationId": "WorkspacesController_list",
@@ -54309,6 +54480,309 @@
           "arcadedb",
           "opensearch",
           "searxng"
+        ]
+      },
+      "AdminErrorEvent": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "traceId": {
+            "type": "string"
+          },
+          "process": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OpsProcessKind"
+              }
+            ],
+            "nullable": true
+          },
+          "source": {
+            "type": "string"
+          },
+          "level": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "nullable": true
+          },
+          "message": {
+            "type": "string"
+          },
+          "context": {
+            "type": "string",
+            "nullable": true
+          },
+          "route": {
+            "type": "string",
+            "nullable": true
+          },
+          "durationMs": {
+            "type": "number",
+            "nullable": true
+          },
+          "workspaceId": {
+            "type": "string",
+            "nullable": true
+          },
+          "workspaceName": {
+            "type": "string",
+            "nullable": true
+          },
+          "userId": {
+            "type": "string",
+            "nullable": true
+          },
+          "userEmail": {
+            "type": "string",
+            "nullable": true
+          },
+          "stack": {
+            "type": "string",
+            "nullable": true
+          },
+          "fields": {
+            "type": "object",
+            "additionalProperties": {}
+          }
+        },
+        "required": [
+          "id",
+          "createdAt",
+          "traceId",
+          "process",
+          "source",
+          "level",
+          "code",
+          "message",
+          "context",
+          "route",
+          "durationMs",
+          "workspaceId",
+          "workspaceName",
+          "userId",
+          "userEmail",
+          "stack",
+          "fields"
+        ]
+      },
+      "AdminErrorGroup": {
+        "type": "object",
+        "properties": {
+          "fingerprint": {
+            "type": "string"
+          },
+          "latestId": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string",
+            "nullable": true
+          },
+          "level": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "nullable": true
+          },
+          "source": {
+            "type": "string"
+          },
+          "context": {
+            "type": "string",
+            "nullable": true
+          },
+          "route": {
+            "type": "string",
+            "nullable": true
+          },
+          "processes": {
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/OpsProcessKind"
+                }
+              ],
+              "nullable": true
+            }
+          },
+          "count": {
+            "type": "number"
+          },
+          "workspaceCount": {
+            "type": "number"
+          },
+          "firstSeenAt": {
+            "type": "string"
+          },
+          "lastSeenAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "fingerprint",
+          "latestId",
+          "message",
+          "detail",
+          "level",
+          "code",
+          "source",
+          "context",
+          "route",
+          "processes",
+          "count",
+          "workspaceCount",
+          "firstSeenAt",
+          "lastSeenAt"
+        ]
+      },
+      "AdminErrorOccurrence": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "traceId": {
+            "type": "string"
+          },
+          "process": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OpsProcessKind"
+              }
+            ],
+            "nullable": true
+          },
+          "workspaceId": {
+            "type": "string",
+            "nullable": true
+          },
+          "workspaceName": {
+            "type": "string",
+            "nullable": true
+          },
+          "route": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "createdAt",
+          "traceId",
+          "process",
+          "workspaceId",
+          "workspaceName",
+          "route"
+        ]
+      },
+      "AdminErrorResponse": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "$ref": "#/components/schemas/AdminErrorEvent"
+          },
+          "group": {
+            "type": "object",
+            "properties": {
+              "fingerprint": {
+                "type": "string"
+              },
+              "count": {
+                "type": "number"
+              },
+              "firstSeenAt": {
+                "type": "string"
+              },
+              "lastSeenAt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "fingerprint",
+              "count",
+              "firstSeenAt",
+              "lastSeenAt"
+            ]
+          },
+          "recent": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdminErrorOccurrence"
+            }
+          }
+        },
+        "required": [
+          "event",
+          "group",
+          "recent"
+        ]
+      },
+      "AdminErrorWorkspaceFacet": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "count": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "workspaceId",
+          "name",
+          "count"
+        ]
+      },
+      "AdminErrorsResponse": {
+        "type": "object",
+        "properties": {
+          "groups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdminErrorGroup"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true
+          },
+          "workspaces": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdminErrorWorkspaceFacet"
+            }
+          },
+          "retentionDays": {
+            "type": "number"
+          },
+          "recording": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "groups",
+          "nextCursor",
+          "workspaces",
+          "retentionDays",
+          "recording"
         ]
       },
       "AdminHealthResponse": {

@@ -4,6 +4,8 @@ import type {
   ActivityCalendarResponse,
   AddFindingTermResponse,
   AdminConfigResponse,
+  AdminErrorResponse,
+  AdminErrorsResponse,
   AdminHealthResponse,
   AgentLearningSummary,
   AgentOutcomesResponse,
@@ -391,6 +393,8 @@ export interface ContractResponses {
   ActivityCalendarResponse: ActivityCalendarResponse;
   AddFindingTermResponse: AddFindingTermResponse;
   AdminConfigResponse: AdminConfigResponse;
+  AdminErrorResponse: AdminErrorResponse;
+  AdminErrorsResponse: AdminErrorsResponse;
   AdminHealthResponse: AdminHealthResponse;
   AgentLearningSummary: AgentLearningSummary;
   AgentOutcomesResponse: AgentOutcomesResponse;

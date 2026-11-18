@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { currentTrace } from '@knowledge/observability';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type { Env } from '../config/env.js';
-import { UUID_RE } from '@knowledge/contracts';
+import { UUID_RE, type OpsProcessKind } from '@knowledge/contracts';
 
 const FLUSH_MS = 2_000;
 const MAX_BUFFER = 500;
@@ -18,6 +18,7 @@ export interface OpsEventInput {
 interface OpsEventRow {
   traceId: string;
   source: string;
+  process: OpsProcessKind | null;
   level: string;
   code: string | null;
   message: string;
@@ -37,6 +38,15 @@ function serialize(value: unknown): unknown {
 }
 
 let registered: OpsSinkService | undefined;
+let processKind: OpsProcessKind | null = null;
+
+/**
+ * Which entrypoint this is, for every row it writes (#1240). Set by
+ * `OpsBeacon`, so a process with no beacon (MCP stdio, a script) writes null.
+ */
+export function stampOpsProcess(kind: OpsProcessKind | null): void {
+  processKind = kind;
+}
 
 /** The sink, once DI has built it. Undefined before boot completes, by design. */
 export function opsSink(): OpsSinkService | undefined {
@@ -113,6 +123,7 @@ export class OpsSinkService implements OnModuleInit, OnModuleDestroy {
     this.buffer.push({
       traceId: trace?.traceId ?? 'unscoped',
       source: trace?.source ?? 'cli',
+      process: processKind,
       level: entry.level,
       code: typeof code === 'string' ? code : null,
       message: entry.message.slice(0, 2_000),

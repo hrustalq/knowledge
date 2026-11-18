@@ -116,3 +116,93 @@ export interface AdminHealthResponse {
   processes: AdminProcess[] | null;
   ticks: AdminTick[] | null;
 }
+
+// --- errors (#1240) --------------------------------------------------------
+
+/** The periods the errors list offers, in hours. */
+export const ADMIN_ERROR_PERIODS = [1, 24, 168, 720] as const;
+
+/**
+ * Repeats of one error in the period. The fingerprint is derived when read
+ * (source + logger context + the message with ids, numbers and quoted values
+ * folded), never stored, so changing the rule regroups history at once.
+ */
+export interface AdminErrorGroup {
+  fingerprint: string;
+  /** The newest occurrence: what the row shows and where it links. */
+  latestId: string;
+  message: string;
+  /** The logged error's own message, on one line, when it says more than `message` (a catch-all's "Unhandled exception"). */
+  detail: string | null;
+  level: string;
+  code: string | null;
+  /** 'http' | 'job' | 'ws' | 'mcp' | 'cli' */
+  source: string;
+  /** The logger context (the class that logged it), when the call site had one. */
+  context: string | null;
+  route: string | null;
+  /** Every process the group was seen in; null for a row written before processes were recorded. */
+  processes: Array<OpsProcessKind | null>;
+  count: number;
+  workspaceCount: number;
+  firstSeenAt: string;
+  lastSeenAt: string;
+}
+
+export interface AdminErrorWorkspaceFacet {
+  workspaceId: string;
+  name: string;
+  count: number;
+}
+
+export interface AdminErrorsResponse {
+  groups: AdminErrorGroup[];
+  /** Pass back as `cursor` for the next page; null on the last one. */
+  nextCursor: string | null;
+  /** Workspaces with errors in the period, most first: the workspace filter's options. */
+  workspaces: AdminErrorWorkspaceFacet[];
+  /** How long rows are kept (`OPS_EVENTS_RETENTION_DAYS`). */
+  retentionDays: number;
+  /** `OPS_SINK_ENABLED` on this API process. Off, an empty list means nothing was recorded, not nothing failed. */
+  recording: boolean;
+}
+
+export interface AdminErrorOccurrence {
+  id: string;
+  createdAt: string;
+  traceId: string;
+  process: OpsProcessKind | null;
+  workspaceId: string | null;
+  workspaceName: string | null;
+  route: string | null;
+}
+
+export interface AdminErrorEvent {
+  id: string;
+  createdAt: string;
+  traceId: string;
+  process: OpsProcessKind | null;
+  source: string;
+  level: string;
+  code: string | null;
+  message: string;
+  context: string | null;
+  route: string | null;
+  durationMs: number | null;
+  workspaceId: string | null;
+  workspaceName: string | null;
+  userId: string | null;
+  userEmail: string | null;
+  /** The serialized error's stack, when one was logged. */
+  stack: string | null;
+  /** Everything the call site logged, the serialized error included. */
+  fields: Record<string, unknown>;
+}
+
+export interface AdminErrorResponse {
+  event: AdminErrorEvent;
+  /** The same fingerprint across everything still kept. */
+  group: { fingerprint: string; count: number; firstSeenAt: string; lastSeenAt: string };
+  /** The group's newest occurrences, this one among them when recent. */
+  recent: AdminErrorOccurrence[];
+}

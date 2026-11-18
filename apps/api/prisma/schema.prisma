@@ -1979,6 +1979,10 @@ model OpsEvent {
   traceId     String   @map("trace_id")
   /// 'http' | 'job' | 'ws' | 'mcp' | 'cli'
   source      String
+  /// The entrypoint that wrote it (`OpsProcessKind`: api | worker | learner |
+  /// git), stamped by the sink (#1240). Null for a process with no beacon (the
+  /// MCP stdio server, a script) and for every row written before the column.
+  process     String?
   /// pino level name — in practice 'warn' | 'error' | 'fatal'.
   level       String
   /// OpsCode or ApiErrorCode from contracts. A closed set, so failures can be
@@ -2000,6 +2004,8 @@ model OpsEvent {
   @@index([workspaceId, createdAt])
   @@index([traceId])
   @@index([code, createdAt])
+  /// The admin errors list (#1240) and the retention sweep read across workspaces by time.
+  @@index([createdAt])
   @@map("ops_events")
 }
 

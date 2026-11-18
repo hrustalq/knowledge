@@ -6,6 +6,7 @@ import { reportTicksTo, Ticker, type TickReport } from '../common/ticker.js';
 import { PRODUCT_VERSION } from '../config/version.js';
 import { RedisModule } from '../redis/redis.module.js';
 import { SharedRedis } from '../redis/shared-redis.js';
+import { stampOpsProcess } from './ops-sink.service.js';
 
 /**
  * What the admin console's monitoring view (#1238) knows about processes it is
@@ -51,6 +52,8 @@ class OpsBeacon implements OnModuleInit, OnModuleDestroy {
     private readonly redis: SharedRedis,
   ) {
     this.field = `${kind}:${this.host}:${process.pid}`;
+    // In the constructor, so it holds before any module's init can log an error.
+    stampOpsProcess(kind);
   }
 
   onModuleInit(): void {

@@ -730,6 +730,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/errors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Error groups (derived fingerprint) in a period, newest first, with count, first and last seen (platform admin) */
+        get: operations["AdminErrorsController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/errors/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One error event with its trace id, context and stack, plus its group (platform admin) */
+        get: operations["AdminErrorsController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workspaces": {
         parameters: {
             query?: never;
@@ -11865,6 +11899,74 @@ export interface components {
         };
         /** @enum {string} */
         AdminDependencyName: "postgres" | "redis" | "minio" | "arcadedb" | "opensearch" | "searxng";
+        AdminErrorEvent: {
+            id: string;
+            createdAt: string;
+            traceId: string;
+            process: components["schemas"]["OpsProcessKind"] | null;
+            source: string;
+            level: string;
+            code: string | null;
+            message: string;
+            context: string | null;
+            route: string | null;
+            durationMs: number | null;
+            workspaceId: string | null;
+            workspaceName: string | null;
+            userId: string | null;
+            userEmail: string | null;
+            stack: string | null;
+            fields: {
+                [key: string]: unknown;
+            };
+        };
+        AdminErrorGroup: {
+            fingerprint: string;
+            latestId: string;
+            message: string;
+            detail: string | null;
+            level: string;
+            code: string | null;
+            source: string;
+            context: string | null;
+            route: string | null;
+            processes: (components["schemas"]["OpsProcessKind"] | null)[];
+            count: number;
+            workspaceCount: number;
+            firstSeenAt: string;
+            lastSeenAt: string;
+        };
+        AdminErrorOccurrence: {
+            id: string;
+            createdAt: string;
+            traceId: string;
+            process: components["schemas"]["OpsProcessKind"] | null;
+            workspaceId: string | null;
+            workspaceName: string | null;
+            route: string | null;
+        };
+        AdminErrorResponse: {
+            event: components["schemas"]["AdminErrorEvent"];
+            group: {
+                fingerprint: string;
+                count: number;
+                firstSeenAt: string;
+                lastSeenAt: string;
+            };
+            recent: components["schemas"]["AdminErrorOccurrence"][];
+        };
+        AdminErrorWorkspaceFacet: {
+            workspaceId: string;
+            name: string;
+            count: number;
+        };
+        AdminErrorsResponse: {
+            groups: components["schemas"]["AdminErrorGroup"][];
+            nextCursor: string | null;
+            workspaces: components["schemas"]["AdminErrorWorkspaceFacet"][];
+            retentionDays: number;
+            recording: boolean;
+        };
         AdminHealthResponse: {
             checkedAt: string;
             version: string;
@@ -20421,6 +20523,99 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminHealthResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AdminErrorsController_list: {
+        parameters: {
+            query?: {
+                /** @description Hours back from now. Omitted: 24 */
+                hours?: 1 | 24 | 168 | 720;
+                /** @description Comma-separated processes (api, worker, learner, git) */
+                process?: string;
+                /** @description Comma-separated workspace ids */
+                workspaceId?: string;
+                /** @description Text the message contains, or a trace id */
+                q?: string;
+                /** @description The previous page's nextCursor */
+                cursor?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminErrorsResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AdminErrorsController_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminErrorResponse"];
                 };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */

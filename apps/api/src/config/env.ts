@@ -1099,6 +1099,8 @@ export const envSchema = z.object({
    * either way; this only controls whether errors are also queryable in SQL.
    */
   OPS_SINK_ENABLED: boolish(true),
+  /** Days ops_events rows are kept; the worker's OpsRetentionSweeper deletes older ones (#1240). */
+  OPS_EVENTS_RETENTION_DAYS: z.coerce.number().int().positive().default(30),
   /**
    * Write the backtest event stream (search / ai / ingest) to LOG_DIR. Separate
    * from LOG_LEVEL on purpose: these are measurements, not diagnostics, and a

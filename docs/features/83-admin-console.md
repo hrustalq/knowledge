@@ -8,8 +8,8 @@ platform: configuration, monitoring, users and errors. Workspace settings keep w
 | 1 | [#1236] | [#1275] | `apps/admin`, its image and route; the platform-admin gate; `@knowledge/api-client` |
 | 2 | [#1237] | [#1276] | The configuration view: `GET /v1/admin/config` |
 | 3 | [#1238] | [#1277] | Monitoring: `GET /v1/admin/health`, `GET /healthz`, heartbeats and sweeper ticks |
-| 4 | [#1239] | — | Users: the roster, one account's page, `user.*` audit actions; Accounts leaves `/settings/access` |
-| 5 | [#1240] | — | Errors over `ops_events` |
+| 4 | [#1239] | [#1278] | Users: the roster, one account's page, `user.*` audit actions; Accounts leaves `/settings/access` |
+| 5 | [#1240] | — | Errors over `ops_events`: `GET /v1/admin/errors`, a `process` column, `OPS_EVENTS_RETENTION_DAYS` |
 
 [#1236]: https://github.com/hrustalq/knowledge/issues/1236
 [#1237]: https://github.com/hrustalq/knowledge/issues/1237
@@ -19,6 +19,7 @@ platform: configuration, monitoring, users and errors. Workspace settings keep w
 [#1275]: https://github.com/hrustalq/knowledge/pull/1275
 [#1276]: https://github.com/hrustalq/knowledge/pull/1276
 [#1277]: https://github.com/hrustalq/knowledge/pull/1277
+[#1278]: https://github.com/hrustalq/knowledge/pull/1278
 
 ## The app and its door
 
@@ -137,3 +138,33 @@ the profile page and the console draw a session the same way. The kit keeps Intl
 takes a `when` formatter. The Intl formatters both apps need (`formatRelative`, `formatDateTime`,
 `formatDuration`, …) are now `@knowledge/contracts/format`, taking an explicit locale. `apps/web`'s
 `shared/utils/format.ts` wraps them with the app's locale, and Monitoring dropped its inline copies.
+
+## Errors
+
+`ops_events` has been written since the observability work (`OpsSinkService`: every `error`/`fatal` log, buffered
+and flushed every 2 s, while `OPS_SINK_ENABLED` is on) and nothing read it. The Errors section is its reader.
+
+- **The list, `/errors`.** `GET /v1/admin/errors` (`AdminErrorsController`, `@PlatformAdmin()`) returns groups,
+  newest last-seen first, 50 a page with a keyset cursor (`last_seen` to the microsecond + fingerprint, so a
+  page boundary never repeats or skips a group). Filters run in SQL: a period (`hours` 1, 24, 168 or 720, a pinned
+  scope on the bar), process, workspace, and text that matches the message (contains) or a trace id (exact).
+  The workspace options are the period's workspaces with errors, returned beside the groups. A group's count and
+  first seen cover the period; the error's own page counts everything still kept.
+- **The fingerprint is derived, never stored** (`FINGERPRINT_SQL`, `admin-errors.service.ts`, the one spelling):
+  md5 of source, the logger context (`fields.ctx`) and the message plus the logged error's own type and message,
+  with uuids, quoted values and numbers folded. The error's own text is in it because a catch-all logs one
+  sentence for everything (`ApiExceptionFilter`: "Unhandled exception"), which alone made every 500 one group.
+  The list shows that text under the message as `detail`. A better rule regroups history on the next read.
+- **One error, `/errors/:id`.** `GET /v1/admin/errors/:id`: trace id (with a copy button), process, source,
+  logger, route, code, duration, workspace and user, the stack (`fields.err.stack`), every logged field, and the
+  group's 20 newest occurrences. The group read filters on source and context before the regex, which the
+  fingerprint starts with.
+- **Which process.** `ops_events.process` (nullable, migration `20270207100000_ops_events_process`, with a
+  `created_at` index) is stamped by the sink from `stampOpsProcess`, which `OpsBeacon` calls in its constructor,
+  so only the four long-running entrypoints write one. Rows from before the column, and from the MCP stdio
+  process or a script, show "Not recorded". A row written outside any request or job context has source `cli`.
+- **Retention.** `OpsRetentionSweeper`, provided by `WorkerModule` so one process sweeps, deletes rows older than
+  `OPS_EVENTS_RETENTION_DAYS` (default 30) once an hour, 5,000 at a time, at most 20 batches a pass. None existed
+  before. When `OPS_SINK_ENABLED` is off the response says `recording: false` and the page says that an empty
+  list proves nothing.
+

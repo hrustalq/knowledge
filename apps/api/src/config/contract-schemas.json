@@ -483,6 +483,309 @@
       "searxng"
     ]
   },
+  "AdminErrorEvent": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "createdAt": {
+        "type": "string"
+      },
+      "traceId": {
+        "type": "string"
+      },
+      "process": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/OpsProcessKind"
+          }
+        ],
+        "nullable": true
+      },
+      "source": {
+        "type": "string"
+      },
+      "level": {
+        "type": "string"
+      },
+      "code": {
+        "type": "string",
+        "nullable": true
+      },
+      "message": {
+        "type": "string"
+      },
+      "context": {
+        "type": "string",
+        "nullable": true
+      },
+      "route": {
+        "type": "string",
+        "nullable": true
+      },
+      "durationMs": {
+        "type": "number",
+        "nullable": true
+      },
+      "workspaceId": {
+        "type": "string",
+        "nullable": true
+      },
+      "workspaceName": {
+        "type": "string",
+        "nullable": true
+      },
+      "userId": {
+        "type": "string",
+        "nullable": true
+      },
+      "userEmail": {
+        "type": "string",
+        "nullable": true
+      },
+      "stack": {
+        "type": "string",
+        "nullable": true
+      },
+      "fields": {
+        "type": "object",
+        "additionalProperties": {}
+      }
+    },
+    "required": [
+      "id",
+      "createdAt",
+      "traceId",
+      "process",
+      "source",
+      "level",
+      "code",
+      "message",
+      "context",
+      "route",
+      "durationMs",
+      "workspaceId",
+      "workspaceName",
+      "userId",
+      "userEmail",
+      "stack",
+      "fields"
+    ]
+  },
+  "AdminErrorGroup": {
+    "type": "object",
+    "properties": {
+      "fingerprint": {
+        "type": "string"
+      },
+      "latestId": {
+        "type": "string"
+      },
+      "message": {
+        "type": "string"
+      },
+      "detail": {
+        "type": "string",
+        "nullable": true
+      },
+      "level": {
+        "type": "string"
+      },
+      "code": {
+        "type": "string",
+        "nullable": true
+      },
+      "source": {
+        "type": "string"
+      },
+      "context": {
+        "type": "string",
+        "nullable": true
+      },
+      "route": {
+        "type": "string",
+        "nullable": true
+      },
+      "processes": {
+        "type": "array",
+        "items": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/OpsProcessKind"
+            }
+          ],
+          "nullable": true
+        }
+      },
+      "count": {
+        "type": "number"
+      },
+      "workspaceCount": {
+        "type": "number"
+      },
+      "firstSeenAt": {
+        "type": "string"
+      },
+      "lastSeenAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "fingerprint",
+      "latestId",
+      "message",
+      "detail",
+      "level",
+      "code",
+      "source",
+      "context",
+      "route",
+      "processes",
+      "count",
+      "workspaceCount",
+      "firstSeenAt",
+      "lastSeenAt"
+    ]
+  },
+  "AdminErrorOccurrence": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "createdAt": {
+        "type": "string"
+      },
+      "traceId": {
+        "type": "string"
+      },
+      "process": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/OpsProcessKind"
+          }
+        ],
+        "nullable": true
+      },
+      "workspaceId": {
+        "type": "string",
+        "nullable": true
+      },
+      "workspaceName": {
+        "type": "string",
+        "nullable": true
+      },
+      "route": {
+        "type": "string",
+        "nullable": true
+      }
+    },
+    "required": [
+      "id",
+      "createdAt",
+      "traceId",
+      "process",
+      "workspaceId",
+      "workspaceName",
+      "route"
+    ]
+  },
+  "AdminErrorResponse": {
+    "type": "object",
+    "properties": {
+      "event": {
+        "$ref": "#/components/schemas/AdminErrorEvent"
+      },
+      "group": {
+        "type": "object",
+        "properties": {
+          "fingerprint": {
+            "type": "string"
+          },
+          "count": {
+            "type": "number"
+          },
+          "firstSeenAt": {
+            "type": "string"
+          },
+          "lastSeenAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "fingerprint",
+          "count",
+          "firstSeenAt",
+          "lastSeenAt"
+        ]
+      },
+      "recent": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/AdminErrorOccurrence"
+        }
+      }
+    },
+    "required": [
+      "event",
+      "group",
+      "recent"
+    ]
+  },
+  "AdminErrorWorkspaceFacet": {
+    "type": "object",
+    "properties": {
+      "workspaceId": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "count": {
+        "type": "number"
+      }
+    },
+    "required": [
+      "workspaceId",
+      "name",
+      "count"
+    ]
+  },
+  "AdminErrorsResponse": {
+    "type": "object",
+    "properties": {
+      "groups": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/AdminErrorGroup"
+        }
+      },
+      "nextCursor": {
+        "type": "string",
+        "nullable": true
+      },
+      "workspaces": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/AdminErrorWorkspaceFacet"
+        }
+      },
+      "retentionDays": {
+        "type": "number"
+      },
+      "recording": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "groups",
+      "nextCursor",
+      "workspaces",
+      "retentionDays",
+      "recording"
+    ]
+  },
   "AdminHealthResponse": {
     "type": "object",
     "properties": {

@@ -24,7 +24,7 @@ in the pull request that introduces them — see
   missing only while their env flag is on. **Queues** shows waiting, active, delayed and failed counts for every
   BullMQ queue; waiting includes a paused queue's jobs. **Background tasks** shows each sweeper's last pass, how
   long it took, and whether it failed or is late (no pass in three intervals). The counts come from
-  `GET /v1/admin/health`, platform admins only. A new `GET /health` answers `{"status":"ok"}` without touching any
+  `GET /v1/admin/health`, platform admins only. A new `GET /healthz` answers `{"status":"ok"}` without touching any
   store, for liveness probes. (#1238)
 - The admin console's **Configuration** section lists every environment setting the running API resolved, grouped
   (core, storage, sign-in, AI, …), with its effective value and whether it came from the environment or the
@@ -60,7 +60,7 @@ in the pull request that introduces them — see
 - Every long-running process (API, worker, learner, git remote) now writes a heartbeat to Redis every 15 s, and
   every sweeper pass, into two hashes: `ops:processes` and `ops:ticks`. The learner did not use Redis before. Where
   a NetworkPolicy limits its egress, allow learner → redis:6379, or the console reports it as not live. The k3s
-  liveness and readiness probes can point at `GET /health` (homelab repo, tracked on #1274). No migration and no
+  liveness and readiness probes can point at `GET /healthz` (homelab repo, tracked on #1274). No migration and no
   new env var; rolling back by retag leaves the two hashes behind, harmless and pruned by nothing. (#1238)
 - New image `ghcr.io/hrustalq/knowledge-admin` (static files served by Caddy on :8080, `/healthz` for probes) and a
   `/admin` route in `Caddyfile` to `admin:8080`. Until the homelab manifests gain an `admin` Deployment, Service,

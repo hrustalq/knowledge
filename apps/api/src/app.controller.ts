@@ -18,8 +18,9 @@ export class AppController {
    * Liveness for the k3s probes (#1238): the process answers HTTP. It touches
    * no store, so a down Redis or Postgres never restarts the pod, and it says
    * nothing a stranger could use; the detail is `GET /v1/admin/health`.
+   * `/healthz`, not `/health`: that path is the Hindsight memory wire's (doc 80).
    */
-  @Get('health')
+  @Get('healthz')
   @Public()
   @CachePolicy('no-store')
   @ApiExcludeEndpoint()

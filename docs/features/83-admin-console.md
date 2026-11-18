@@ -7,7 +7,7 @@ platform: configuration, monitoring, users and errors. Workspace settings keep w
 | --- | --- | --- | --- |
 | 1 | [#1236] | [#1275] | `apps/admin`, its image and route; the platform-admin gate; `@knowledge/api-client` |
 | 2 | [#1237] | [#1276] | The configuration view: `GET /v1/admin/config` |
-| 3 | [#1238] | [#1277] | Monitoring: `GET /v1/admin/health`, `GET /health`, heartbeats and sweeper ticks |
+| 3 | [#1238] | [#1277] | Monitoring: `GET /v1/admin/health`, `GET /healthz`, heartbeats and sweeper ticks |
 | 4 | [#1239] | — | Users across workspaces |
 | 5 | [#1240] | — | Errors over `ops_events` |
 
@@ -95,9 +95,10 @@ on its own, so a down Redis still shows the stores.
   after three intervals plus a minute. The API and the worker are always expected; the learner and the git remote
   only while `LEARNER_ENABLED` / `GIT_REMOTE_ENABLED` are on.
 
-`GET /health` (`AppController`, `@Public()`, excluded from the OpenAPI document) answers `{ "status": "ok" }`
+`GET /healthz` (`AppController`, `@Public()`, excluded from the OpenAPI document) answers `{ "status": "ok" }`
 and touches no store: it is liveness, so a down dependency never restarts the pod, and it tells a stranger
-nothing. Pointing the k3s probes at it is a homelab change ([#1274](https://github.com/hrustalq/knowledge/issues/1274)).
+nothing. Not `/health`: that path is the Hindsight memory wire's ([80](80-memory-banks.md)), which also pins
+`/health/live` and `/health/ready` as 404s. Pointing the k3s probes at it is a homelab change ([#1274](https://github.com/hrustalq/knowledge/issues/1274)).
 
 The page polls every 10 s while the tab is visible. Status is a 6px dot plus a word in the panel ramp (tip up,
 caution down or failed, warning late), never emerald/amber/red, which the indexing dot owns. The ramp moved

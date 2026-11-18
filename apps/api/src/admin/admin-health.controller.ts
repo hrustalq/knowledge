@@ -6,7 +6,7 @@ import { PlatformAdmin } from '../auth/access.decorator.js';
 import { Returns } from '../common/returns.decorator.js';
 import { AdminHealthService } from './admin-health.service.js';
 
-/** The admin console's monitoring view (#1238). `GET /health` is the public, detail-free liveness twin. */
+/** The admin console's monitoring view (#1238). `GET /healthz` is the public, detail-free liveness twin. */
 @ApiTags('admin')
 @PlatformAdmin()
 @Controller('v1/admin')

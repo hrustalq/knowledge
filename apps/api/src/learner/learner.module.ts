@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { BootstrapModule } from '../config/bootstrap.module.js';
 import { PrismaModule } from '../prisma/prisma.module.js';
+import { OpsBeaconModule } from '../observability/ops-beacon.js';
 import { AiCoreModule } from '../ai/ai-core.module.js';
 import { AgentCoreModule } from '../agents/agent-core.module.js';
 import { AssistantClientModule } from '../assistant/assistant-client.module.js';
@@ -22,7 +23,7 @@ import { LearnerTicker } from './learner.ticker.js';
  * and mail publishers a reader has no use for.
  */
 @Module({
-  imports: [BootstrapModule, PrismaModule, AiCoreModule, AgentCoreModule, AssistantClientModule, EmbeddingModule],
+  imports: [BootstrapModule, OpsBeaconModule.forProcess('learner'), PrismaModule, AiCoreModule, AgentCoreModule, AssistantClientModule, EmbeddingModule],
   providers: [LearnerService, LearnerTicker],
 })
 export class LearnerModule {}

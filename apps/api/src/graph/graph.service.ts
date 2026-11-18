@@ -293,6 +293,11 @@ export class GraphService {
     private readonly aliases: EntityAliasService,
   ) {}
 
+  /** The admin console's ArcadeDB probe (#1238): reads no type, so no workspace predicate applies. */
+  async ping(): Promise<void> {
+    await this.arcade.query('sql', 'SELECT 1');
+  }
+
   /**
    * Idempotent DDL, applied on worker boot. `vectorDimension` is
    * `EMBEDDINGS_DIM`, the one dimension the chunk vector index is built for.

@@ -442,6 +442,233 @@
       "entries"
     ]
   },
+  "AdminDependency": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "$ref": "#/components/schemas/AdminDependencyName"
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "up",
+          "down",
+          "off"
+        ]
+      },
+      "latencyMs": {
+        "type": "number",
+        "nullable": true
+      },
+      "error": {
+        "type": "string",
+        "nullable": true
+      }
+    },
+    "required": [
+      "name",
+      "status",
+      "latencyMs",
+      "error"
+    ]
+  },
+  "AdminDependencyName": {
+    "type": "string",
+    "enum": [
+      "postgres",
+      "redis",
+      "minio",
+      "arcadedb",
+      "opensearch",
+      "searxng"
+    ]
+  },
+  "AdminHealthResponse": {
+    "type": "object",
+    "properties": {
+      "checkedAt": {
+        "type": "string"
+      },
+      "version": {
+        "type": "string"
+      },
+      "dependencies": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/AdminDependency"
+        }
+      },
+      "queues": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/AdminQueue"
+        }
+      },
+      "processes": {
+        "anyOf": [
+          {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdminProcess"
+            }
+          }
+        ],
+        "nullable": true
+      },
+      "ticks": {
+        "anyOf": [
+          {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdminTick"
+            }
+          }
+        ],
+        "nullable": true
+      }
+    },
+    "required": [
+      "checkedAt",
+      "version",
+      "dependencies",
+      "queues",
+      "processes",
+      "ticks"
+    ]
+  },
+  "AdminProcess": {
+    "type": "object",
+    "properties": {
+      "kind": {
+        "$ref": "#/components/schemas/OpsProcessKind"
+      },
+      "expected": {
+        "type": "boolean"
+      },
+      "instances": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/AdminProcessInstance"
+        }
+      }
+    },
+    "required": [
+      "kind",
+      "expected",
+      "instances"
+    ]
+  },
+  "AdminProcessInstance": {
+    "type": "object",
+    "properties": {
+      "host": {
+        "type": "string"
+      },
+      "pid": {
+        "type": "number"
+      },
+      "version": {
+        "type": "string"
+      },
+      "startedAt": {
+        "type": "string"
+      },
+      "lastSeenAt": {
+        "type": "string"
+      },
+      "live": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "host",
+      "pid",
+      "version",
+      "startedAt",
+      "lastSeenAt",
+      "live"
+    ]
+  },
+  "AdminQueue": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string"
+      },
+      "counts": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "waiting": {
+                "type": "number"
+              },
+              "active": {
+                "type": "number"
+              },
+              "delayed": {
+                "type": "number"
+              },
+              "failed": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "waiting",
+              "active",
+              "delayed",
+              "failed"
+            ]
+          }
+        ],
+        "nullable": true
+      }
+    },
+    "required": [
+      "name",
+      "counts"
+    ]
+  },
+  "AdminTick": {
+    "type": "object",
+    "properties": {
+      "process": {
+        "$ref": "#/components/schemas/OpsProcessKind"
+      },
+      "name": {
+        "type": "string"
+      },
+      "host": {
+        "type": "string"
+      },
+      "intervalMs": {
+        "type": "number",
+        "nullable": true
+      },
+      "lastAt": {
+        "type": "string"
+      },
+      "ok": {
+        "type": "boolean"
+      },
+      "ms": {
+        "type": "number"
+      },
+      "late": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "process",
+      "name",
+      "host",
+      "intervalMs",
+      "lastAt",
+      "ok",
+      "ms",
+      "late"
+    ]
+  },
   "AgentCapability": {
     "type": "string",
     "enum": [
@@ -19329,6 +19556,15 @@
       "issuer",
       "clientId",
       "scopes"
+    ]
+  },
+  "OpsProcessKind": {
+    "type": "string",
+    "enum": [
+      "api",
+      "worker",
+      "learner",
+      "git"
     ]
   },
   "OverrideSetting<number>": {

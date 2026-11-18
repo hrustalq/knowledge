@@ -9,6 +9,7 @@ import {
   DeleteObjectCommand,
   DeleteObjectsCommand,
   GetObjectCommand,
+  HeadBucketCommand,
   HeadObjectCommand,
   ListObjectVersionsCommand,
   PutObjectCommand,
@@ -305,6 +306,11 @@ export class StorageService {
     if (old.length > 0) {
       await this.s3.send(new DeleteObjectsCommand({ Bucket: this.bucket, Delete: { Objects: old, Quiet: true } }));
     }
+  }
+
+  /** The admin console's MinIO probe (#1238): the bucket exists and these credentials reach it. */
+  async ping(signal?: AbortSignal): Promise<void> {
+    await this.s3.send(new HeadBucketCommand({ Bucket: this.bucket }), { abortSignal: signal });
   }
 
   async headObject(objectKey: string): Promise<HeadResult | null> {

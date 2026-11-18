@@ -61,6 +61,60 @@
         "live": "Live updates and co-editing",
         "other": "Other"
       }
+    },
+    "monitoring": {
+      "refresh": "Refresh",
+      "healthy": "All checks healthy",
+      "problems": "Problems: {n}",
+      "checkedAt": "checked at {time}",
+      "cadence": "refreshes every 10 s while open",
+      "refreshFailed": "Last refresh failed. Showing the result from {time}.",
+      "stores": "Stores",
+      "processes": "Processes",
+      "queues": "Queues",
+      "tasks": "Background tasks",
+      "status": {
+        "up": "Up",
+        "down": "Down",
+        "off": "Not configured",
+        "ok": "OK",
+        "failed": "Last pass failed",
+        "late": "Late"
+      },
+      "deps": {
+        "postgres": "PostgreSQL",
+        "redis": "Redis",
+        "minio": "MinIO",
+        "arcadedb": "ArcadeDB",
+        "opensearch": "OpenSearch",
+        "searxng": "SearXNG"
+      },
+      "kinds": {
+        "api": "API",
+        "worker": "Worker",
+        "learner": "Learner",
+        "git": "Git remote"
+      },
+      "live": "Live: {n}",
+      "noneLive": "Nothing live. Is the process running?",
+      "notExpected": "Off: its env flag is not set",
+      "versionDiffers": "the API runs v{version}",
+      "seen": "seen {ago}",
+      "silent": "silent since {ago}",
+      "cols": {
+        "queue": "Queue",
+        "waiting": "Waiting",
+        "active": "Active",
+        "delayed": "Delayed",
+        "failed": "Failed"
+      },
+      "countsUnread": "Counts unavailable",
+      "redisUnread": "Can't read this while Redis is unreachable: heartbeats and passes are kept there.",
+      "noTicks": "No background task has finished a pass yet.",
+      "took": "took {took}",
+      "every": "every {interval}",
+      "onDemand": "run on demand",
+      "version": "v{version}"
     }
   }
 }

@@ -61,6 +61,60 @@
         "live": "Обновления и совместное редактирование",
         "other": "Прочее"
       }
+    },
+    "monitoring": {
+      "refresh": "Обновить",
+      "healthy": "Все проверки в норме",
+      "problems": "Проблем: {n}",
+      "checkedAt": "проверено в {time}",
+      "cadence": "обновляется каждые 10 с, пока страница открыта",
+      "refreshFailed": "Последнее обновление не удалось. Показан результат от {time}.",
+      "stores": "Хранилища",
+      "processes": "Процессы",
+      "queues": "Очереди",
+      "tasks": "Фоновые задачи",
+      "status": {
+        "up": "Работает",
+        "down": "Недоступно",
+        "off": "Не настроено",
+        "ok": "Норма",
+        "failed": "Последний проход упал",
+        "late": "Опаздывает"
+      },
+      "deps": {
+        "postgres": "PostgreSQL",
+        "redis": "Redis",
+        "minio": "MinIO",
+        "arcadedb": "ArcadeDB",
+        "opensearch": "OpenSearch",
+        "searxng": "SearXNG"
+      },
+      "kinds": {
+        "api": "API",
+        "worker": "Воркер",
+        "learner": "Learner",
+        "git": "Git-сервер"
+      },
+      "live": "Активных: {n}",
+      "noneLive": "Нет активных. Процесс запущен?",
+      "notExpected": "Выключен: флаг в окружении не задан",
+      "versionDiffers": "API работает на v{version}",
+      "seen": "отклик {ago}",
+      "silent": "молчит с {ago}",
+      "cols": {
+        "queue": "Очередь",
+        "waiting": "Ждут",
+        "active": "В работе",
+        "delayed": "Отложены",
+        "failed": "Упали"
+      },
+      "countsUnread": "Счётчики недоступны",
+      "redisUnread": "Не прочитать, пока Redis недоступен: пульс процессов и проходы хранятся там.",
+      "noTicks": "Ни одна фоновая задача ещё не завершила проход.",
+      "took": "заняло {took}",
+      "every": "раз в {interval}",
+      "onDemand": "запуск по требованию",
+      "version": "v{version}"
     }
   }
 }

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { BootstrapModule } from './config/bootstrap.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
+import { OpsBeaconModule } from './observability/ops-beacon.js';
 import { AuthModule } from './auth/auth.module.js';
 import { SsoModule } from './auth/sso/sso.module.js';
 import { ScimModule } from './scim/scim.module.js';
@@ -61,6 +62,7 @@ import { MemoryModule } from './memory/memory.module.js';
 @Module({
   imports: [
     BootstrapModule,
+    OpsBeaconModule.forProcess('api'),
     PrismaModule,
     AuthModule,
     // Enterprise SSO (#75): API-only, every route 404s unless AUTH_SSO_ENABLED.

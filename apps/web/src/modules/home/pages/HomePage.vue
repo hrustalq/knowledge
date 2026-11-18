@@ -15,7 +15,7 @@ import { PageLayout, PageState } from '@knowledge/ui/layout'
 import { getWorkspaceId } from '@/shared/api/api'
 import { api } from '@/shared/api/client'
 import { errorMessage } from '@/shared/api/errors'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { ActivityFeed } from '@/entities/document'
 import HomeWidget from '../components/HomeWidget.vue'
 import HomeMetrics from '../components/HomeMetrics.vue'
@@ -27,7 +27,7 @@ import { homeQuery } from '../model/home-query'
 import { inZone, moveWidget, slotsFor, toggleWidget } from '../model/layout-draft'
 
 const { t } = useI18n()
-const auth = useAuthStore()
+const isWorkspaceAdmin = usePermission('workspace:admin')
 const queryClient = useQueryClient()
 const query = useQuery(homeQuery())
 const data = computed(() => query.data.value)
@@ -123,7 +123,7 @@ function hasData(w: Widget): boolean {
 
 <template>
   <PageLayout variant="list" :title="t('home.title')">
-    <template v-if="mounted && auth.canAdminWorkspace && data" #actions>
+    <template v-if="mounted && isWorkspaceAdmin && data" #actions>
       <template v-if="customizing">
         <Button variant="ghost" size="sm" :disabled="saving" @click="reset">{{ t('home.customize.reset') }}</Button>
         <Button variant="outline" size="sm" :disabled="saving" @click="cancel">{{ t('common.cancel') }}</Button>

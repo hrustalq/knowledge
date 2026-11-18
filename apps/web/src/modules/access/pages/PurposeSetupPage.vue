@@ -21,7 +21,7 @@ import { Textarea } from '@knowledge/ui/textarea'
 import { PromptFields, answersOf, answerText, roundComplete, seedOf, submitOnEnter, type PromptValues } from '@/entities/assistant'
 import { errorMessage } from '@/shared/api/errors'
 import { ownPath } from '@/shared/utils/own-path'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { useFeaturesStore } from '@/stores/features'
 import FeatureSections from '../components/FeatureSections.vue'
 import PurposeUses from '../components/PurposeUses.vue'
@@ -31,7 +31,7 @@ import { purposeMachine, type PurposeContext, type PurposeEvent, type PurposeSte
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
-const auth = useAuthStore()
+const isWorkspaceAdmin = usePermission('workspace:admin')
 const features = useFeaturesStore()
 const draft = usePurposeDraft()
 
@@ -50,7 +50,7 @@ const description = ref('')
 onMounted(async () => {
   actor.start()
   // A re-run starts from the words already stored, so Confirm does not erase them.
-  if (rerun && auth.canAdminWorkspace) description.value = (await features.loadPurpose().catch(() => null))?.description ?? ''
+  if (rerun && isWorkspaceAdmin.value) description.value = (await features.loadPurpose().catch(() => null))?.description ?? ''
 })
 onBeforeUnmount(() => actor.stop())
 
@@ -110,7 +110,7 @@ async function leave(how: 'confirm' | 'skip') {
 
 <template>
   <PageLayout variant="prose">
-    <p v-if="!auth.canAdminWorkspace" class="text-sm text-muted-foreground">{{ t('features.adminOnly') }}</p>
+    <p v-if="!isWorkspaceAdmin" class="text-sm text-muted-foreground">{{ t('features.adminOnly') }}</p>
 
     <div v-else class="flex flex-col gap-6" :aria-busy="step === 'asking' || undefined">
       <header class="space-y-1">

@@ -9,7 +9,7 @@
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { PageTabs, panelId, tabId, usePageTabs, type PageTab } from '@knowledge/ui/layout'
 import AuditLogTable from '@/modules/access/components/AuditLogTable.vue'
 import AuthPolicyPanel from '@/modules/access/components/AuthPolicyPanel.vue'
@@ -19,8 +19,7 @@ import ScimPanel from '@/modules/access/components/ScimPanel.vue'
 import SsoDomainsPanel from '@/modules/access/components/SsoDomainsPanel.vue'
 
 const { t } = useI18n()
-const auth = useAuthStore()
-const canManage = computed(() => auth.canAdminWorkspace)
+const canManage = usePermission('workspace:admin')
 
 const TAB_KEYS = ['providers', 'domains', 'groups', 'provisioning', 'policy', 'audit'] as const
 type TabKey = (typeof TAB_KEYS)[number]

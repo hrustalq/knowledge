@@ -21,7 +21,7 @@ import { apiQueryOptions } from '@/shared/api/queries'
 import { errorMessage, errorReason } from '@/shared/api/errors'
 import { getWorkspaceId } from '@/shared/api/api'
 import { formatDateTime, formatRelative } from '@/shared/utils/format'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { useProjectsStore } from '@/stores/projects'
 import { Button } from '@knowledge/ui/button'
 import { Input } from '@knowledge/ui/input'
@@ -40,7 +40,8 @@ import {
 import { PageState } from '@knowledge/ui/layout'
 
 const { t } = useI18n()
-const auth = useAuthStore()
+const canContribute = usePermission('workspace:contribute')
+const isWorkspaceAdmin = usePermission('workspace:admin')
 const projects = useProjectsStore()
 const queryClient = useQueryClient()
 const workspaceId = getWorkspaceId()
@@ -120,7 +121,7 @@ async function remove() {
       <p class="mt-0.5 max-w-2xl text-sm text-muted-foreground">{{ t('releaseTags.subtitle') }}</p>
     </div>
 
-    <form v-if="auth.canEdit" class="grid gap-3 rounded-xl border bg-card p-4 sm:grid-cols-[minmax(0,12rem)_minmax(0,14rem)_minmax(0,1fr)]" @submit.prevent="create">
+    <form v-if="canContribute" class="grid gap-3 rounded-xl border bg-card p-4 sm:grid-cols-[minmax(0,12rem)_minmax(0,14rem)_minmax(0,1fr)]" @submit.prevent="create">
       <div class="space-y-1.5">
         <Label for="tag-name">{{ t('releaseTags.name') }}</Label>
         <Input
@@ -200,7 +201,7 @@ async function remove() {
             <td class="max-w-80 px-3 py-2 text-muted-foreground">{{ tag.note }}</td>
             <td class="px-3 py-2 text-right">
               <Button
-                v-if="auth.canAdminWorkspace"
+                v-if="isWorkspaceAdmin"
                 size="icon"
                 variant="ghost"
                 class="size-8 text-muted-foreground hover:text-destructive"

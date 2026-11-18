@@ -25,17 +25,16 @@ import { apiQueryOptions } from '@/shared/api/queries'
 import { errorMessage } from '@/shared/api/errors'
 import { getWorkspaceId } from '@/shared/api/api'
 import { formatDate } from '@/shared/utils/format'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { Badge } from '@knowledge/ui/badge'
 import { Button } from '@knowledge/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@knowledge/ui/select'
 import { PageState } from '@knowledge/ui/layout'
 
 const { t } = useI18n()
-const auth = useAuthStore()
 const queryClient = useQueryClient()
 const workspaceId = getWorkspaceId()
-const canManage = computed(() => auth.canAdminWorkspace)
+const canManage = usePermission('workspace:admin')
 
 const settingsOptions = apiQueryOptions('/v1/workspaces/{id}/publishing-settings', { path: { id: workspaceId } })
 const settingsQuery = useQuery({ ...settingsOptions, enabled: canManage })

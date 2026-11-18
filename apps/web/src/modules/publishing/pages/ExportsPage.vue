@@ -19,14 +19,14 @@ import { apiQueryOptions } from '@/shared/api/queries'
 import { errorMessage } from '@/shared/api/errors'
 import { getWorkspaceId } from '@/shared/api/api'
 import { formatBytes, formatDateTime, formatRelative } from '@/shared/utils/format'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { Badge } from '@knowledge/ui/badge'
 import { Button } from '@knowledge/ui/button'
 import { PageState } from '@knowledge/ui/layout'
 import { UserChip } from '@/entities/person'
 
 const { t } = useI18n()
-const auth = useAuthStore()
+const isWorkspaceAdmin = usePermission('workspace:admin')
 
 const listQuery = useQuery(
   computed(() => ({
@@ -63,7 +63,7 @@ async function download(e: ExportJobSummary) {
     <div>
       <h1 class="font-display text-2xl font-bold tracking-tight">{{ t('export.page.title') }}</h1>
       <p class="text-muted-foreground mt-0.5 text-sm">
-        {{ auth.canAdminWorkspace ? t('export.page.subtitleAdmin') : t('export.page.subtitle') }}
+        {{ isWorkspaceAdmin ? t('export.page.subtitleAdmin') : t('export.page.subtitle') }}
       </p>
     </div>
 
@@ -78,7 +78,7 @@ async function download(e: ExportJobSummary) {
             <th class="px-3 py-2 font-medium">{{ t('export.page.colWhat') }}</th>
             <th class="px-3 py-2 font-medium">{{ t('export.page.colFormat') }}</th>
             <th class="px-3 py-2 font-medium">{{ t('export.page.colStatus') }}</th>
-            <th v-if="auth.canAdminWorkspace" class="px-3 py-2 font-medium">{{ t('export.page.colBy') }}</th>
+            <th v-if="isWorkspaceAdmin" class="px-3 py-2 font-medium">{{ t('export.page.colBy') }}</th>
             <th class="px-3 py-2 font-medium">{{ t('export.page.colCreated') }}</th>
             <th class="px-3 py-2" />
           </tr>
@@ -103,7 +103,7 @@ async function download(e: ExportJobSummary) {
                 {{ t('export.page.summary', { pages: e.pageCount ?? 0, size: formatBytes(e.sizeBytes ?? 0) }) }}
               </p>
             </td>
-            <td v-if="auth.canAdminWorkspace" class="px-3 py-2"><UserChip :user-id="e.requestedBy" size="sm" /></td>
+            <td v-if="isWorkspaceAdmin" class="px-3 py-2"><UserChip :user-id="e.requestedBy" size="sm" /></td>
             <td class="text-muted-foreground px-3 py-2" :title="formatDateTime(e.createdAt)">{{ formatRelative(e.createdAt) }}</td>
             <td class="px-3 py-2 text-right">
               <Button v-if="e.status === 'completed'" size="sm" variant="outline" class="h-7" @click="download(e)">

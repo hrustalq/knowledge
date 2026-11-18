@@ -40,7 +40,7 @@ import { apiQueryOptions } from '@/shared/api/queries'
 import { errorMessage } from '@/shared/api/errors'
 import { getWorkspaceId, relativeTime } from '@/shared/api/api'
 import { useTheme } from '@/shared/utils/theme'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { useProjectsStore } from '@/stores/projects'
 import { Badge } from '@knowledge/ui/badge'
 import { Button } from '@knowledge/ui/button'
@@ -54,13 +54,12 @@ import SiteAudiencePanel from '@/modules/publishing/components/SiteAudiencePanel
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
-const auth = useAuthStore()
 const projects = useProjectsStore()
 const queryClient = useQueryClient()
 
 const projectId = computed(() => route.params.id as string)
 const project = computed(() => projects.items.find((p) => p.projectId === projectId.value) ?? null)
-const canManage = computed(() => auth.canAdminWorkspace)
+const canManage = usePermission('workspace:admin')
 
 const siteOptions = computed(() => apiQueryOptions('/v1/projects/{id}/site', { path: { id: projectId.value } }))
 const siteQuery = useQuery(

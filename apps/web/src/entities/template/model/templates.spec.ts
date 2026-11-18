@@ -3,7 +3,7 @@ import type { TemplateMeta, TemplateSummary } from '@knowledge/contracts'
 import { composeTemplateSource, type TemplateDetail } from '@knowledge/contracts'
 import { htmlToMarkdown } from '@/core/markdown/serialize'
 import {
-  canWriteTemplate,
+  templateWriteAction,
   groupTemplates,
   matchesTemplate,
   offeredTemplates,
@@ -106,16 +106,11 @@ describe('previewTemplate', () => {
   })
 })
 
-describe('settings role gating', () => {
-  it('lets an editor write project templates only, and an admin everything', () => {
-    expect(canWriteTemplate('project', 'editor')).toBe(true)
-    expect(canWriteTemplate('workspace', 'editor')).toBe(false)
-    expect(canWriteTemplate('built-in', 'editor')).toBe(false)
-    for (const scope of ['project', 'workspace', 'built-in'] as const) {
-      expect(canWriteTemplate(scope, 'admin')).toBe(true)
-      expect(canWriteTemplate(scope, 'viewer')).toBe(false)
-      expect(canWriteTemplate(scope, null)).toBe(false)
-    }
+describe('templateWriteAction', () => {
+  it('asks contribute for a project template and admin for anything wider', () => {
+    expect(templateWriteAction('project')).toBe('workspace:contribute')
+    expect(templateWriteAction('workspace')).toBe('workspace:admin')
+    expect(templateWriteAction('built-in')).toBe('workspace:admin')
   })
 })
 

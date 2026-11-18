@@ -10,7 +10,7 @@
  * to fill in by hand.
  *
  * A project template needs `editor`, a workspace-wide one `admin`
- * (`canWriteTemplate`, the API's rule); the scope the caller cannot write is
+ * (`templateWriteAction`, the API's rule); the scope the caller cannot write is
  * shown disabled with the reason rather than hidden, so the choice is legible.
  */
 import { computed, ref, watch } from 'vue'
@@ -29,8 +29,8 @@ import {
 import { api } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
 import { errorMessage } from '@/shared/api/errors'
-import { canWriteTemplate, unescapePlaceholders } from '@/entities/template/model/templates'
-import { useAuthStore } from '@/stores/auth'
+import { unescapePlaceholders, templateWriteAction } from '@/entities/template/model/templates'
+import { usePermissionsStore } from '@/stores/permissions'
 import { useProjectsStore } from '@/stores/projects'
 import { useTemplatesStore } from '@/entities/template/model/templates.store'
 import { Button } from '@knowledge/ui/button'
@@ -68,7 +68,7 @@ const emit = defineEmits<{ saved: [TemplateDetail] }>()
 
 const { t } = useI18n()
 const router = useRouter()
-const auth = useAuthStore()
+const permissions = usePermissionsStore()
 const projects = useProjectsStore()
 const templates = useTemplatesStore()
 
@@ -81,8 +81,8 @@ const chosenScope = ref<'project' | 'workspace' | null>(null)
 const placeholders = ref<TemplatePlaceholder[]>([])
 const saving = ref(false)
 
-const canProject = computed(() => !!props.page?.projectId && canWriteTemplate('project', auth.role))
-const canWorkspace = computed(() => canWriteTemplate('workspace', auth.role))
+const canProject = computed(() => !!props.page?.projectId && permissions.allows(templateWriteAction('project')))
+const canWorkspace = computed(() => permissions.allows(templateWriteAction('workspace')))
 /** Derived until picked: the role can arrive after the dialog opens. */
 const scope = computed<'project' | 'workspace'>({
   get: () => chosenScope.value ?? (canProject.value ? 'project' : 'workspace'),

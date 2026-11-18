@@ -5,6 +5,7 @@ import { AuthModule } from './auth/auth.module.js';
 import { SsoModule } from './auth/sso/sso.module.js';
 import { ScimModule } from './scim/scim.module.js';
 import { UsersModule } from './users/users.module.js';
+import { AdminModule } from './admin/admin.module.js';
 import { WorkspacesModule } from './workspaces/workspaces.module.js';
 import { WorkspacePurposeModule } from './workspace-purpose/workspace-purpose.module.js';
 import { PermissionsModule } from './permissions/permissions.module.js';
@@ -67,6 +68,7 @@ import { MemoryModule } from './memory/memory.module.js';
     // SCIM provisioning (#75): API-only, every route 404s unless AUTH_SCIM_ENABLED.
     ScimModule,
     UsersModule,
+    AdminModule,
     WorkspacesModule,
     WorkspacePurposeModule,
     PermissionsModule,

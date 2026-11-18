@@ -17,6 +17,12 @@ in the pull request that introduces them — see
 
 ### Added
 
+- The admin console's **Configuration** section lists every environment setting the running API resolved, grouped
+  (core, storage, sign-in, AI, …), with its effective value and whether it came from the environment or the
+  default. Search covers keys and values, and a filter shows only what the environment sets. Secrets (credentials,
+  tokens, private keys, DSNs) show only "set" or "not set": `GET /v1/admin/config` never returns their value, and
+  strips the user and password from every other URL. It covers the API process; workers, the learner and the git
+  remote resolve their own. Platform admins only. (#1237)
 - A platform admin console at `/admin`, a separate app with its own bundle and image (`knowledge-admin`). It uses
   the member app's session, so there is no second sign-in, and anyone signed out is sent to `/login` and brought
   back. Its sections are configuration, monitoring, users and errors, and each one says it is not built yet until

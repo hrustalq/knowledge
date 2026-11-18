@@ -375,6 +375,73 @@
       "projectId"
     ]
   },
+  "AdminConfigEntry": {
+    "type": "object",
+    "properties": {
+      "key": {
+        "type": "string"
+      },
+      "group": {
+        "$ref": "#/components/schemas/EnvGroup"
+      },
+      "source": {
+        "$ref": "#/components/schemas/EnvSource"
+      },
+      "secret": {
+        "type": "boolean"
+      },
+      "set": {
+        "type": "boolean"
+      },
+      "value": {
+        "nullable": true,
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "boolean"
+          }
+        ]
+      }
+    },
+    "required": [
+      "key",
+      "group",
+      "source",
+      "secret",
+      "set",
+      "value"
+    ]
+  },
+  "AdminConfigResponse": {
+    "type": "object",
+    "properties": {
+      "process": {
+        "type": "string",
+        "enum": [
+          "api"
+        ]
+      },
+      "version": {
+        "type": "string"
+      },
+      "entries": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/AdminConfigEntry"
+        }
+      }
+    },
+    "required": [
+      "process",
+      "version",
+      "entries"
+    ]
+  },
   "AgentCapability": {
     "type": "string",
     "enum": [
@@ -12349,6 +12416,34 @@
       "type",
       "name",
       "degree"
+    ]
+  },
+  "EnvGroup": {
+    "type": "string",
+    "enum": [
+      "core",
+      "storage",
+      "auth",
+      "mail",
+      "ai",
+      "agents",
+      "memory",
+      "ingestion",
+      "search",
+      "quality",
+      "publishing",
+      "connectors",
+      "chat",
+      "memos",
+      "live",
+      "other"
+    ]
+  },
+  "EnvSource": {
+    "type": "string",
+    "enum": [
+      "env",
+      "default"
     ]
   },
   "ExportCapabilitiesResponse": {

@@ -1208,8 +1208,20 @@ function smtpUrlHasUserinfo(url: string): boolean {
   }
 }
 
+/**
+ * The schema keys the environment set, as the last `validateEnv` saw them —
+ * what the admin console's configuration view calls source `env` (#1237).
+ * Captured here because nothing later can tell: @nestjs/config writes the
+ * validated values, defaults included, back into `process.env`.
+ */
+let providedKeys: ReadonlySet<string> = new Set();
+export function providedEnvKeys(): ReadonlySet<string> {
+  return providedKeys;
+}
+
 /** Fail-fast env validation, plugged into @nestjs/config `validate`. */
 export function validateEnv(config: Record<string, unknown>): Env {
+  providedKeys = new Set(Object.keys(envSchema.shape).filter((key) => config[key] !== undefined));
   // #1143: production's default for an unset line is the closed one.
   if (config.NODE_ENV === 'production' && config.AUTH_REQUIRE_VERIFIED_EMAIL === undefined) {
     config = { ...config, AUTH_REQUIRE_VERIFIED_EMAIL: true };

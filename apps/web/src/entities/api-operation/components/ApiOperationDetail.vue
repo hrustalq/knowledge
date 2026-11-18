@@ -22,7 +22,7 @@ import type { ApiOperationInfo } from '@knowledge/contracts'
 import { MarkdownView } from '@/entities/document'
 import { Collapse } from '@knowledge/ui/collapse'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@knowledge/ui/dropdown-menu'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { operationView, statusTone, type ResponseView } from '@/entities/api-operation/model/api-spec'
 import { operationDomId } from '../model/use-api-reference'
 import { useCopy } from '@/shared/composables/use-copy'
@@ -65,11 +65,12 @@ const openResponses = ref(new Set((view.value?.responses ?? []).filter((r) => r.
  * Test requests (#468), HTTP only. The suite is read only while the card is
  * open; Generate opens the card so its progress and result are in view.
  */
-const auth = useAuthStore()
 // QA switched off in the workspace (#604): no suite read, nothing to generate or run.
 const qaOn = computed(() => useFeaturesStore().isOn('qa'))
-const canGenerate = computed(() => qaOn.value && auth.can('api-test-suites.generate'))
-const canRun = computed(() => qaOn.value && auth.can('api-test-suites.run'))
+const mayGenerate = usePermission('api-test-suites:generate')
+const mayRun = usePermission('api-test-suites:run')
+const canGenerate = computed(() => qaOn.value && mayGenerate.value)
+const canRun = computed(() => qaOn.value && mayRun.value)
 const tests = useTestSuite(
   () => props.workspaceId,
   () => props.operation.documentId,

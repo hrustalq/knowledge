@@ -57,6 +57,7 @@ import { useMembers } from '@/entities/person'
 import { useAgentNames } from '@/entities/person'
 import { fullTime, timelineTime } from '../model/mr-ui'
 import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { TeachAgentDialog } from '@/entities/assistant'
 
 const { t } = useI18n()
@@ -90,6 +91,7 @@ const { agentNames } = useAgentNames()
 /** Set on a merge request's lint threads; page comments never carry it. */
 const ruleId = computed(() => ('ruleId' in props.thread ? (props.thread.ruleId as string | null) : null))
 const auth = useAuthStore()
+const canContribute = usePermission('workspace:contribute')
 const panelId = useId()
 
 /** Resolved threads start collapsed; resolving/unresolving follows along. */
@@ -126,7 +128,7 @@ const teachOpen = computed({
   },
 })
 function canTeach(comment: ReviewComment): boolean {
-  return !!props.teachKind && !!comment.agentKey && !comment.pending && auth.canEdit
+  return !!props.teachKind && !!comment.agentKey && !comment.pending && canContribute.value
 }
 /** Comment actions other than teaching need an open, writable thread. */
 const canAct = computed(() => !props.readonly && !props.thread.resolved)

@@ -42,6 +42,7 @@ import { api, fetchApi } from '@/shared/api/queries'
 import { errorMessage, errorReason } from '@/shared/api/errors'
 import { getWorkspaceId } from '@/shared/api/api'
 import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { Autocomplete, type AutocompleteOption } from '@knowledge/ui/autocomplete'
 import { Badge } from '@knowledge/ui/badge'
 import { Button } from '@knowledge/ui/button'
@@ -67,6 +68,7 @@ const emit = defineEmits<{ saved: [ResourceAccessResponse] }>()
 
 const { t } = useI18n()
 const auth = useAuthStore()
+const isWorkspaceAdmin = usePermission('workspace:admin')
 
 const access = ref<ResourceAccessResponse | null>(null)
 const loading = ref(false)
@@ -238,7 +240,7 @@ function remove(grant: AccessGrantEntry) {
  */
 function onRestrictedChange(value: boolean | 'indeterminate') {
   restricted.value = value === true
-  if (!restricted.value || auth.canAdminWorkspace) return
+  if (!restricted.value || isWorkspaceAdmin.value) return
   const me = auth.me
   if (!me || manual.value.some((g) => g.level === 'manage')) return
   const mine = manual.value.find((g) => g.subjectType === 'user' && g.subjectId === me.userId)

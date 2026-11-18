@@ -35,7 +35,7 @@ import {
 import { api } from '@/shared/api/client'
 import { errorMessage } from '@/shared/api/errors'
 import { answerText, type AnswerTurn, type FlowStep } from '@/entities/assistant/model/flow-steps'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 
 const { t } = useI18n()
 
@@ -183,8 +183,8 @@ async function copy() {
 // back with the pages it stands on (the API refuses one without), and a web
 // citation is not a page anyone here can review. Editors only — it opens a
 // merge request in the reader's name.
-const auth = useAuthStore()
-const canSave = computed(() => auth.canEdit && props.message.sources.some(isPageSource))
+const canContribute = usePermission('workspace:contribute')
+const canSave = computed(() => canContribute.value && props.message.sources.some(isPageSource))
 const saving = ref(false)
 const saved = ref<CaptureResult | null>(null)
 

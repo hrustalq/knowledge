@@ -17873,7 +17873,15 @@ export interface components {
             emailVerified: boolean;
             hasApiKey: boolean;
             createdAt: string;
-            memberships: components["schemas"]["WorkspaceMembership"][];
+            lastSignInAt: string | null;
+            memberships: {
+                workspaceName: string;
+                workspaceId: string;
+                role: components["schemas"]["WorkspaceRole"];
+                trustedOperator: boolean;
+                capabilities: components["schemas"]["MemberCapability"][];
+                source: components["schemas"]["MembershipSource"];
+            }[];
         };
         ValidateWorkflowResponse: {
             valid: boolean;

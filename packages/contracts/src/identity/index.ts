@@ -176,6 +176,17 @@ export const AUDIT_ACTIONS = [
   'memory.directive_changed',
   'memory.operation_cancelled',
   'memory.promoted',
+  /**
+   * Account writes by a platform admin (#1239), `target` the user. One action per kind of change, written only when
+   * the value changed: `renamed` carries `from`/`to`, `created` whether an invite was mailed. Never a password.
+   */
+  'user.created',
+  'user.renamed',
+  'user.admin_granted',
+  'user.admin_revoked',
+  'user.disabled',
+  'user.enabled',
+  'user.password_set',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
@@ -835,7 +846,10 @@ export interface UserSummary {
   emailVerified: boolean;
   hasApiKey: boolean;
   createdAt: string;
-  memberships: WorkspaceMembership[];
+  /** The newest session's `created_at` (#1239), derived, never stored. Null: never signed in with a session. */
+  lastSignInAt: string | null;
+  /** Live workspaces only: a deleted one's memberships are left out. */
+  memberships: (WorkspaceMembership & { workspaceName: string })[];
 }
 
 // GET /v1/users

@@ -56,10 +56,8 @@ const links = computed<SettingsLink[]>(() => [
 
   { to: '/settings/publishing', label: t('nav.publishing'), icon: Globe, hint: t('settings.publishingHint') },
   { to: '/settings/api', label: t('nav.apiReference'), icon: Braces, hint: t('settings.apiReferenceHint') },
-  // Members, roles and — for a platform admin — the accounts themselves, all
-  // under one row. Accounts used to be a second row beside this one, which put
-  // "can this person sign in" and "what may they do here" in two places and
-  // gave a workspace admin a nav row that only ever 403'd.
+  // Members, roles, groups and requests under one row. Platform accounts are the
+  // admin console's (#1239); the page links a platform admin there.
   { to: '/settings/access', label: t('nav.access'), icon: ShieldCheck, hint: t('settings.accessHint') },
   { to: '/settings/activity', label: t('nav.activity'), icon: Activity, hint: t('settings.activityHint') },
   // Connect AI is a section in here (issue #182): open to every role, so this

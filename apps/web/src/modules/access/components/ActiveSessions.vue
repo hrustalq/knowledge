@@ -14,7 +14,8 @@ import type { ListSessionsResponse } from '@knowledge/contracts'
 import { api } from '@/shared/api/client'
 import { apiQueryOptions } from '@/shared/api/queries'
 import { errorMessage } from '@/shared/api/errors'
-import SessionList from './SessionList.vue'
+import { SessionList } from '@knowledge/ui/session-list'
+import { formatRelative } from '@/shared/utils/format'
 
 const { t } = useI18n()
 const queryClient = useQueryClient()
@@ -38,6 +39,6 @@ async function revoke(id: string) {
     <h3 class="text-sm font-medium">{{ t('profileSettings.sessions.title') }}</h3>
     <p class="mt-0.5 text-xs text-muted-foreground">{{ t('profileSettings.sessions.hint') }}</p>
   </div>
-  <SessionList v-if="sessions.length" class="mt-3" :sessions="sessions" :revoke="revoke" />
+  <SessionList v-if="sessions.length" class="mt-3" :sessions="sessions" :revoke="revoke" :when="formatRelative" />
   <p v-else-if="query.isSuccess.value" class="mt-3 text-xs text-muted-foreground">{{ t('profileSettings.sessions.none') }}</p>
 </template>

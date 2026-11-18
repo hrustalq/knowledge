@@ -1,32 +1,40 @@
 <script setup lang="ts">
 /**
  * Rows of login sessions (#75, #292): how each was opened, from where, and when
- * it was last used. Shared by your own profile and a platform admin's view of
- * someone else's, so both read a session the same way; the caller owns the
- * fetching and decides what revoking means. The current session gets no button
- * — signing out the page you are reading is what Log out is for.
+ * it was last used. Shared by your own profile, a workspace's member view and
+ * the admin console's user page (#1239), so every surface reads a session the
+ * same way; the caller owns the fetching and decides what revoking means. The
+ * current session gets no button: signing out the page you are reading is what
+ * Log out is for.
  */
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Monitor } from 'lucide-vue-next'
-import type { SessionView } from '@knowledge/contracts'
-import { formatRelative } from '@/shared/utils/format'
-import { labelFor } from '@/shared/i18n/labels'
-import { describeUserAgent } from '@/core/user-agent'
-import { Button } from '@knowledge/ui/button'
+import { Button } from '../button'
+import type { SessionRow } from './types'
+import { describeUserAgent } from './user-agent'
 
 const props = defineProps<{
-  sessions: SessionView[]
+  sessions: SessionRow[]
   revoke: (id: string) => Promise<void>
+  /** "5 minutes ago" for an ISO time, in the app's locale: the kit formats no dates itself. */
+  when: (iso: string) => string
 }>()
 
 const { t } = useI18n()
 const pending = ref<string | null>(null)
 
-function device(s: SessionView): string {
+const METHOD: Record<string, string> = {
+  password: 'ui.sessions.method.password',
+  oidc: 'ui.sessions.method.oidc',
+  saml: 'ui.sessions.method.saml',
+  ldap: 'ui.sessions.method.ldap',
+}
+
+function device(s: SessionRow): string {
   const d = describeUserAgent(s.userAgent)
-  if (!d) return t('profileSettings.sessions.unknownDevice')
-  return d.os ? t('profileSettings.sessions.onDevice', { browser: d.browser, os: d.os }) : d.browser
+  if (!d) return t('ui.sessions.unknownDevice')
+  return d.os ? t('ui.sessions.onDevice', { browser: d.browser, os: d.os }) : d.browser
 }
 
 async function onRevoke(id: string) {
@@ -47,16 +55,16 @@ async function onRevoke(id: string) {
         <p class="truncate">
           {{ device(s) }}
           <span v-if="s.current" class="ml-1 rounded bg-primary/10 px-1.5 py-0.5 text-caption font-medium text-primary">
-            {{ t('profileSettings.sessions.current') }}
+            {{ t('ui.sessions.current') }}
           </span>
         </p>
         <p class="mt-0.5 break-words text-xs text-muted-foreground">
-          {{ labelFor(t, 'profileSettings.sessions.method', s.authMethod) }}
+          {{ t(METHOD[s.authMethod] ?? METHOD.password) }}
           <template v-if="s.providerName"> · {{ s.providerName }}</template>
           <template v-if="s.ip"> · <span class="font-mono">{{ s.ip }}</span></template>
           · {{ s.lastSeenAt
-            ? t('profileSettings.sessions.lastSeen', { when: formatRelative(s.lastSeenAt) })
-            : t('profileSettings.sessions.signedIn', { when: formatRelative(s.createdAt) }) }}
+            ? t('ui.sessions.lastSeen', { when: when(s.lastSeenAt) })
+            : t('ui.sessions.signedIn', { when: when(s.createdAt) }) }}
         </p>
       </div>
       <Button
@@ -67,7 +75,7 @@ async function onRevoke(id: string) {
         :disabled="pending === s.id"
         @click="onRevoke(s.id)"
       >
-        {{ t('profileSettings.sessions.revoke') }}
+        {{ t('ui.sessions.revoke') }}
       </Button>
     </li>
   </ul>

@@ -56,6 +56,20 @@
       "fit": "Вписать в экран ({percent}%)",
       "previous": "Предыдущая диаграмма",
       "next": "Следующая диаграмма"
+    },
+    "sessions": {
+      "current": "Этот браузер",
+      "revoke": "Завершить",
+      "lastSeen": "Активен {when}",
+      "signedIn": "Вход {when}",
+      "unknownDevice": "Неизвестное устройство",
+      "onDevice": "{browser}, {os}",
+      "method": {
+        "password": "Пароль",
+        "oidc": "Единый вход (OIDC)",
+        "saml": "Единый вход (SAML)",
+        "ldap": "Каталог (LDAP)"
+      }
     }
   }
 }

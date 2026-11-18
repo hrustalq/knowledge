@@ -8,7 +8,7 @@ platform: configuration, monitoring, users and errors. Workspace settings keep w
 | 1 | [#1236] | [#1275] | `apps/admin`, its image and route; the platform-admin gate; `@knowledge/api-client` |
 | 2 | [#1237] | [#1276] | The configuration view: `GET /v1/admin/config` |
 | 3 | [#1238] | [#1277] | Monitoring: `GET /v1/admin/health`, `GET /healthz`, heartbeats and sweeper ticks |
-| 4 | [#1239] | — | Users across workspaces |
+| 4 | [#1239] | — | Users: the roster, one account's page, `user.*` audit actions; Accounts leaves `/settings/access` |
 | 5 | [#1240] | — | Errors over `ops_events` |
 
 [#1236]: https://github.com/hrustalq/knowledge/issues/1236
@@ -107,3 +107,33 @@ the export renderer, which inlines `tokens.css`) read one declaration. Problems 
 stores, expected processes with nothing live, and failed or late ticks, which sort first. A queue's failed
 count is shown in caution ink but not counted, because BullMQ keeps failed jobs and it would never clear.
 
+
+## Users
+
+The console's Users section replaces the Accounts tab that sat on the member app's `/settings/access`: who has an
+account is the platform's question, not a workspace's. `/settings/access` keeps members, roles, groups and
+requests, and shows a platform admin an **Accounts** link into the console (a plain link: another app, a full
+load). `/settings/users` redirects to `/settings/access`.
+
+- **The roster, `/users`.** `GET /v1/users` (`UsersController`, `@PlatformAdmin()` on the class), one response
+  for every account. Each `UserSummary` gains `lastSignInAt`, the newest `sessions.created_at` (one `groupBy` per
+  list, derived and never stored; a revoked or expired session still counts as a sign-in), and each membership
+  gains `workspaceName`. A deleted workspace's memberships are left out. Filters (status, role, workspace, name
+  or email) match client-side, and the workspace filter's options come from the memberships, so the page makes
+  one call.
+- **One account, `/users/:id`.** Read from the same roster query, so there is no per-user route. Actions are what
+  `v1/users` already did: rename, set password (a dialog, not `window.prompt`), make or revoke platform admin,
+  disable or enable, and the sessions with **Sign out everywhere**. Making an admin and disabling ask first. On
+  your own page the admin and disable buttons are off, because the API refuses both. Memberships are read-only
+  here: a role is changed from that workspace's Access page by whoever manages it.
+- **Audit.** Every account write records one row per kind of change, `workspaceId` null and `target` the user:
+  `user.created` (`invited`, `isAdmin`), `user.renamed` (`from`, `to`), `user.admin_granted`,
+  `user.admin_revoked`, `user.disabled`, `user.enabled` and `user.password_set`. `accountChanges`
+  (`users.service.ts`) writes a row only for a field whose value changed, and never the password. Session revokes
+  stay `auth.session_revoked`.
+
+The session rows (`SessionList`, `describeUserAgent`) moved from `apps/web` into `@knowledge/ui/session-list`, so
+the profile page and the console draw a session the same way. The kit keeps Intl out (its lint), so the list
+takes a `when` formatter. The Intl formatters both apps need (`formatRelative`, `formatDateTime`,
+`formatDuration`, …) are now `@knowledge/contracts/format`, taking an explicit locale. `apps/web`'s
+`shared/utils/format.ts` wraps them with the app's locale, and Monitoring dropped its inline copies.

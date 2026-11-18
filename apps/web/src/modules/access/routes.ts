@@ -29,10 +29,9 @@ export const settingsRoutes: RouteRecordRaw[] = [
   // handed to a client. A string redirect keeps the query, so
   // `?client=` still opens the client it named.
   { path: 'connect', redirect: '/settings/ai/connect' },
-  // Access: workspace members, what each role grants, and — for a
-  // platform admin — the accounts themselves. The page gates mutations
-  // by workspace role, and hides the Accounts tab for anyone the API's
-  // @PlatformAdmin guard would refuse.
+  // Access: workspace members, what each role grants, groups and
+  // requests. The page gates mutations by workspace role. The accounts
+  // themselves are the admin console's (/admin/users, #1239).
   { path: 'access', component: () => import('./pages/AccessControlPage.vue') },
   // Sign-in and the audit trail (#75): workspace administration, so the
   // page gates on auth.canAdminWorkspace and the API enforces admin.
@@ -42,13 +41,10 @@ export const settingsRoutes: RouteRecordRaw[] = [
   { path: 'features', component: () => import('./pages/FeaturesSettingsPage.vue') },
   // How an edit reaches a page (#958): admin-gated the same way.
   { path: 'editing', component: () => import('./pages/EditingSettingsPage.vue') },
-  // Accounts moved into /settings/access as a tab. Kept as a redirect
-  // rather than deleted: it was a nav row and a bookmark for as long as
-  // the settings shell has existed. No `platformAdmin` meta — the
-  // destination decides what to show, and bouncing a workspace admin to
-  // /403 for following their own bookmark is worse than landing them on
-  // the members list.
-  { path: 'users', redirect: '/settings/access?tab=accounts' },
+  // Accounts were a nav row here, then a tab of /settings/access, and are
+  // now the admin console's (#1239). Kept as a redirect: a bookmark lands
+  // on the members list, whose header links a platform admin onward.
+  { path: 'users', redirect: '/settings/access' },
 ]
 
 /**

@@ -56,6 +56,20 @@
       "fit": "Fit to screen ({percent}%)",
       "previous": "Previous diagram",
       "next": "Next diagram"
+    },
+    "sessions": {
+      "current": "This browser",
+      "revoke": "Sign out",
+      "lastSeen": "Last active {when}",
+      "signedIn": "Signed in {when}",
+      "unknownDevice": "Unknown device",
+      "onDevice": "{browser} on {os}",
+      "method": {
+        "password": "Password",
+        "oidc": "Single sign-on (OIDC)",
+        "saml": "Single sign-on (SAML)",
+        "ldap": "Directory (LDAP)"
+      }
     }
   }
 }

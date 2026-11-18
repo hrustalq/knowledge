@@ -6,18 +6,15 @@ import type {
   AuthMethod,
   AuthSessionResponse,
   Locale,
-  MemberCapability,
   MeResponse,
   SsoDiscoverResponse,
   SsoProvidersResponse,
-  WorkspaceAction,
   WorkspaceRole,
 } from '@knowledge/contracts'
 import { api, fetchApi, isApiRequestError } from '@/shared/api/queries'
 import { getWorkspaceId, setActiveWorkspace } from '@/shared/api/api'
 import { clearPwaCaches } from '@/shared/utils/pwa'
 import { forgetSignedInStorage } from '@/shared/utils/signed-in-storage'
-import { usePermissionsStore } from '@/stores/permissions'
 
 /**
  * #650 migration: a tab signed in before the session became an HttpOnly cookie
@@ -56,7 +53,6 @@ export const useAuthStore = defineStore('auth', {
     authenticated: (s) => s.me !== null,
     /** AUTH_MODE=none — no login UI, full access. */
     isDev: (s) => s.me?.mode === 'dev',
-    isAdmin: (s) => s.me?.isAdmin ?? false,
     /** How the current session was opened (#75); null for an API key or the dev principal. */
     authMethod: (s): AuthMethod | null => s.me?.authMethod ?? null,
     /**
@@ -65,23 +61,15 @@ export const useAuthStore = defineStore('auth', {
      * card until the mailed link is followed (docs/features/41).
      */
     verificationPending: (s) => !!s.me && s.me.emailVerificationRequired && !s.me.emailVerified,
-    /** Caller's role in the active workspace ('admin' for dev/platform admins). */
-    role(): WorkspaceRole | null {
+    /**
+     * The caller's role in the active workspace ('admin' for dev/platform
+     * admins), to show as a label. Never a permission: those are the API's
+     * answers, read through `usePermission` (#1299).
+     */
+    roleLabel(): WorkspaceRole | null {
       if (!this.me) return null
       if (this.me.mode === 'dev' || this.me.isAdmin) return 'admin'
       return this.me.memberships.find((m) => m.workspaceId === getWorkspaceId())?.role ?? null
-    },
-    /** The grants are the API's answer (#1296); these stay until their call sites move (#1299). */
-    canEdit: () => usePermissionsStore().allows('workspace:contribute'),
-    /** Commenting is a viewer action (feature 15); a guest reads only what is granted to it. */
-    canComment: () => usePermissionsStore().allows('workspace:view'),
-    canAdminWorkspace: () => usePermissionsStore().allows('workspace:admin'),
-    /** A member capability (#468) in the active workspace. */
-    can(): (capability: MemberCapability) => boolean {
-      // Resolved here, where Pinia has made this app's instance active (SSR renders run concurrently).
-      const permissions = usePermissionsStore()
-      // `api-test-suites.run` is the action `api-test-suites:run` (permission-actions.spec.ts pins it).
-      return (capability) => permissions.allows(capability.replace('.', ':') as WorkspaceAction)
     },
   },
   actions: {

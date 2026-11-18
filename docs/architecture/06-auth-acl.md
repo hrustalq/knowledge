@@ -518,8 +518,8 @@ is a constant, not a column.
 - **One predicate.** `hasCapability(member, capability, platformAdmin)`:
   platform admins and workspace admins hold every capability implicitly,
   everyone else what their row lists; a value outside the catalogue is dropped
-  on read (`memberCapabilitiesOf`). The guard, a background run and the web
-  (`auth.can()`) all read it.
+  on read (`memberCapabilitiesOf`). The guard and a background run read it;
+  the web reads the API's answer as `usePermission('api-test-suites:run')`.
 - **On a route** it is `@Access(role, source, { capability })`, checked in
   `requireRole` after the role and the operator flag. A guest is always sent
   through `requireRole` when a capability is named, so page grants cannot stand

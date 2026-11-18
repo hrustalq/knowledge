@@ -1,5 +1,6 @@
-// ESLint here exists for two jobs: keep UI copy in the i18n catalogs (#85,
-// docs/features/18-i18n.md), and keep API calls on the one typed client (#472).
+// ESLint here exists for three jobs: keep UI copy in the i18n catalogs (#85,
+// docs/features/18-i18n.md), keep API calls on the one typed client (#472),
+// and keep "may I" with the API rather than the workspace role (#1299).
 // General linting stays with vue-tsc; this config deliberately enables nothing
 // else.
 //
@@ -59,6 +60,44 @@ const RAW_FETCH_OK = [
   'src/modules/reader/**',
 ]
 
+// The API owns every "may I" (#1245): a control reads `usePermission(action)`,
+// never the caller's role. A comparison of `.role` / `.myRole` against a role
+// literal is how a rule gets rebuilt by hand, so it fails here, in a template as
+// much as in a script. `no-restricted-syntax` never visits a template and
+// eslint-plugin-vue is not installed, hence this small rule: vue-eslint-parser
+// hands it the template's expressions directly. Showing a role (a badge, a
+// "no grant needed" note) is allowed in ROLE_LABELS only.
+const ROLE_LITERALS = new Set(['admin', 'editor', 'viewer', 'guest'])
+const unchain = (n) => (n?.type === 'ChainExpression' ? n.expression : n)
+const isRoleRead = (n) =>
+  unchain(n)?.type === 'MemberExpression' && !unchain(n).computed && ['role', 'myRole'].includes(unchain(n).property.name)
+const isRoleLiteral = (n) => n?.type === 'Literal' && ROLE_LITERALS.has(n.value)
+const noRoleLiteral = {
+  meta: {
+    type: 'problem',
+    messages: {
+      role: 'Ask the API, not the role: read usePermission(\'<resource>:<action>\') from @/stores/permissions. A role shown as a label belongs in ROLE_LABELS (eslint.config.js).',
+    },
+  },
+  create(context) {
+    const BinaryExpression = (node) => {
+      if (!['==', '===', '!=', '!=='].includes(node.operator)) return
+      if ((isRoleRead(node.left) && isRoleLiteral(node.right)) || (isRoleRead(node.right) && isRoleLiteral(node.left))) {
+        context.report({ node, messageId: 'role' })
+      }
+    }
+    const services = context.sourceCode.parserServices
+    return services?.defineTemplateBodyVisitor
+      ? services.defineTemplateBodyVisitor({ BinaryExpression }, { BinaryExpression })
+      : { BinaryExpression }
+  },
+}
+const ROLE_LABELS = [
+  'src/modules/access/components/AccessRoles.vue', // the role matrix: members grouped and badged by role
+  'src/modules/access/components/AccessGroups.vue', // a guest badge on a group member
+  'src/modules/access/pages/AccessControlPage.vue', // "admins need no grant", beside an admin's row
+]
+
 // The app's catalogs, and the public reader's own small one (docs/features/43):
 // kept apart so a reader's bundle never carries the app's whole catalog. The UI
 // kit's `ui.*` keys are its own (packages/ui/src/messages): app code reads none.
@@ -95,6 +134,12 @@ export default [
       '@intlify/vue-i18n/no-missing-keys': 'error',
       'no-restricted-syntax': [...LOCALE_FORMATTING, ...RAW_FETCH],
     },
+  },
+  {
+    files: ['src/**/*.vue', 'src/**/*.ts'],
+    ignores: ['src/**/*.spec.ts', 'src/**/*.d.ts', ...ROLE_LABELS],
+    plugins: { knowledge: { rules: { 'no-role-literal': noRoleLiteral } } },
+    rules: { 'knowledge/no-role-literal': 'error' },
   },
   {
     files: ['src/**/*.ts'],

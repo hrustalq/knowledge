@@ -13,6 +13,7 @@ import { homeQuery } from './modules/home'
 import { ensureLocaleMessages } from './shared/i18n'
 import { useAuthStore } from './stores/auth'
 import { useDocumentsStore } from './stores/documents'
+import { usePermissionsStore } from './stores/permissions'
 import { useProjectsStore } from './stores/projects'
 import { useWorkspacesStore } from './stores/workspaces'
 
@@ -84,7 +85,11 @@ async function prefetchShell(router: Router, pinia: Pinia, queryClient: QueryCli
       // The fallback's roster is this render's first load, not a refresh of
       // the gone workspace's empty one: the rail lands by it (#671).
       projects.loaded = false
-      await projects.fetchList().catch(() => undefined)
+      await Promise.all([
+        projects.fetchList().catch(() => undefined),
+        // The guard read the gone workspace's grants; the render draws this one's controls.
+        usePermissionsStore(pinia).ensureLoaded(auth.me?.userId),
+      ])
     }
   }
   if (projects.loaded && projects.activeId !== scoped) {

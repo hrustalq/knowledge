@@ -22,7 +22,7 @@ import { AccessService } from './access.service.js';
 import { FeaturesService } from './features.service.js';
 import { type WorkspaceFeature, UUID_RE } from '@knowledge/contracts';
 import { PermissionService, type AccessResource, type BranchRefs } from '../permissions/permission.service.js';
-import type { Principal } from './principal.js';
+import { isPlatformAdmin, type Principal } from './principal.js';
 import { t } from '../i18n/t.js';
 import { bindTrace } from '@knowledge/observability';
 
@@ -88,7 +88,7 @@ export class AclGuard implements CanActivate {
     }
 
     if (this.reflector.getAllAndOverride<boolean>(PLATFORM_ADMIN_META, [ctx.getHandler(), ctx.getClass()])) {
-      if (principal.mode !== 'dev' && !principal.isAdmin) {
+      if (!isPlatformAdmin(principal)) {
         throw new ForbiddenException(t('error.auth.platformAdminRequired'));
       }
     }

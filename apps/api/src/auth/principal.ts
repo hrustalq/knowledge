@@ -102,3 +102,8 @@ export const ROLE_ORDER: Record<WorkspaceRole, number> = { guest: -1, viewer: 0,
  * otherwise let a guest in.
  */
 export const WORKSPACE_READER = { role: { not: 'guest' } } as const;
+
+/** What `@PlatformAdmin()` admits: a platform admin, or the dev principal. */
+export function isPlatformAdmin(principal: Principal): boolean {
+  return principal.mode === 'dev' || principal.isAdmin;
+}

@@ -961,6 +961,71 @@
         ]
       }
     },
+    "/v1/me/permissions": {
+      "get": {
+        "operationId": "MeController_grants",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MePermissionsResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "What the caller may do in a workspace: every workspace action of the permission catalogue (#1296)",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/v1/me/api-key": {
       "post": {
         "deprecated": true,
@@ -72259,6 +72324,49 @@
         "enum": [
           "section-off",
           "key-toolsets"
+        ]
+      },
+      "MePermissionsResponse": {
+        "type": "object",
+        "properties": {
+          "platform:admin": {
+            "type": "boolean"
+          },
+          "workspace:create": {
+            "type": "boolean"
+          },
+          "workspace:view": {
+            "type": "boolean"
+          },
+          "workspace:contribute": {
+            "type": "boolean"
+          },
+          "workspace:admin": {
+            "type": "boolean"
+          },
+          "workspace:history": {
+            "type": "boolean"
+          },
+          "workspace:publish-direct": {
+            "type": "boolean"
+          },
+          "api-test-suites:generate": {
+            "type": "boolean"
+          },
+          "api-test-suites:run": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "platform:admin",
+          "workspace:create",
+          "workspace:view",
+          "workspace:contribute",
+          "workspace:admin",
+          "workspace:history",
+          "workspace:publish-direct",
+          "api-test-suites:generate",
+          "api-test-suites:run"
         ]
       },
       "MeResponse": {

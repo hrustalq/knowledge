@@ -2,7 +2,6 @@
 // client load) and drives router guards + nav state. The session itself is an
 // HttpOnly cookie the API sets and clears (#650); nothing here can read it.
 import { defineStore } from 'pinia'
-import { hasCapability } from '@knowledge/contracts'
 import type {
   AuthMethod,
   AuthSessionResponse,
@@ -11,12 +10,14 @@ import type {
   MeResponse,
   SsoDiscoverResponse,
   SsoProvidersResponse,
+  WorkspaceAction,
   WorkspaceRole,
 } from '@knowledge/contracts'
 import { api, fetchApi, isApiRequestError } from '@/shared/api/queries'
 import { getWorkspaceId, setActiveWorkspace } from '@/shared/api/api'
 import { clearPwaCaches } from '@/shared/utils/pwa'
 import { forgetSignedInStorage } from '@/shared/utils/signed-in-storage'
+import { usePermissionsStore } from '@/stores/permissions'
 
 /**
  * #650 migration: a tab signed in before the session became an HttpOnly cookie
@@ -70,32 +71,17 @@ export const useAuthStore = defineStore('auth', {
       if (this.me.mode === 'dev' || this.me.isAdmin) return 'admin'
       return this.me.memberships.find((m) => m.workspaceId === getWorkspaceId())?.role ?? null
     },
-    canEdit(): boolean {
-      return this.role === 'editor' || this.role === 'admin'
-    },
-    /**
-     * Commenting is a viewer action (feature 15): whoever may read a page may
-     * annotate it. Mirrors `@Access('viewer', 'document')` on the API's
-     * thread routes.
-     */
-    canComment(): boolean {
-      // A guest reads only what is granted to it (#76), so workspace-wide it
-      // can comment on nothing — the API refuses it every `viewer` route.
-      return this.role !== null && this.role !== 'guest'
-    },
-    canAdminWorkspace(): boolean {
-      return this.role === 'admin'
-    },
-    /**
-     * A member capability (#468) in the active workspace, through the same
-     * predicate the API guard reads: workspace and platform admins hold all.
-     */
+    /** The grants are the API's answer (#1296); these stay until their call sites move (#1299). */
+    canEdit: () => usePermissionsStore().allows('workspace:contribute'),
+    /** Commenting is a viewer action (feature 15); a guest reads only what is granted to it. */
+    canComment: () => usePermissionsStore().allows('workspace:view'),
+    canAdminWorkspace: () => usePermissionsStore().allows('workspace:admin'),
+    /** A member capability (#468) in the active workspace. */
     can(): (capability: MemberCapability) => boolean {
-      const me = this.me
-      if (!me) return () => false
-      if (me.mode === 'dev') return () => true
-      const membership = me.memberships.find((m) => m.workspaceId === getWorkspaceId()) ?? null
-      return (capability) => hasCapability(membership, capability, me.isAdmin)
+      // Resolved here, where Pinia has made this app's instance active (SSR renders run concurrently).
+      const permissions = usePermissionsStore()
+      // `api-test-suites.run` is the action `api-test-suites:run` (permission-actions.spec.ts pins it).
+      return (capability) => permissions.allows(capability.replace('.', ':') as WorkspaceAction)
     },
   },
   actions: {

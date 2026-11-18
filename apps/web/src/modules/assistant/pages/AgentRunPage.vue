@@ -21,7 +21,7 @@ import { apiInfiniteQueryOptions, apiQueryOptions, useApiMutation } from '@/shar
 import { getWorkspaceId, relativeTime } from '@/shared/api/api'
 import { formatCosts, formatDuration, formatNumber } from '@/shared/utils/format'
 import { labelFor } from '@/shared/i18n/labels'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { documentDetailQuery } from '@/entities/document'
 import { Badge } from '@knowledge/ui/badge'
 import { Button } from '@knowledge/ui/button'
@@ -32,7 +32,7 @@ import { RUN_STATUS_ICON, isLiveRun, runStatusClass } from '../model/agent-run-u
 
 const { t } = useI18n()
 const route = useRoute()
-const auth = useAuthStore()
+const canContribute = usePermission('workspace:contribute')
 const workspaceId = getWorkspaceId()
 const runId = computed(() => String(route.params.id))
 
@@ -150,7 +150,7 @@ const stepMeta = (s: AgentRunStep) =>
           </p>
         </div>
         <Button
-          v-if="auth.canEdit && isLiveRun(run.status)"
+          v-if="canContribute && isLiveRun(run.status)"
           variant="outline"
           size="sm"
           class="text-destructive hover:text-destructive"

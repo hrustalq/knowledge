@@ -136,7 +136,7 @@ describe('account-security routes take a session, never an API key (#1092)', () 
 
   it('a workspace-pinned key does not create workspaces', async () => {
     const prisma = { workspace: { create: vi.fn() }, $transaction: vi.fn() };
-    const svc = new WorkspacesService(prisma as never, {} as never, {} as never, {} as never, { get: () => true } as never);
+    const svc = new WorkspacesService(prisma as never, {} as never, {} as never, {} as never, { get: () => true } as never, { permissionsChanged: () => {} } as never);
     await expect(svc.create(keyPrincipal, 'escape')).rejects.toBeInstanceOf(ForbiddenException);
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });

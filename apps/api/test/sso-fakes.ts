@@ -161,7 +161,7 @@ export function ssoHarness(config = fakeConfig(), defaults: Row = {}) {
     })),
   };
   const oidc = new OidcService(config as never);
-  const login = new SsoLoginService(prisma as never, audit as never, new RoleSyncService(prisma as never, audit as never));
+  const login = new SsoLoginService(prisma as never, audit as never, new RoleSyncService(prisma as never, audit as never, { permissionsChanged: () => {} } as never));
   const flow = new AuthFlowService(prisma as never, config as never, sessions as never, {} as never, audit as never, noAuthPolicy);
   const saml = new SamlService(config as never);
   const ldap = new LdapService(config as never);

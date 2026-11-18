@@ -575,7 +575,7 @@ describe('claims', () => {
     // The generic preset does not read `hd`; a google-preset provider is checked by SsoLoginService.
     expect(fragmentCode(await signIn(h, p.id, person({ hd: undefined })))).toBeTruthy();
 
-    const login = new SsoLoginService(h.prisma as never, h.audit as never, new RoleSyncService(h.prisma as never, h.audit as never));
+    const login = new SsoLoginService(h.prisma as never, h.audit as never, new RoleSyncService(h.prisma as never, h.audit as never, { permissionsChanged: () => {} } as never));
     const google = { ...p, id: randomUUID(), preset: 'google' };
     const id = { subject: 'g1', email: 'bob@corp.example', emailVerified: true, displayName: null, groups: [], idpSessionId: null, notes: [] };
     expect(await login.resolve(google as never, { ...id, hostedDomain: null })).toMatchObject({ ok: false, error: 'domain-not-allowed' });

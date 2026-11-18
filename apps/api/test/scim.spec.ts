@@ -14,6 +14,7 @@ import { AuditService } from '../src/auth/audit.service.js';
 import { SessionsService } from '../src/auth/sessions.service.js';
 import { GroupMappingsService } from '../src/auth/sso/group-mappings.service.js';
 import { RoleSyncService } from '../src/auth/sso/role-sync.service.js';
+import { AclEventsService } from '../src/permissions/acl-events.service.js';
 import { ScimController } from '../src/scim/scim.controller.js';
 import { ScimService } from '../src/scim/scim.service.js';
 import { ScimTokenGuard } from '../src/scim/scim-token.guard.js';
@@ -246,6 +247,7 @@ let app: INestApplication;
 let db: ReturnType<typeof fakeDb>;
 let audit: { record: ReturnType<typeof vi.fn> };
 let sessions: { revokeAllForUser: ReturnType<typeof vi.fn>; revokeIssuedBy: ReturnType<typeof vi.fn> };
+let aclEvents: { permissionsChanged: ReturnType<typeof vi.fn> };
 let tokens: ScimTokensService;
 let mappings: GroupMappingsService;
 
@@ -254,6 +256,7 @@ beforeEach(async () => {
   db = fakeDb();
   audit = { record: vi.fn(async () => undefined) };
   sessions = { revokeAllForUser: vi.fn(async () => 1), revokeIssuedBy: vi.fn(async () => 0) };
+  aclEvents = { permissionsChanged: vi.fn() };
   db.tables.scimToken.push(
     { id: randomUUID(), workspaceId: WS_A, name: 'Entra', tokenHash: sha(TOKEN_A), prefix: 'kscim_aaaaaaaa', lastUsedAt: null, revokedAt: null, createdAt: new Date() },
     { id: randomUUID(), workspaceId: WS_B, name: 'Okta', tokenHash: sha(TOKEN_B), prefix: 'kscim_bbbbbbbb', lastUsedAt: null, revokedAt: null, createdAt: new Date() },
@@ -270,6 +273,7 @@ beforeEach(async () => {
       { provide: PrismaService, useValue: db.prisma },
       { provide: AuditService, useValue: audit },
       { provide: SessionsService, useValue: sessions },
+      { provide: AclEventsService, useValue: aclEvents },
       { provide: ConfigService, useValue: config },
     ],
   }).compile();
@@ -430,6 +434,8 @@ describe('SCIM Users', () => {
     expect(sessions.revokeIssuedBy).toHaveBeenCalledWith(id, WS_A);
     expect(db.tables.user.find((u) => u.id === id)!.disabledAt).toBeNull();
     expect(actions()).toContain('scim.user_deactivated');
+    // Their open tabs hear it (#1297): the frame names them and nobody else.
+    expect(aclEvents.permissionsChanged).toHaveBeenLastCalledWith(WS_A, [id]);
 
     // Re-activating restores the membership.
     await entra.patch(`/Users/${id}`, { Operations: [{ op: 'replace', value: { active: true } }] });

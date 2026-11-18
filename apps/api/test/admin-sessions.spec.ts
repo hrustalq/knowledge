@@ -40,7 +40,7 @@ function harness(opts: { userExists?: boolean; revokedCount?: number } = {}) {
   };
   const audit = { record: vi.fn(async () => undefined) };
   const sessions = new SessionsService(prisma as never, config as never);
-  const users = new UsersService(prisma as never, sessions, {} as never, config as never, audit as never);
+  const users = new UsersService(prisma as never, sessions, {} as never, config as never, audit as never, { permissionsChanged: () => {} } as never);
   return { prisma, audit, users };
 }
 
@@ -116,7 +116,7 @@ describe('UsersService — account writes and what the console reads (#1239)', (
       onCommit: (fn: () => void) => fn(),
     };
     const audit = { record: vi.fn(async () => undefined) };
-    const users = new UsersService(prisma as never, new SessionsService(prisma as never, config as never), {} as never, config as never, audit as never);
+    const users = new UsersService(prisma as never, new SessionsService(prisma as never, config as never), {} as never, config as never, audit as never, { permissionsChanged: () => {} } as never);
     return { users, audit };
   }
 
@@ -150,7 +150,7 @@ describe('UsersService — account writes and what the console reads (#1239)', (
       },
       session: { groupBy: vi.fn(async () => [{ userId: USER, _max: { createdAt: new Date('2026-11-02T00:00:00Z') } }]) },
     };
-    const users = new UsersService(prisma as never, {} as never, {} as never, config as never, {} as never);
+    const users = new UsersService(prisma as never, {} as never, {} as never, config as never, {} as never, { permissionsChanged: () => {} } as never);
     const { users: list } = await users.list();
     expect(prisma.user.findMany.mock.calls[0][0]).toMatchObject({ include: { memberships: { where: { workspace: { deletedAt: null } } } } });
     expect(list.map((u) => u.lastSignInAt)).toEqual(['2026-11-02T00:00:00.000Z', null]);

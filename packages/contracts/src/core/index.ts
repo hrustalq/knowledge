@@ -573,6 +573,11 @@ export const KNOWN_EVENT_TYPES = [
   // page and no names: it tells live clients to drop what they cached about
   // who sees what and refetch the tree and search.
   'acl.changed',
+  // A person's own role, capabilities, operator or platform-admin flag moved
+  // (#1297). Always addressed: it carries that person's `userId` and nothing
+  // else about the change, and tells their open tabs to re-read /v1/me and
+  // their grants.
+  'permissions.changed',
   'attachment.created',
   'attachment.deleted',
   // A turn in progress, for a client rendering the assistant's own work

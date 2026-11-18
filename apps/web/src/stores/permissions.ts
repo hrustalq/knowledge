@@ -41,6 +41,29 @@ export const usePermissionsStore = defineStore('permissions', {
       }
       this.loadedFor = key
     },
+    /**
+     * Read the grants again after the person's standing moved (#1297). The last
+     * answer stays until the new one lands, so controls do not blink out, and
+     * stays on a failed read: the API enforces either way.
+     */
+    async refresh(): Promise<void> {
+      const workspaceId = getWorkspaceId()
+      if (!this.loadedFor?.endsWith(`:${workspaceId}`)) return
+      try {
+        await bindStoreQuery<MePermissionsResponse>(
+          this,
+          'grants',
+          this.queryClient,
+          optionsFor(workspaceId),
+          (res) => {
+            this.grants = res
+          },
+          { fresh: true },
+        )
+      } catch {
+        // see above
+      }
+    },
   },
 })
 

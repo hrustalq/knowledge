@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
 import { AuthCoreModule } from '../auth/auth-core.module.js';
 import { PrismaModule } from '../prisma/prisma.module.js';
 import { WorkspacesController } from './workspaces.controller.js';
@@ -18,7 +19,7 @@ import { ReadCacheCoreModule } from '../cache/read-cache.module.js';
  * the graph and BM25 may be deleted from.
  */
 @Module({
-  imports: [PrismaModule, AuthCoreModule, ProjectsModule, StorageModule, GraphModule, FulltextModule, ReadCacheCoreModule],
+  imports: [PrismaModule, AuthCoreModule, PermissionsCoreModule, ProjectsModule, StorageModule, GraphModule, FulltextModule, ReadCacheCoreModule],
   controllers: [WorkspacesController],
   providers: [WorkspacesService, WorkspaceTeardownService, WorkspaceTeardownSweeper],
 })

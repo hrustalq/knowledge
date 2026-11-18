@@ -40,6 +40,7 @@ import { apiQueryOptions, useApiMutation } from '@/shared/api/queries'
 import { errorMessage } from '@/shared/api/errors'
 import { getWorkspaceId } from '@/shared/api/api'
 import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { useProjectsStore } from '@/stores/projects'
 import { Button } from '@knowledge/ui/button'
 import { Input } from '@knowledge/ui/input'
@@ -60,6 +61,7 @@ import { CAPTURE_TABS, type CaptureTab } from '@/entities/capture'
 const { t } = useI18n()
 const route = useRoute()
 const auth = useAuthStore()
+const canContribute = usePermission('workspace:contribute')
 const projects = useProjectsStore()
 
 const ALL = 'all'
@@ -124,7 +126,7 @@ watch(apiKeyId, (id) => {
   if (key.value?.id !== id) key.value = null
 })
 
-const canFilterKey = (c: CaptureInfo) => auth.canEdit || c.createdBy === auth.me?.userId
+const canFilterKey = (c: CaptureInfo) => canContribute.value || c.createdBy === auth.me?.userId
 
 const invalidates = () => [['/v1/captures']]
 const bulk = useApiMutation('post', '/v1/captures/bulk-reject', { invalidates })
@@ -227,7 +229,7 @@ const projectNames = computed(() => new Map(projects.items.map((p) => [p.project
         </button>
       </span>
       <Button
-        v-if="apiKeyId && auth.canEdit && !listQuery.isError.value"
+        v-if="apiKeyId && canContribute && !listQuery.isError.value"
         variant="outline"
         size="sm"
         class="text-destructive hover:text-destructive"
@@ -263,7 +265,7 @@ const projectNames = computed(() => new Map(projects.items.map((p) => [p.project
           :key="c.captureId"
           :capture="c"
           :project-name="projectNames.get(c.projectId)"
-          :can-decide="auth.canEdit"
+          :can-decide="canContribute"
           :can-filter-key="canFilterKey(c)"
           @filter-key="(id: string) => (apiKeyId = id)"
         />

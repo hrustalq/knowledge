@@ -126,6 +126,9 @@ export interface HttpRequestEvent extends BacktestEventBase {
   status: number;
   requestBytes?: number;
   responseBytes?: number;
+  /** Prisma operations this request ran and their summed time; present only under OPS_QUERY_COUNT_ENABLED (#1242). */
+  queries?: number;
+  queryMs?: number;
 }
 
 /** The tuple a recall@k / MRR sweep needs. `results` is the ranked head, in order. */
@@ -140,6 +143,10 @@ export interface SearchExecutedEvent extends BacktestEventBase {
   vectorMs?: number;
   fulltextMs?: number;
   tagsMs?: number;
+  /** The query-embedding call, inside `vectorMs` (#1242). */
+  embedMs?: number;
+  /** The PG join that applies page permissions and reads trust, after the legs (#1242). */
+  joinMs?: number;
   vectorHits: number;
   fulltextHits: number;
   fusedHits: number;

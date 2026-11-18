@@ -17,7 +17,7 @@ import type { MemoInfo, MemoListResponse } from '@knowledge/contracts'
 import { apiQueryOptions } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
 import { formatDateTime, formatDuration, formatRelative } from '@/shared/utils/format'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { useProjectsStore } from '@/stores/projects'
 import { Button } from '@knowledge/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@knowledge/ui/select'
@@ -37,7 +37,7 @@ const workspaceId = getWorkspaceId()
 
 /** The list's one filter (#879): a kind of recording, or all of them. */
 const ALL = 'all'
-const auth = useAuthStore()
+const isWorkspaceAdmin = usePermission('workspace:admin')
 const { offered, labelOf, nameOf } = useMemoTypes(workspaceId)
 const typeFilter = ref(ALL)
 const tagFilter = ref(ALL)
@@ -103,7 +103,7 @@ const playable = (m: MemoInfo) => m.audioAvailable && m.status !== 'pending'
             <SelectItem v-for="tag in tagChoices" :key="tag" :value="tag">#{{ tag }}</SelectItem>
           </SelectContent>
         </Select>
-        <Button v-if="auth.canAdminWorkspace" size="sm" variant="ghost" @click="typesOpen = true">{{ t('memos.types.manage') }}</Button>
+        <Button v-if="isWorkspaceAdmin" size="sm" variant="ghost" @click="typesOpen = true">{{ t('memos.types.manage') }}</Button>
       </div>
 
       <p v-if="!memos.length" class="text-muted-foreground kn-measure text-sm">{{ t(typeFilter === ALL && tagFilter === ALL ? 'memos.empty' : 'memos.types.noneOfType') }}</p>
@@ -148,6 +148,6 @@ const playable = (m: MemoInfo) => m.audioAvailable && m.status !== 'pending'
         </li>
       </ul>
     </template>
-    <MemoTypesDialog v-if="auth.canAdminWorkspace" v-model:open="typesOpen" :workspace-id="workspaceId" />
+    <MemoTypesDialog v-if="isWorkspaceAdmin" v-model:open="typesOpen" :workspace-id="workspaceId" />
   </PageLayout>
 </template>

@@ -15,7 +15,7 @@ import type { ListProjectsResponse, ProjectSummary } from '@knowledge/contracts'
 import { api, fetchApi } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
 import { errorMessage } from '@/shared/api/errors'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { useProjectsStore } from '@/stores/projects'
 import { revealStackedPane } from '@/shared/utils/reveal-pane'
 import { Autocomplete, type AutocompleteOption } from '@knowledge/ui/autocomplete'
@@ -24,7 +24,7 @@ import { Skeleton } from '@knowledge/ui/skeleton'
 
 const { t } = useI18n()
 
-const auth = useAuthStore()
+const canContribute = usePermission('workspace:contribute')
 const store = useProjectsStore()
 const route = useRoute()
 const router = useRouter()
@@ -163,7 +163,7 @@ watch(
       </div>
 
       <!-- Create sits at the foot of the rail, below its own divider. -->
-      <div v-if="auth.canEdit" class="mt-auto shrink-0 border-t p-2">
+      <div v-if="canContribute" class="mt-auto shrink-0 border-t p-2">
         <Button variant="outline" size="sm" class="w-full justify-start gap-2" as-child>
           <RouterLink to="/projects/new">
             <Plus class="size-4" />

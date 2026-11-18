@@ -37,7 +37,7 @@ import type {
 import { apiQueryOptions, useApiMutation } from '@/shared/api/queries'
 import { errorMessage, errorReason } from '@/shared/api/errors'
 import { getProjectId, getWorkspaceId } from '@/shared/api/api'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { useDocumentsStore } from '@/stores/documents'
 import { useProjectsStore } from '@/stores/projects'
 import { useGlossaryStore } from '@/entities/document'
@@ -71,15 +71,15 @@ import { MarkdownView } from '@/entities/document'
 const { t } = useI18n()
 
 const route = useRoute()
-const auth = useAuthStore()
+const isWorkspaceAdmin = usePermission('workspace:admin')
 const documents = useDocumentsStore()
 const projects = useProjectsStore()
 const glossaryStore = useGlossaryStore()
 const workspaceId = getWorkspaceId()
 
-const canEdit = computed(() => auth.canEdit)
+const canEdit = usePermission('workspace:contribute')
 /** A workspace term is the whole workspace's vocabulary: an admin's to change, as the API enforces. */
-const canWrite = (term: GlossaryTerm) => (term.projectId === null ? auth.canAdminWorkspace : canEdit.value)
+const canWrite = (term: GlossaryTerm) => (term.projectId === null ? isWorkspaceAdmin.value : canEdit.value)
 const projectName = (id: string) => projects.items.find((p) => p.projectId === id)?.name ?? ''
 
 // --- filters -----------------------------------------------------------------
@@ -569,7 +569,7 @@ watch(highlighted, (id) => {
           </TableCell>
           <TableCell class="align-top text-right whitespace-nowrap">
             <Button
-              v-if="term.projectId !== null && auth.canAdminWorkspace"
+              v-if="term.projectId !== null && isWorkspaceAdmin"
               variant="ghost"
               size="sm"
               :disabled="busy"
@@ -634,7 +634,7 @@ watch(highlighted, (id) => {
             :fallback-label="pageLabel"
             :empty-hint="t('hints.noPagesToLink')"
           />
-          <label v-if="!editing && auth.canAdminWorkspace" class="flex items-start gap-2">
+          <label v-if="!editing && isWorkspaceAdmin" class="flex items-start gap-2">
             <Checkbox class="mt-0.5" :model-value="form.workspace" @update:model-value="form.workspace = $event === true" />
             <span class="text-sm">
               {{ t('glossary.workspaceTerm') }}

@@ -9,7 +9,7 @@ import {
 import type { Pinia } from 'pinia'
 import { useAuthStore } from '@/stores/auth'
 import { useFeaturesStore } from '@/stores/features'
-import { usePermissionsStore } from '@/stores/permissions'
+import { isWorkspaceAction, usePermissionsStore } from '@/stores/permissions'
 import { isWorkspaceFeature } from '@knowledge/contracts'
 import { reauthKindOf } from '@/modules/auth'
 import * as access from '@/modules/access/routes'
@@ -91,7 +91,8 @@ export function createRouter() {
  * - authenticated on /login|/signup → /documents, unless /login was asked to
  *   sign them in again (`?reauth=`, a workspace's sign-in policy, #75) — the
  *   bounce back would 403 straight into /login again, forever
- * - non-platform-admin on an admin route → /403 (RBAC)
+ * - a route whose `meta.permission` the caller lacks → /403: an admin-only
+ *   settings page refuses here rather than opening read-only
  * - unconfirmed address under AUTH_REQUIRE_VERIFIED_EMAIL → /verify-email
  *   (docs/features/41); every other route would only answer 403 anyway
  * - a route whose `meta.feature` the workspace switched off (#604) → / (the home)
@@ -111,8 +112,9 @@ export function installAuthGuard(router: Router, pinia: Pinia) {
     // Before the features read: a gated account would only collect a 403 for it.
     if (auth.verificationPending) return { path: '/verify-email' }
     const features = useFeaturesStore(pinia)
-    await Promise.all([features.ensureLoaded(), usePermissionsStore(pinia).ensureLoaded(auth.me?.userId)])
-    return refusal(to, auth, features) ?? true
+    const permissions = usePermissionsStore(pinia)
+    await Promise.all([features.ensureLoaded(), permissions.ensureLoaded(auth.me?.userId)])
+    return refusal(to, auth, features, permissions) ?? true
   })
 }
 
@@ -125,9 +127,11 @@ export function refusal(
   to: Pick<RouteLocationNormalized, 'meta' | 'matched' | 'path' | 'fullPath'>,
   auth: ReturnType<typeof useAuthStore>,
   features: ReturnType<typeof useFeaturesStore>,
+  permissions: ReturnType<typeof usePermissionsStore>,
 ): { path: string; query?: Record<string, string> } | null {
   if (auth.verificationPending) return { path: '/verify-email' }
-  if (to.meta.platformAdmin && !auth.isAdmin && !auth.isDev) return { path: '/403' }
+  const needs = to.matched.map((r) => r.meta.permission).filter(isWorkspaceAction)
+  if (needs.some((action) => !permissions.allows(action))) return { path: '/403' }
   // A section the workspace switched off (#604) is not there: home, not a 404,
   // since the link that led here was the app's own until the switch.
   const feature = to.matched.map((r) => r.meta.feature).find(isWorkspaceFeature)
@@ -135,7 +139,7 @@ export function refusal(
   // A workspace nobody has said the purpose of (#934): its admin is asked once,
   // and `next` carries them on to where they were heading. Confirm and Skip both
   // set the flag in the store before navigating, so this cannot loop.
-  if (!features.purposeAsked && auth.canAdminWorkspace && to.path !== access.PURPOSE_SETUP_PATH) {
+  if (!features.purposeAsked && permissions.allows('workspace:admin') && to.path !== access.PURPOSE_SETUP_PATH) {
     return { path: access.PURPOSE_SETUP_PATH, query: to.fullPath === '/' ? {} : { next: to.fullPath } }
   }
   return null

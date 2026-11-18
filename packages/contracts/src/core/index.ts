@@ -1079,15 +1079,6 @@ export interface ProjectSettingOverridesResponse {
   overrides: { projectId: string; name: string; settings: ProjectSettingKey[] }[];
 }
 
-// GET /v1/projects/:id/settings/access — what the caller may change on the project's settings page.
-export interface ProjectSettingsAccess {
-  projectId: string;
-  /** Workspace admin, or a workspace editor holding `manage` on the project: the non-gate settings. */
-  canWrite: boolean;
-  /** Workspace admin: the two merge gates, `breakingChanges` and `lintPolicy`. */
-  canWriteGates: boolean;
-}
-
 /**
  * GET/PATCH /v1/projects/:id/settings/capture-parent (#924): the page new
  * captured pages of the project nest under. `workspace` and `project` are what

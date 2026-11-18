@@ -155,6 +155,13 @@ in the pull request that introduces them — see
   from the server: `GET /v1/documents/:id/permissions` (a sibling of the page detail, never cached), a
   `permissions` map on `GET /v1/projects/:id` and `GET /v1/merge-requests/:id`, and an `accessLevel` on every row of
   `GET /v1/documents/tree` and `GET /v1/documents`. Nobody may do anything they could not do before. (#1298)
+- **Admin-only settings pages refuse at the door.** Opening Settings → Chat bots, Security, Features or Editing, or
+  Analytics, without the workspace admin role now lands on the "no access" page. Before, the page opened with every
+  control disabled. Every other control in the web app now reads what the API answered rather than the workspace
+  role, so what it shows matches what the API allows everywhere. That includes Settings → Access for a workspace
+  other than the active one, which is now judged against that workspace. `GET /v1/projects/:id/settings/access` is
+  removed: the project page reads the `permissions` map on `GET /v1/projects/:id` instead, and nothing else called
+  it. (#1299)
 
 - **Open tabs follow a role change without a reload.** When an admin changes someone's role, operator flag or
   capabilities, adds or removes them, or flips their platform-admin flag, and when an SSO sign-in or SCIM sync moves

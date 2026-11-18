@@ -6,11 +6,12 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 import { FilePlus2, Sparkles, Upload, Workflow } from 'lucide-vue-next'
 import { Button } from '@knowledge/ui/button'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { useFeaturesStore } from '@/stores/features'
 
 const { t } = useI18n()
-const auth = useAuthStore()
+const canContribute = usePermission('workspace:contribute')
+const canViewWorkspace = usePermission('workspace:view')
 const features = useFeaturesStore()
 
 interface HomeAction {
@@ -21,11 +22,11 @@ interface HomeAction {
 
 const actions = computed(() => {
   const out: HomeAction[] = []
-  if (auth.canEdit) out.push({ to: '/create', label: t('home.actions.newPage'), icon: FilePlus2 })
-  if (auth.canEdit) out.push({ to: '/upload', label: t('home.actions.import'), icon: Upload })
+  if (canContribute.value) out.push({ to: '/create', label: t('home.actions.newPage'), icon: FilePlus2 })
+  if (canContribute.value) out.push({ to: '/upload', label: t('home.actions.import'), icon: Upload })
   // A guest fails every workspace-level route, the assistant's among them.
-  if (auth.canComment && features.isOn('assistant')) out.push({ to: '/assistant', label: t('home.actions.ask'), icon: Sparkles })
-  if (auth.canEdit && features.isOn('workflows')) out.push({ to: '/workflows', label: t('home.actions.workflow'), icon: Workflow })
+  if (canViewWorkspace.value && features.isOn('assistant')) out.push({ to: '/assistant', label: t('home.actions.ask'), icon: Sparkles })
+  if (canContribute.value && features.isOn('workflows')) out.push({ to: '/workflows', label: t('home.actions.workflow'), icon: Workflow })
   return out
 })
 </script>

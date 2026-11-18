@@ -17,14 +17,14 @@ import { apiInfiniteQueryOptions, apiQueryOptions } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
 import { formatDateTime } from '@/shared/utils/format'
 import { labelFor } from '@/shared/i18n/labels'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { Button } from '@knowledge/ui/button'
 import { PageState } from '@knowledge/ui/layout'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@knowledge/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@knowledge/ui/table'
 
 const { t } = useI18n()
-const auth = useAuthStore()
+const isPlatformAdmin = usePermission('platform:admin')
 
 // A Select item cannot carry the empty string, so "no filter" needs a value of its own.
 const ALL = '__all__'
@@ -43,7 +43,7 @@ const workspaceLog = useInfiniteQuery(
 const platformLog = useInfiniteQuery(
   computed(() => ({
     ...apiInfiniteQueryOptions('/v1/admin/audit-logs', { query: filter.value }),
-    enabled: scope.value === 'platform' && auth.isAdmin,
+    enabled: scope.value === 'platform' && isPlatformAdmin.value,
   })),
 )
 const log = computed(() => (scope.value === 'platform' ? platformLog : workspaceLog))
@@ -58,7 +58,7 @@ const members = useQuery(
   })),
 )
 const users = useQuery(
-  computed(() => ({ ...apiQueryOptions('/v1/users'), enabled: scope.value === 'platform' && auth.isAdmin })),
+  computed(() => ({ ...apiQueryOptions('/v1/users'), enabled: scope.value === 'platform' && isPlatformAdmin.value })),
 )
 const names = computed(() => {
   const map = new Map<string, string>()
@@ -90,7 +90,7 @@ function actionLabel(a: string): string {
     </div>
 
     <div class="flex flex-wrap items-center gap-2">
-      <div v-if="auth.isAdmin" class="flex gap-1" role="group" :aria-label="t('security.audit.scope.label')">
+      <div v-if="isPlatformAdmin" class="flex gap-1" role="group" :aria-label="t('security.audit.scope.label')">
         <Button
           v-for="s in (['workspace', 'platform'] as const)"
           :key="s"

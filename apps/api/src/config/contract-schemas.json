@@ -21389,25 +21389,6 @@
       "overrides"
     ]
   },
-  "ProjectSettingsAccess": {
-    "type": "object",
-    "properties": {
-      "projectId": {
-        "type": "string"
-      },
-      "canWrite": {
-        "type": "boolean"
-      },
-      "canWriteGates": {
-        "type": "boolean"
-      }
-    },
-    "required": [
-      "projectId",
-      "canWrite",
-      "canWriteGates"
-    ]
-  },
   "ProjectSiteResponse": {
     "type": "object",
     "properties": {

@@ -24,7 +24,7 @@ import { getWorkspaceId, relativeTime } from '@/shared/api/api'
 import { labelFor } from '@/shared/i18n/labels'
 import { Badge } from '@knowledge/ui/badge'
 import { Button } from '@knowledge/ui/button'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { useFeedbackStore } from '@/entities/assistant'
 import ReportIssueDialog from './ReportIssueDialog.vue'
 import { WorkItemChips } from '@/entities/document'
@@ -36,7 +36,7 @@ const props = defineProps<{
 }>()
 
 const { t } = useI18n()
-const auth = useAuthStore()
+const canContribute = usePermission('workspace:contribute')
 const feedback = useFeedbackStore()
 const queryClient = useQueryClient()
 
@@ -114,7 +114,7 @@ const statusVariant = (status: string) =>
             {{ t('knowledgeIssue.openMergeRequest') }}
           </RouterLink>
         </p>
-        <div v-if="auth.canEdit" class="mt-2 flex gap-1.5">
+        <div v-if="canContribute" class="mt-2 flex gap-1.5">
           <Button variant="outline" size="sm" class="h-7 text-xs" :disabled="busy === issue.id" @click="close(issue, 'resolved')">
             {{ t('knowledgeIssue.resolve') }}
           </Button>
@@ -122,7 +122,7 @@ const statusVariant = (status: string) =>
             {{ t('knowledgeIssue.dismiss') }}
           </Button>
         </div>
-        <WorkItemChips source-kind="issue" :source-id="issue.id" :can-handoff="auth.canEdit" class="mt-2" />
+        <WorkItemChips source-kind="issue" :source-id="issue.id" :can-handoff="canContribute" class="mt-2" />
       </li>
     </ul>
 

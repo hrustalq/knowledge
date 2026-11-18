@@ -13,6 +13,6 @@ export const routes: RouteRecordRaw[] = [
 export const settingsRoutes: RouteRecordRaw[] = [
   // API reference (#78): the try-it proxy mode. Open to every member to
   // read, since the console needs to know; the page gates the change on
-  // auth.canAdminWorkspace and the API enforces admin.
+  // `workspace:admin` and the API enforces admin.
   { path: 'api', component: () => import('./pages/ApiSettingsPage.vue') },
 ]

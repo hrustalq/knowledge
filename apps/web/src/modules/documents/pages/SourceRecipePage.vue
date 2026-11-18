@@ -63,13 +63,12 @@ import { Button } from '@knowledge/ui/button'
 import { Card } from '@knowledge/ui/card'
 import { Input } from '@knowledge/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@knowledge/ui/select'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { appliedChecks, blankRule, cleanRecipe, cloneRecipe, recipeAttention } from '../model/source-recipe'
 
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
-const auth = useAuthStore()
 const queryClient = useQueryClient()
 
 /** A crawled tree's recipe (the connector's), rather than one page's. */
@@ -101,7 +100,7 @@ const state = computed<DocumentSourceRecipeState | undefined>(() => {
   return s && { active: s.active, proposal: s.proposal, heldAt: null, heldReasons: [], heldDetail: null, structureChangedAt: null, hasBody: !!picked.value?.hasBody }
 })
 const attention = computed(() => recipeAttention(state.value))
-const canEdit = computed(() => auth.canEdit)
+const canEdit = usePermission('workspace:contribute')
 const selectorsEditable = computed(() => canEdit.value && (tree.value || attention.value === 'held' || attention.value === 'proposal'))
 /** Where the person goes once the recipe is saved: the page, or the tree's root. */
 const home = computed(() =>

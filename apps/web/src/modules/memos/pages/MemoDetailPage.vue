@@ -33,7 +33,7 @@ import { UserAvatar, useMembers } from '@/entities/person'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@knowledge/ui/select'
 import { Input } from '@knowledge/ui/input'
 import { Label } from '@knowledge/ui/label'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { useProjectsStore } from '@/stores/projects'
 import MemoActions from '@/modules/memos/components/MemoActions.vue'
 import { useMemoTypes } from '@/modules/memos/model/memo-types'
@@ -203,7 +203,7 @@ watch(
  * follows (doc 75), so it is saved only by the admin's own press there. A
  * saved type becomes this memo's choice.
  */
-const auth = useAuthStore()
+const isWorkspaceAdmin = usePermission('workspace:admin')
 const typesOpen = ref(false)
 const typesDraft = computed(() => data.value?.triage?.newType ?? null)
 const adoptType = () => {
@@ -350,7 +350,7 @@ const retry = () => act(() => request('post', '/v1/memos/{id}/retry', { path: { 
           </div>
           <div v-if="data.triage?.newType && review.type === NO_TYPE" class="text-muted-foreground space-y-1.5 text-xs">
             <p>{{ t('memos.review.newType', { name: data.triage.newType.name }) }}</p>
-            <template v-if="auth.canAdminWorkspace">
+            <template v-if="isWorkspaceAdmin">
               <p class="italic">{{ data.triage.newType.guidance }}</p>
               <Button size="xs" variant="outline" :disabled="acting" @click="adoptType">{{ t('memos.review.adoptType') }}</Button>
               <MemoTypesDialog v-model:open="typesOpen" :workspace-id="getWorkspaceId()" :draft="typesDraft" @saved="adopted" />

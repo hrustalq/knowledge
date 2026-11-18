@@ -31,7 +31,7 @@ const { t } = useI18n()
 const auth = useAuthStore()
 const router = useRouter()
 
-const roleLabel = computed(() => (auth.role ? t(`role.${auth.role}`) : t('nav.noRole')))
+const roleLabel = computed(() => (auth.roleLabel ? t(`role.${auth.roleLabel}`) : t('nav.noRole')))
 
 async function logout() {
   await auth.logout()

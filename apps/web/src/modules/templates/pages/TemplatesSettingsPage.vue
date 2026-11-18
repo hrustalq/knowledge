@@ -8,7 +8,7 @@
  * template's shape and its version history, and is where it is written:
  * created, edited, customised (a built-in), reset, hidden or archived.
  *
- * Controls follow `canWriteTemplate`, the API's rule: a project template is an
+ * Controls follow `templateWriteAction`, the API's rule: a project template is an
  * editor's, a workspace-wide one or a built-in an admin's. The API enforces
  * it either way; hiding a control only spares a 403.
  *
@@ -37,8 +37,8 @@ import { api } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
 import { errorMessage } from '@/shared/api/errors'
 import { labelFor } from '@/shared/i18n/labels'
-import { canWriteTemplate, groupTemplates, matchesTemplate } from '@/entities/template'
-import { useAuthStore } from '@/stores/auth'
+import { groupTemplates, matchesTemplate, templateWriteAction } from '@/entities/template'
+import { usePermission, usePermissionsStore } from '@/stores/permissions'
 import { useTemplatesStore } from '@/entities/template'
 import { Badge } from '@knowledge/ui/badge'
 import { Button } from '@knowledge/ui/button'
@@ -63,7 +63,8 @@ import { PageTabs, panelId, tabId, type PageTab } from '@knowledge/ui/layout'
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
-const auth = useAuthStore()
+const permissions = usePermissionsStore()
+const canContribute = usePermission('workspace:contribute')
 const templates = useTemplatesStore()
 
 // On mount, not in setup: setup also runs in the SSR pass, and a fetch started
@@ -87,8 +88,8 @@ const selected = computed<TemplateSummary | null>(() =>
 )
 
 /** Anyone who could create at least a project template. */
-const canCreate = computed(() => canWriteTemplate('project', auth.role))
-const canWrite = computed(() => (selected.value ? canWriteTemplate(selected.value.scope, auth.role) : false))
+const canCreate = computed(() => permissions.allows(templateWriteAction('project')))
+const canWrite = computed(() => (selected.value ? permissions.allows(templateWriteAction(selected.value.scope)) : false))
 
 const detail = ref<TemplateDetail | null>(null)
 const detailError = ref<string | null>(null)
@@ -308,7 +309,7 @@ watch(
             <h2 class="min-w-0 flex-1 basis-48 truncate text-lg font-semibold">{{ selected.name }}</h2>
 
             <div v-if="!editing" class="flex flex-wrap gap-1.5">
-              <Button v-if="offered && auth.canEdit" variant="outline" size="sm" @click="useTemplate">
+              <Button v-if="offered && canContribute" variant="outline" size="sm" @click="useTemplate">
                 <FilePlus2 class="size-3.5" /> {{ t('templates.settings.use') }}
               </Button>
               <template v-if="canWrite">
@@ -350,7 +351,7 @@ watch(
           <p v-if="selected.description" class="text-muted-foreground text-sm">{{ selected.description }}</p>
         </header>
 
-        <p v-if="!canWrite && auth.role" class="text-muted-foreground mb-4 text-xs">
+        <p v-if="!canWrite" class="text-muted-foreground mb-4 text-xs">
           {{ selected.scope === 'project' ? t('templates.settings.readOnly') : t('templates.settings.adminOnly') }}
         </p>
 

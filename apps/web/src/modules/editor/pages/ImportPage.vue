@@ -36,7 +36,7 @@ import { DOCUMENT_CATEGORIES, type DocumentCategory, type TemplateDetail } from 
 import { getWorkspaceId } from '@/shared/api/api'
 import { useDocumentsStore } from '@/stores/documents'
 import { useProjectsStore } from '@/stores/projects'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { useTemplatesStore } from '@/entities/template'
 import { Button } from '@knowledge/ui/button'
 import { SaveAsTemplateDialog, type SaveAsTemplatePage } from '@/entities/template'
@@ -55,7 +55,7 @@ const MAX_BYTES = 52_428_800
 const router = useRouter()
 const projects = useProjectsStore()
 const documents = useDocumentsStore()
-const auth = useAuthStore()
+const canContribute = usePermission('workspace:contribute')
 const templates = useTemplatesStore()
 
 const file = ref<File | null>(null)
@@ -367,7 +367,7 @@ function tryAgain(): void {
           <Button :disabled="busy || !title.trim()" @click="create">
             {{ busy ? t('import.creatingPage') : t('import.createPage') }}
           </Button>
-          <Button v-if="auth.canEdit" variant="outline" :disabled="busy" @click="openSaveAsTemplate">
+          <Button v-if="canContribute" variant="outline" :disabled="busy" @click="openSaveAsTemplate">
             {{ t('import.saveAsTemplate') }}
           </Button>
           <Button variant="ghost" :disabled="busy" @click="throwAway">{{ t('common.discard') }}</Button>

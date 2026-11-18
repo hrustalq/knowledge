@@ -20,7 +20,7 @@ import type {
 } from '@knowledge/contracts'
 import { api } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { useGlossaryStore } from '@/entities/document'
 import { Badge } from '@knowledge/ui/badge'
 import { Button } from '@knowledge/ui/button'
@@ -46,7 +46,6 @@ interface ChatMessage {
 
 const props = defineProps<{ documentId: string; title: string }>()
 
-const auth = useAuthStore()
 const glossaryStore = useGlossaryStore()
 
 const open = ref(false)
@@ -71,7 +70,7 @@ const PROMPTS = computed(() => [
   { label: t('assistant.promptRelated'), prompt: t('assistant.promptRelatedBody') },
 ])
 
-const canBuildGlossary = computed(() => auth.canEdit)
+const canBuildGlossary = usePermission('workspace:contribute')
 
 // A different page is a different conversation.
 watch(

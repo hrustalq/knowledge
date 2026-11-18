@@ -1,7 +1,7 @@
 import { computed, toValue, type ComputedRef, type MaybeRefOrGetter } from 'vue'
 import { defineStore } from 'pinia'
 import { useQuery } from '@tanstack/vue-query'
-import type { MePermissionsResponse, PermissionAction, ResourceAction, WorkspaceAction } from '@knowledge/contracts'
+import { WORKSPACE_ACTIONS, type MePermissionsResponse, type PermissionAction, type ResourceAction, type WorkspaceAction } from '@knowledge/contracts'
 import { apiQueryOptions, bindStoreQuery } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
 import { PERMISSION_READS } from '@/shared/api/live-cache'
@@ -75,12 +75,20 @@ export const usePermissionsStore = defineStore('permissions', {
 export const documentPermissionsQuery = (id: string, branch?: string | null) =>
   apiQueryOptions('/v1/documents/{id}/permissions', { path: { id }, ...(branch ? { query: { branch } } : {}) })
 
-/** The read that carries a resource action's answer (#1298): the page's sibling route, or the project or merge request detail. */
+/** A workspace action of the catalogue (a route's `meta.permission` is untyped). */
+export const isWorkspaceAction = (action: unknown): action is WorkspaceAction =>
+  (WORKSPACE_ACTIONS as readonly unknown[]).includes(action)
+
+/**
+ * The read that carries an action's answer for `id` (#1298): the page's sibling
+ * route, the project or merge request detail, or another workspace's grants.
+ */
 function resourceQuery(
-  action: ResourceAction,
+  action: PermissionAction,
   id: string,
   branch?: string | null,
 ): { queryKey: readonly unknown[]; queryFn: (ctx: { signal: AbortSignal }) => Promise<unknown>; staleTime?: number } {
+  if (isWorkspaceAction(action)) return optionsFor(id)
   if (action.startsWith('project:')) return apiQueryOptions('/v1/projects/{id}', { path: { id } })
   if (action.startsWith('merge-request:')) return apiQueryOptions('/v1/merge-requests/{id}', { path: { id } })
   return documentPermissionsQuery(id, branch)
@@ -88,12 +96,17 @@ function resourceQuery(
 
 /**
  * `usePermission('workspace:contribute')`, or `usePermission('document:edit',
- * documentId)` for a resource: reactive, for a component's setup. A resource
+ * documentId)` for a resource: reactive, for a component's setup. A workspace
+ * action with an id answers for that workspace rather than the active one (a
+ * page that picks among workspaces, such as Access). A resource
  * answer is read from the query that carries it, which the page has usually
  * asked already (same key, one request); `branch` is `branch:edit`'s. Until it
  * lands, and on a failed read, the answer is `false`: the API enforces either way.
  */
-export function usePermission(action: WorkspaceAction): ComputedRef<boolean>
+export function usePermission(
+  action: WorkspaceAction,
+  workspaceId?: MaybeRefOrGetter<string | null | undefined>,
+): ComputedRef<boolean>
 export function usePermission(
   action: ResourceAction,
   id: MaybeRefOrGetter<string | null | undefined>,
@@ -110,7 +123,7 @@ export function usePermission(
   }
   const query = useQuery(
     computed(() => ({
-      ...resourceQuery(action as ResourceAction, toValue(id) ?? '', toValue(branch)),
+      ...resourceQuery(action, toValue(id) ?? '', toValue(branch)),
       enabled: !!toValue(id),
     })),
   )

@@ -993,23 +993,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/projects/{id}/settings/access": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** What the caller may change on the project's settings page: the non-gate settings, and the merge gates */
-        get: operations["ProjectsController_settingsAccess"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/projects/{id}": {
         parameters: {
             query?: never;
@@ -16759,11 +16742,6 @@ export interface components {
                 settings: components["schemas"]["ProjectSettingKey"][];
             }[];
         };
-        ProjectSettingsAccess: {
-            projectId: string;
-            canWrite: boolean;
-            canWriteGates: boolean;
-        };
         ProjectSiteResponse: {
             site: components["schemas"]["PublishedSiteSummary"] | null;
             policy: {
@@ -21751,48 +21729,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProjectSettingOverridesResponse"];
-                };
-            };
-            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
-            "5XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-        };
-    };
-    ProjectsController_settingsAccess: {
-        parameters: {
-            query?: never;
-            header?: {
-                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
-                "Accept-Language"?: "en" | "ru";
-            };
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProjectSettingsAccess"];
                 };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */

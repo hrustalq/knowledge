@@ -11,7 +11,7 @@ import { toast } from 'vue-sonner'
 import { errorMessage } from '@/shared/api/errors'
 import { Button } from '@knowledge/ui/button'
 import { Textarea } from '@knowledge/ui/textarea'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { useFeaturesStore } from '@/stores/features'
 import FeatureSections from '../components/FeatureSections.vue'
 import PurposeUses from '../components/PurposeUses.vue'
@@ -19,7 +19,7 @@ import { usePurposeDraft } from '../model/purpose-draft'
 import { PURPOSE_SETUP_PATH } from '../model/purpose-setup-path'
 
 const { t } = useI18n()
-const auth = useAuthStore()
+const isWorkspaceAdmin = usePermission('workspace:admin')
 const features = useFeaturesStore()
 const draft = usePurposeDraft()
 
@@ -27,7 +27,7 @@ const draft = usePurposeDraft()
 const description = ref('')
 const storedDescription = ref('')
 onMounted(async () => {
-  if (!auth.canAdminWorkspace) return
+  if (!isWorkspaceAdmin.value) return
   try {
     description.value = storedDescription.value = (await features.loadPurpose()).description ?? ''
   } catch (e) {
@@ -70,7 +70,7 @@ async function save() {
       <h1 class="font-display text-2xl font-bold tracking-tight">{{ t('features.title') }}</h1>
       <p class="kn-measure mt-0.5 text-sm text-muted-foreground">{{ t('features.subtitle') }}</p>
     </div>
-    <p v-if="!auth.canAdminWorkspace" class="text-sm text-muted-foreground">{{ t('features.adminOnly') }}</p>
+    <p v-if="!isWorkspaceAdmin" class="text-sm text-muted-foreground">{{ t('features.adminOnly') }}</p>
 
     <form v-else class="space-y-8" @submit.prevent="save">
       <section class="space-y-3" aria-labelledby="purpose-heading">

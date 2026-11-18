@@ -33,7 +33,7 @@ const MERGE_REQUEST_ACTIONS = resourceActions<MergeRequestAction>('merge-request
 /**
  * The answers behind the permission catalogue (#1296, #1298): each action of
  * `PERMISSION_ACTIONS`, asked of the guard that enforces it, without throwing
- * — `PermissionService.projectSettingsAccess` is the pattern. Role actions go
+ * — `allowed(guard)`. Role actions go
  * through `requireRole`, so key narrowing, enforced SSO and the dev principal
  * answer as they do on a route. Never `requireResource`, which audits an
  * admin's bypass per resource.

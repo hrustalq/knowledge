@@ -31,7 +31,7 @@ import { apiQueryOptions } from '@/shared/api/queries'
 import { errorMessage, errorReason } from '@/shared/api/errors'
 import { formatDate } from '@/shared/utils/format'
 import { useCopy } from '@/shared/composables/use-copy'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { Badge } from '@knowledge/ui/badge'
 import { Button } from '@knowledge/ui/button'
 import { Checkbox } from '@knowledge/ui/checkbox'
@@ -53,7 +53,7 @@ const props = defineProps<{
 }>()
 
 const { t } = useI18n()
-const auth = useAuthStore()
+const isWorkspaceAdmin = usePermission('workspace:admin')
 const queryClient = useQueryClient()
 const { state: copyState, copy } = useCopy()
 
@@ -158,7 +158,7 @@ function onOpen(next: boolean) {
       <div v-else-if="policy && !policy.enabled" class="space-y-1">
         <p>{{ t('share.disabled') }}</p>
         <p class="text-muted-foreground">
-          <RouterLink v-if="auth.canAdminWorkspace" to="/settings/publishing" class="text-primary hover:underline">
+          <RouterLink v-if="isWorkspaceAdmin" to="/settings/publishing" class="text-primary hover:underline">
             {{ t('share.disabledAdmin') }}
           </RouterLink>
           <template v-else>{{ t('share.disabledAsk') }}</template>

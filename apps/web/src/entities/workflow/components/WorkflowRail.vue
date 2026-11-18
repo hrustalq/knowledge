@@ -7,7 +7,7 @@ import { Play } from 'lucide-vue-next'
 import type { DocumentWorkflowRunsResponse } from '@knowledge/contracts'
 import { apiQueryOptions, useApiMutation } from '@/shared/api/queries'
 import { getWorkspaceId, relativeTime } from '@/shared/api/api'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { useWorkflowsStore } from '@/entities/workflow/model/workflows.store'
 import { Button } from '@knowledge/ui/button'
 import { Skeleton } from '@knowledge/ui/skeleton'
@@ -25,7 +25,7 @@ const { t } = useI18n()
  */
 const props = defineProps<{ documentId: string }>()
 
-const auth = useAuthStore()
+const canContribute = usePermission('workspace:contribute')
 const store = useWorkflowsStore()
 onMounted(() => void store.ensureLoaded())
 
@@ -92,7 +92,7 @@ async function start(definitionId: string) {
         {{ t('workflow.rail.noRun') }}
       </p>
 
-      <div v-if="auth.canEdit && available.length" class="space-y-1 border-t pt-2">
+      <div v-if="canContribute && available.length" class="space-y-1 border-t pt-2">
         <p class="text-muted-foreground text-xs font-medium">{{ t('workflow.rail.start') }}</p>
         <Button
           v-for="workflow in available"
@@ -109,7 +109,7 @@ async function start(definitionId: string) {
       </div>
 
       <RouterLink
-        v-else-if="auth.canEdit"
+        v-else-if="canContribute"
         to="/settings/workflows"
         class="text-primary block text-xs hover:underline"
       >

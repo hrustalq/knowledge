@@ -17,7 +17,7 @@ import {
 } from '@knowledge/contracts'
 import { useApiMutation } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { useProjectsStore } from '@/stores/projects'
 import { useAgentNames } from '@/entities/person'
 import { Button } from '@knowledge/ui/button'
@@ -50,7 +50,7 @@ const emit = defineEmits<{ saved: [learning: AgentLearningSummary] }>()
 const { t } = useI18n()
 
 const workspaceId = getWorkspaceId()
-const auth = useAuthStore()
+const isWorkspaceAdmin = usePermission('workspace:admin')
 const projects = useProjectsStore()
 const { agentNames } = useAgentNames()
 
@@ -125,7 +125,7 @@ async function submit() {
       <DialogHeader>
         <DialogTitle>{{ learning ? t('ai.learnings.editTitle') : t('ai.learnings.teachTitle', { agent: agentLabel }) }}</DialogTitle>
         <DialogDescription>
-          {{ auth.canAdminWorkspace ? t('ai.learnings.teachDescAdmin') : t('ai.learnings.teachDesc') }}
+          {{ isWorkspaceAdmin ? t('ai.learnings.teachDescAdmin') : t('ai.learnings.teachDesc') }}
         </DialogDescription>
       </DialogHeader>
 
@@ -162,7 +162,7 @@ async function submit() {
           </label>
         </div>
 
-        <label v-if="!learning && auth.canAdminWorkspace" class="flex items-center gap-2 text-sm">
+        <label v-if="!learning && isWorkspaceAdmin" class="flex items-center gap-2 text-sm">
           <Checkbox :model-value="form.active" @update:model-value="form.active = $event === true" />
           {{ t('ai.learnings.activeNow') }}
         </label>

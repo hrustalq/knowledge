@@ -14,7 +14,7 @@ import type {
   AssistantThreadSummary,
 } from '@knowledge/contracts'
 import { useAssistantStore } from '@/entities/assistant/model/assistant.store'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { Button } from '@knowledge/ui/button'
 import {
   DropdownMenu,
@@ -57,7 +57,7 @@ const emit = defineEmits<{
 }>()
 
 const assistant = useAssistantStore()
-const auth = useAuthStore()
+const canContribute = usePermission('workspace:contribute')
 const composerEl = ref<InstanceType<typeof ChatComposer> | null>(null)
 const transcriptEl = ref<InstanceType<typeof ChatTranscript> | null>(null)
 
@@ -278,7 +278,7 @@ function startNewThread() {
       :sending="assistant.sending"
       :placeholder="placeholder"
       :history="assistant.sentHistory"
-      :can-edit="auth.canEdit"
+      :can-edit="canContribute"
       :document-id="documentId ?? assistant.activeThread?.documentId ?? undefined"
       @send="handleSend"
       @stop="assistant.stopStreaming()"

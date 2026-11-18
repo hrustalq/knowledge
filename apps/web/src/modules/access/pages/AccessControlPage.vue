@@ -29,7 +29,7 @@ import type {
 import { useQueryClient } from '@tanstack/vue-query'
 import { api, fetchApi } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { Autocomplete, type AutocompleteOption } from '@knowledge/ui/autocomplete'
 import { Badge } from '@knowledge/ui/badge'
 import { UserChip } from '@/entities/person'
@@ -73,7 +73,6 @@ const { t } = useI18n()
 
 const ROLES: readonly WorkspaceRole[] = WORKSPACE_ROLES
 
-const auth = useAuthStore()
 const queryClient = useQueryClient()
 const workspaces = ref<WorkspaceSummary[]>([])
 const selected = ref<string>(getWorkspaceId())
@@ -206,11 +205,8 @@ watch(selected, () => {
   candidateCache.clear()
 })
 
-const selectedWorkspace = computed(() => workspaces.value.find((w) => w.workspaceId === selected.value))
-/** Can the caller manage the selected workspace? (dev + platform admins always can) */
-const canManage = computed(
-  () => auth.isDev || auth.isAdmin || selectedWorkspace.value?.myRole === 'admin',
-)
+/** Can the caller manage the selected workspace? Asked of that workspace, not the active one. */
+const canManage = usePermission('workspace:admin', selected)
 
 // Fresh, here and for members: this page writes both, and no live event re-asks either.
 async function loadWorkspaces() {
@@ -349,7 +345,7 @@ async function removeMember(member: WorkspaceMemberEntry) {
 /* ------------------------------------------------------------------- tabs */
 
 /** A platform admin (or the dev principal) searches every account in the picker and gets the console link. */
-const isPlatformAdmin = computed(() => auth.isAdmin || auth.isDev)
+const isPlatformAdmin = usePermission('platform:admin')
 
 const tabs = computed<PageTab[]>(() => [
   { key: 'members', label: t('access.tabMembers'), count: members.value.length },

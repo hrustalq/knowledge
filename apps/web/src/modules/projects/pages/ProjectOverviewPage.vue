@@ -49,13 +49,14 @@ import { ProjectAnalyticsSection } from '@/entities/insight'
 import { ConnectorList } from '@/entities/connector'
 import { scoreTone } from '@/entities/insight'
 import { useProjectsStore } from '@/stores/projects'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { useFeaturesStore } from '@/stores/features'
 
 const { t } = useI18n()
 const route = useRoute()
 const projects = useProjectsStore()
-const auth = useAuthStore()
+const canContribute = usePermission('workspace:contribute')
+const isWorkspaceAdmin = usePermission('workspace:admin')
 const features = useFeaturesStore()
 /** "Export project" (docs/features/45): open to every reader of the project. */
 const exportOpen = ref(false)
@@ -146,12 +147,12 @@ const visibleWidgets = computed(() => {
     if (w.id === 'glossary') return c.glossaryTerms > 0
     if (w.id === 'quality') return (quality.value?.scoredPages ?? 0) > 0
     // The project's repositories (#553), or the place to connect the first one.
-    if (w.id === 'connectors') return c.connectors > 0 || auth.canAdminWorkspace
+    if (w.id === 'connectors') return c.connectors > 0 || isWorkspaceAdmin.value
     if (w.id === 'workflows') return c.workflows > 0
     if (w.id === 'merge-requests') return c.openMergeRequests > 0
     if (w.id === 'branches') return branches.value.length > 0
     // A site is worth a row once it exists, or for someone who could set one up.
-    if (w.id === 'site') return site.value !== null || auth.canAdminWorkspace
+    if (w.id === 'site') return site.value !== null || isWorkspaceAdmin.value
     return true
   })
 })
@@ -270,7 +271,7 @@ const isActive = computed(() => projectId.value === projects.activeId)
 
         <!-- Which pages are read and which nobody needs (#79): curation, so editors only. -->
         <!-- v-if, not v-feature: hidden would still mount it, and its query would 404 (#604). -->
-        <ProjectAnalyticsSection v-if="auth.canEdit && features.isOn('analytics')" :project-id="projectId" />
+        <ProjectAnalyticsSection v-if="canContribute && features.isOn('analytics')" :project-id="projectId" />
       </div>
 
       <!-- Same rail, same bound as the document page's: sticky and
@@ -365,7 +366,7 @@ const isActive = computed(() => projectId.value === projects.activeId)
 
           <ConnectorList
             v-else-if="w.id === 'connectors'"
-            :can-manage="auth.canAdminWorkspace"
+            :can-manage="isWorkspaceAdmin"
             :project-id="projectId"
           />
 

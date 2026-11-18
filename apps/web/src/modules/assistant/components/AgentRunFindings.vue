@@ -41,7 +41,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@knowledge/ui/dialog'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 // The same chip the assistant cites with (docs/features/25). A finding's web
 // sources are citations of exactly that kind, and rendering them a second way
 // here would make one thing look like two.
@@ -179,7 +179,7 @@ async function apply(run: AgentRunSummary, index: number) {
  * the reader asks to see them, and the agent's next runs are told about it.
  * "Remember why" turns the reason into a proposed learning an admin reviews.
  */
-const auth = useAuthStore()
+const canContribute = usePermission('workspace:contribute')
 const dismissFinding = useApiMutation('post', '/v1/ai/agents/runs/{id}/findings/{index}/dismiss', {
   invalidates: () => [...RUN_KEYS, ['/v1/ai/agents/learnings']],
 })
@@ -229,7 +229,7 @@ const addTermOpen = computed({
   },
 })
 function canAddTerm(f: AgentFinding): boolean {
-  return auth.canEdit && !!f.term && !f.termId && !f.dismissedAt
+  return canContribute.value && !!f.term && !f.termId && !f.dismissedAt
 }
 function askAddTerm(run: AgentRunSummary, index: number) {
   const proposed = run.findings[index]?.term
@@ -398,7 +398,7 @@ const severityClass = (f: AgentFinding) =>
             {{ t('ai.runs.outdatedMarked') }}
           </span>
           <Button
-            v-if="auth.canEdit && !f.dismissedAt && !f.mergeRequestId && !f.termId"
+            v-if="canContribute && !f.dismissedAt && !f.mergeRequestId && !f.termId"
             variant="ghost"
             size="sm"
             class="text-muted-foreground"

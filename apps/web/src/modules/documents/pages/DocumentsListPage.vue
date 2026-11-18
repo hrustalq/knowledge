@@ -28,7 +28,7 @@ import { Archive, ArrowDownUp, FileText, List, ListTree, Loader2, Network, Notep
 import { DOCUMENT_SORTS, type DocumentAuthorFilter, type DocumentSort, type SortOrder } from '@knowledge/contracts'
 import { formatDate } from '@/shared/utils/format'
 import { labelFor } from '@/shared/i18n/labels'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { EMPTY_FILTERS, useDocumentsStore } from '@/stores/documents'
 import { useProjectsStore } from '@/stores/projects'
 import { getProjectId, getWorkspaceId, statusDot, statusVariant } from '@/shared/api/api'
@@ -57,7 +57,7 @@ import { VERIFICATION_MARK_CLASS, needsAttention, verificationDotClass } from '@
 
 const { t } = useI18n()
 
-const auth = useAuthStore()
+const canContribute = usePermission('workspace:contribute')
 const store = useDocumentsStore()
 // Feature 32: the index tree drags too. Same controller, same store, so a
 // move made here and one made in the rail cannot mean different things.
@@ -342,7 +342,7 @@ watch(virtualRows, (rows) => {
         >{{ store.activeFilterCount }}</span>
       </Button>
 
-      <div v-if="auth.canEdit" class="flex gap-2">
+      <div v-if="canContribute" class="flex gap-2">
         <Button variant="outline" size="sm" as-child>
           <RouterLink to="/upload"><Upload class="size-4" /> <span class="sr-only sm:not-sr-only">{{ t('documents.upload') }}</span></RouterLink>
         </Button>
@@ -364,9 +364,9 @@ watch(virtualRows, (rows) => {
             <FileText class="mx-auto size-8 text-muted-foreground/50" />
             <p class="mt-3 font-medium">{{ t('documents.noPagesYet') }}</p>
             <p class="mt-1 text-sm text-muted-foreground">
-              {{ auth.canEdit ? t('documents.createFirst', { scope: scopeLabel }) : t('documents.nothingPublished', { scope: scopeLabel }) }}
+              {{ canContribute ? t('documents.createFirst', { scope: scopeLabel }) : t('documents.nothingPublished', { scope: scopeLabel }) }}
             </p>
-            <Button v-if="auth.canEdit" class="mt-4" as-child>
+            <Button v-if="canContribute" class="mt-4" as-child>
               <RouterLink to="/create"><Plus class="size-4" /> {{ t('documents.newPage') }}</RouterLink>
             </Button>
           </div>

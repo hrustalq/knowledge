@@ -33,7 +33,7 @@ import { api } from '@/shared/api/client'
 import { apiQueryOptions } from '@/shared/api/queries'
 import { errorMessage } from '@/shared/api/errors'
 import type { Row } from '@/modules/api-reference/model/test-fixture'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { useProjectsStore } from '@/stores/projects'
 import { Button } from '@knowledge/ui/button'
 import { Input } from '@knowledge/ui/input'
@@ -44,12 +44,12 @@ import FixtureRows from '@/modules/api-reference/components/FixtureRows.vue'
 
 const props = defineProps<{ workspaceId: string; runnerOn: boolean }>()
 const { t } = useI18n()
-const auth = useAuthStore()
+const isWorkspaceAdmin = usePermission('workspace:admin')
 const projects = useProjectsStore()
 /** A project the roster does not list (restricted from the caller) never reaches this page: the API leaves its environments out. */
 const projectName = (id: string) => projects.items.find((p) => p.projectId === id)?.name ?? id
 const queryClient = useQueryClient()
-const canEdit = computed(() => auth.canEdit)
+const canEdit = usePermission('workspace:contribute')
 
 const options = computed(() => apiQueryOptions('/v1/workspaces/{id}/test-environments', { path: { id: props.workspaceId } }))
 const query = useQuery(options)
@@ -163,7 +163,7 @@ async function remove(env: ApiTestEnvironment) {
         {{ t('qa.env.intro') }}
         <template v-if="!runnerOn">
           {{ t('qa.env.runnerOff') }}
-          <RouterLink v-if="auth.canAdminWorkspace" to="/settings/api" class="text-primary underline underline-offset-2">{{ t('qa.env.runnerSettings') }}</RouterLink>
+          <RouterLink v-if="isWorkspaceAdmin" to="/settings/api" class="text-primary underline underline-offset-2">{{ t('qa.env.runnerSettings') }}</RouterLink>
         </template>
       </p>
       <Button v-if="canEdit && editing !== 'new'" size="sm" variant="outline" @click="open(null)">

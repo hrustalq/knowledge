@@ -36,8 +36,8 @@ import {
 import { api } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
 import { errorMessage } from '@/shared/api/errors'
-import { canWriteTemplate, templateSourceFields, unescapePlaceholders } from '@/entities/template'
-import { useAuthStore } from '@/stores/auth'
+import { templateSourceFields, unescapePlaceholders, templateWriteAction } from '@/entities/template'
+import { usePermissionsStore } from '@/stores/permissions'
 import { useProjectsStore } from '@/stores/projects'
 import { Button } from '@knowledge/ui/button'
 import { Input } from '@knowledge/ui/input'
@@ -56,7 +56,7 @@ const props = defineProps<{
 const emit = defineEmits<{ saved: [detail: TemplateDetail]; cancel: [] }>()
 
 const { t } = useI18n()
-const auth = useAuthStore()
+const permissions = usePermissionsStore()
 const projects = useProjectsStore()
 
 const isBuiltIn = computed(() => props.mode === 'customise' || !!props.detail?.builtInKey)
@@ -86,8 +86,8 @@ const activeProjectId = computed(() => projects.activeId ?? null)
 const activeProjectName = computed(
   () => projects.items.find((p) => p.projectId === activeProjectId.value)?.name ?? t('import.project'),
 )
-const canProject = computed(() => !!activeProjectId.value && canWriteTemplate('project', auth.role))
-const canWorkspace = computed(() => canWriteTemplate('workspace', auth.role))
+const canProject = computed(() => !!activeProjectId.value && permissions.allows(templateWriteAction('project')))
+const canWorkspace = computed(() => permissions.allows(templateWriteAction('workspace')))
 /**
  * Derived, not seeded: the active project and the role can both arrive after
  * the form opens, and a default fixed at that moment silently made a

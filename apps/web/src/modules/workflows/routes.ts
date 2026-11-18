@@ -21,9 +21,8 @@ export const routes: RouteRecordRaw[] = [
 ]
 
 export const settingsRoutes: RouteRecordRaw[] = [
-  // Workflows: like AI settings, deliberately not meta.platformAdmin —
-  // this is workspace administration, so the page gates on
-  // auth.canAdminWorkspace and the API enforces the admin role.
+  // Workflows: workspace administration that every member reads, so the
+  // page gates its controls on `workspace:admin` and the API enforces it.
   // Deliberately not meta.fill: that drops <main>'s padding, which the
   // settings shell's negative-margin bleed depends on. The builder
   // bounds its own panes instead.

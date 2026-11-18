@@ -9,7 +9,6 @@ import { BookmarkPlus, Lock, LockOpen } from 'lucide-vue-next'
 import { SUPPORTED_LOCALES, type DeleteProjectResponse, type Locale } from '@knowledge/contracts'
 import { api } from '@/shared/api/queries'
 import { relativeTime } from '@/shared/api/api'
-import { useAuthStore } from '@/stores/auth'
 import { usePermission } from '@/stores/permissions'
 import { useProjectsStore } from '@/stores/projects'
 import { useDocumentsStore } from '@/stores/documents'
@@ -30,7 +29,7 @@ const lang = computed<Locale>(() => (SUPPORTED_LOCALES.includes(locale.value as 
 
 const emit = defineEmits<{ changed: [] }>()
 
-const auth = useAuthStore()
+const isWorkspaceAdmin = usePermission('workspace:admin')
 const store = useProjectsStore()
 const route = useRoute()
 const router = useRouter()
@@ -293,7 +292,7 @@ async function onDeleted(result: DeleteProjectResponse) {
           <LockOpen v-else class="size-3.5" aria-hidden="true" />
           {{ t('access.action') }}
         </Button>
-        <Button v-if="auth.canAdminWorkspace && project.documentCount" variant="outline" @click="saveBlueprintOpen = true">
+        <Button v-if="isWorkspaceAdmin && project.documentCount" variant="outline" @click="saveBlueprintOpen = true">
           <BookmarkPlus class="size-3.5" aria-hidden="true" />
           {{ t('blueprints.save.fromProject') }}
         </Button>
@@ -316,7 +315,7 @@ async function onDeleted(result: DeleteProjectResponse) {
       @saved="onAccessSaved"
     />
     <SaveBlueprintDialog
-      v-if="auth.canAdminWorkspace"
+      v-if="isWorkspaceAdmin"
       v-model:open="saveBlueprintOpen"
       :project-id="project.projectId"
       :locale="lang"

@@ -5,17 +5,17 @@ import { RouterLink } from 'vue-router'
 import { FileText } from 'lucide-vue-next'
 import type { HomeRecentPage } from '@knowledge/contracts'
 import { relativeTime } from '@/shared/api/api'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 
 defineProps<{ pages: HomeRecentPage[] }>()
 const { t } = useI18n()
-const auth = useAuthStore()
+const canContribute = usePermission('workspace:contribute')
 </script>
 
 <template>
   <p v-if="pages.length === 0" class="rounded-xl border border-dashed px-4 py-3 text-sm text-muted-foreground">
     {{ t('home.recent.empty') }}
-    <RouterLink v-if="auth.canEdit" to="/create" class="text-primary underline underline-offset-2">
+    <RouterLink v-if="canContribute" to="/create" class="text-primary underline underline-offset-2">
       {{ t('home.recent.create') }}
     </RouterLink>
   </p>

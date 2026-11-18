@@ -29,13 +29,13 @@ import {
   Workflow,
 } from 'lucide-vue-next'
 import { PageLayout, PageSubRail } from '@knowledge/ui/layout'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { useFeaturesStore } from '@/stores/features'
 
 const { t } = useI18n()
 
 const route = useRoute()
-const auth = useAuthStore()
+const isWorkspaceAdmin = usePermission('workspace:admin')
 const features = useFeaturesStore()
 
 interface SettingsLink { to: string; label: string; icon: Component; hint: string }
@@ -75,7 +75,7 @@ const links = computed<SettingsLink[]>(() => [
     : []),
   // Admin-only, so hidden from everyone else: unlike the rows above, the page
   // has nothing to show a member who cannot manage it.
-  ...(auth.canAdminWorkspace
+  ...(isWorkspaceAdmin.value
     ? [
         { to: '/settings/chat', label: t('nav.chatBots'), icon: MessagesSquare, hint: t('settings.chatBotsHint') },
         { to: '/settings/security', label: t('nav.security'), icon: LockKeyhole, hint: t('settings.securityHint') },

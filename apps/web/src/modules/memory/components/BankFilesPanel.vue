@@ -17,7 +17,7 @@ import { api } from '@/shared/api/client'
 import { apiQueryOptions } from '@/shared/api/queries'
 import { errorMessage } from '@/shared/api/errors'
 import { formatBytes, formatDateTime, formatRelative } from '@/shared/utils/format'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { Button } from '@knowledge/ui/button'
 import { Collapse } from '@knowledge/ui/collapse'
 import { confirm } from '@knowledge/ui/confirm'
@@ -31,7 +31,7 @@ const PAGE = 50
 const MAX = 200
 
 const { t } = useI18n()
-const auth = useAuthStore()
+const canContribute = usePermission('workspace:contribute')
 const queryClient = useQueryClient()
 
 const search = ref(props.open?.path ?? '')
@@ -127,7 +127,7 @@ async function remove(file: MemoryFileSummary) {
             </span>
           </button>
           <Button
-            v-if="auth.canEdit"
+            v-if="canContribute"
             size="icon"
             variant="ghost"
             class="-my-1 size-8 shrink-0 text-muted-foreground hover:text-destructive"

@@ -8,7 +8,7 @@ import type { ListWorkflowRunsResponse } from '@knowledge/contracts'
 import { WORKFLOW_RUN_STATUSES } from '@knowledge/contracts'
 import { apiQueryOptions, fetchApi, useApiMutation } from '@/shared/api/queries'
 import { getProjectId, getWorkspaceId } from '@/shared/api/api'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { useProjectsStore } from '@/stores/projects'
 import { useWorkflowsStore } from '@/entities/workflow'
 import {
@@ -36,7 +36,7 @@ const { t } = useI18n()
  * filter the fetched rows in memory. The status counts come from the server
  * under the same scope, so the badges do not move as you switch between them.
  */
-const auth = useAuthStore()
+const canContribute = usePermission('workspace:contribute')
 const projects = useProjectsStore()
 const store = useWorkflowsStore()
 const queryClient = useQueryClient()
@@ -176,7 +176,7 @@ watch(starting, (open) => {
         <RouterLink to="/settings/workflows">
           <Button variant="outline" size="sm">{{ t('workflow.configure') }}</Button>
         </RouterLink>
-        <Button v-if="auth.canEdit && store.runnable.length" size="sm" @click="starting = true">
+        <Button v-if="canContribute && store.runnable.length" size="sm" @click="starting = true">
           <Play class="mr-1.5 size-4" /> {{ t('workflow.startRunButton') }}
         </Button>
       </div>

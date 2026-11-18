@@ -14,7 +14,7 @@ import { Bot, Plus } from 'lucide-vue-next'
 import type { ChatIntegrationsResponse } from '@knowledge/contracts'
 import { apiQueryOptions } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { Button } from '@knowledge/ui/button'
 import { PageState } from '@knowledge/ui/layout'
 import ChatIntegrationCard from '@/modules/connectors/components/ChatIntegrationCard.vue'
@@ -22,9 +22,8 @@ import ConnectBotDialog from '@/modules/connectors/components/ConnectBotDialog.v
 import ChatSearchSettings from '@/modules/connectors/components/ChatSearchSettings.vue'
 
 const { t } = useI18n()
-const auth = useAuthStore()
 const queryClient = useQueryClient()
-const canManage = computed(() => auth.canAdminWorkspace)
+const canManage = usePermission('workspace:admin')
 
 const options = apiQueryOptions('/v1/chat/integrations', { query: { workspaceId: getWorkspaceId() } })
 const query = useQuery({ ...options, enabled: canManage })

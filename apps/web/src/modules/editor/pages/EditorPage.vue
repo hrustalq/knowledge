@@ -86,6 +86,7 @@ import { useProjectsStore } from '@/stores/projects'
 import { useTemplatesStore } from '@/entities/template'
 import { useEventsStore } from '@/stores/events'
 import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { useFeaturesStore } from '@/stores/features'
 import { Button } from '@knowledge/ui/button'
 import { Input } from '@knowledge/ui/input'
@@ -158,6 +159,7 @@ const store = useDocumentsStore()
 const projects = useProjectsStore()
 const templates = useTemplatesStore()
 const auth = useAuthStore()
+const isWorkspaceAdmin = usePermission('workspace:admin')
 
 const editId = ref<string | null>((route.params.id as string | undefined) ?? null)
 // Embed groups show the snapshots of what this page has published (#470).
@@ -228,7 +230,7 @@ const branchSlot = ref<string | null>(null)
 const onWorkingBranch = computed(() => !isDraft.value && !!branch.value?.name.startsWith(DRAFT_BRANCH_PREFIX))
 /** Who it is shared with is its owner's to change, or an admin's — as the API has it. */
 const canShareBranch = computed(
-  () => onWorkingBranch.value && (branch.value?.ownerId === auth.me?.userId || auth.canAdminWorkspace),
+  () => onWorkingBranch.value && (branch.value?.ownerId === auth.me?.userId || isWorkspaceAdmin.value),
 )
 const shareOpen = ref(false)
 

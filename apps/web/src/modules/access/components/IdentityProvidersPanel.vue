@@ -33,7 +33,7 @@ import { ApiRequestError } from '@/shared/api/http'
 import { errorMessage } from '@/shared/api/errors'
 import { getWorkspaceId } from '@/shared/api/api'
 import { useCopy } from '@/shared/composables/use-copy'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { Badge } from '@knowledge/ui/badge'
 import { Button } from '@knowledge/ui/button'
 import { confirm } from '@knowledge/ui/confirm'
@@ -45,7 +45,7 @@ import { PageState } from '@knowledge/ui/layout'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@knowledge/ui/select'
 
 const { t } = useI18n()
-const auth = useAuthStore()
+const isPlatformAdmin = usePermission('platform:admin')
 const workspaceId = getWorkspaceId()
 const path = { id: workspaceId }
 
@@ -221,7 +221,7 @@ function body() {
     enabled: form.enabled,
     showOnLogin: form.showOnLogin,
     // Only a platform admin may change it; anyone else sends it unchanged.
-    ...(auth.isAdmin ? { platformWide: form.platformWide } : {}),
+    ...(isPlatformAdmin.value ? { platformWide: form.platformWide } : {}),
   }
 }
 
@@ -569,7 +569,7 @@ const busy = computed(() => create.isPending.value || update.isPending.value)
               <label class="flex items-center gap-2">
                 <Checkbox :model-value="form.showOnLogin" @update:model-value="form.showOnLogin = !!$event" />{{ t('security.providers.showOnLogin') }}
               </label>
-              <label v-if="auth.isAdmin" class="flex items-center gap-2">
+              <label v-if="isPlatformAdmin" class="flex items-center gap-2">
                 <Checkbox :model-value="form.platformWide" @update:model-value="form.platformWide = !!$event" />{{ t('security.providers.platformWideToggle') }}
               </label>
             </div>

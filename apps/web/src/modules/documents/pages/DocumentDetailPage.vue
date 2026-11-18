@@ -150,6 +150,7 @@ const { t } = useI18n()
 const route = useRoute()
 const queryClient = useQueryClient()
 const auth = useAuthStore()
+const canContribute = usePermission('workspace:contribute')
 const layout = useLayoutStore()
 const store = useDocumentsStore()
 /*
@@ -1037,7 +1038,7 @@ watch(
               </DropdownMenuItem>
             </DropdownMenuSubContent>
           </DropdownMenuSub>
-          <DropdownMenuItem v-if="auth.canEdit && saveAsPage" @select="saveAsOpen = true">
+          <DropdownMenuItem v-if="canContribute && saveAsPage" @select="saveAsOpen = true">
             <LayoutTemplate class="size-4" /> {{ t('templates.saveAs.action') }}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
@@ -1085,7 +1086,7 @@ watch(
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      <template v-if="auth.canEdit && saveAsPage">
+      <template v-if="canContribute && saveAsPage">
         <span class="kn-bar-rule kn-aside-only" aria-hidden="true" />
         <Button variant="ghost" size="sm" class="kn-aside-only" @click="saveAsOpen = true">
           <LayoutTemplate class="size-4" aria-hidden="true" />

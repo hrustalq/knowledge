@@ -6342,6 +6342,26 @@
     },
     {
       "method": "GET",
+      "path": "/v1/workspaces/{id}/home",
+      "tag": "workspaces",
+      "summary": "The workspace home: the layout and the data of every widget the caller may read",
+      "role": "viewer",
+      "source": "workspace",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/workspaces/{id}/home/layout",
+      "tag": "workspaces",
+      "summary": "Set which home widgets show and in what order (workspace admin)",
+      "role": "admin",
+      "source": "workspace",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/workspaces/{id}/members",
       "tag": "workspaces",
       "summary": "Workspace member roster (any member)",

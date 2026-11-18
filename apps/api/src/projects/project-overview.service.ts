@@ -49,12 +49,12 @@ export class ProjectOverviewService {
     // A capture still behind its merge request is not a page here yet (#642);
     // the open-MR count keeps it, since that merge request is what it is.
     const listed: Prisma.DocumentWhereInput = { ...LISTED_PAGE, AND: [visible] };
-    const [contributors, counts, recentPages] = await Promise.all([
+    const [contributors, counts, recent] = await Promise.all([
       this.contributorsFor(projectId, listed),
       this.countsFor(project, visible),
-      this.recentPagesFor(projectId, listed),
+      recentPages(this.prisma, { projectId, ...listed }),
     ]);
-    return { project, contributors, counts, recentPages };
+    return { project, contributors, counts, recentPages: recent };
   }
 
   /**
@@ -135,29 +135,32 @@ export class ProjectOverviewService {
       openMergeRequests,
     };
   }
+}
 
-  private async recentPagesFor(
-    projectId: string,
-    visible: Prisma.DocumentWhereInput,
-  ): Promise<ProjectOverviewResponse['recentPages']> {
-    // "Updated" means the newest revision, not documents.created_at — a page
-    // written a year ago and revised yesterday is the recent one.
-    const revisions = await this.prisma.documentRevision.findMany({
-      where: { document: { projectId, AND: [visible] } },
-      select: { documentId: true, createdAt: true, document: { select: { title: true } } },
-      orderBy: { createdAt: 'desc' },
-      take: REVISION_SCAN,
+/**
+ * The newest-revised pages under `where` (also the workspace home's, #1243).
+ * "Updated" means the newest revision, not documents.created_at — a page
+ * written a year ago and revised yesterday is the recent one.
+ */
+export async function recentPages(
+  prisma: PrismaService,
+  where: Prisma.DocumentWhereInput,
+): Promise<ProjectOverviewResponse['recentPages']> {
+  const revisions = await prisma.documentRevision.findMany({
+    where: { document: where },
+    select: { documentId: true, createdAt: true, document: { select: { title: true } } },
+    orderBy: { createdAt: 'desc' },
+    take: REVISION_SCAN,
+  });
+  const seen = new Map<string, { documentId: string; title: string; updatedAt: string }>();
+  for (const revision of revisions) {
+    if (seen.has(revision.documentId)) continue;
+    seen.set(revision.documentId, {
+      documentId: revision.documentId,
+      title: revision.document.title,
+      updatedAt: revision.createdAt.toISOString(),
     });
-    const seen = new Map<string, { documentId: string; title: string; updatedAt: string }>();
-    for (const revision of revisions) {
-      if (seen.has(revision.documentId)) continue;
-      seen.set(revision.documentId, {
-        documentId: revision.documentId,
-        title: revision.document.title,
-        updatedAt: revision.createdAt.toISOString(),
-      });
-      if (seen.size >= RECENT_PAGES) break;
-    }
-    return [...seen.values()];
+    if (seen.size >= RECENT_PAGES) break;
   }
+  return [...seen.values()];
 }

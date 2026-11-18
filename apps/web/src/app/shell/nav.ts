@@ -28,7 +28,7 @@ export interface NavItem {
   workspaceAdmin?: true
 }
 
-export const HOME_NAV: NavItem = { to: '/documents', labelKey: 'nav.home', icon: House }
+export const HOME_NAV: NavItem = { to: '/', labelKey: 'nav.home', icon: House }
 
 // What looks after the knowledge base as a whole rather than one page (#605),
 // folded under one node right below Home so the rail stays short.

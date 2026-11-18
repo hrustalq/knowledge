@@ -9,6 +9,7 @@ import type { QueryClient } from '@tanstack/vue-query'
 import { isStoreQuery, prefetchForRender } from './shared/api/queries'
 import { documentContentQuery, documentDetailQuery, type ContentAt } from './entities/document'
 import { useNotificationsStore } from './modules/notifications'
+import { homeQuery } from './modules/home'
 import { ensureLocaleMessages } from './shared/i18n'
 import { useAuthStore } from './stores/auth'
 import { useDocumentsStore } from './stores/documents'
@@ -106,6 +107,8 @@ async function prefetchShell(router: Router, pinia: Pinia, queryClient: QueryCli
  */
 async function prefetchPage(router: Router, queryClient: QueryClient) {
   const route = router.currentRoute.value
+  // The home (#1243): one read, so it renders with JS off.
+  if (route.path === '/') return prefetchForRender(queryClient, homeQuery())
   if (route.matched.at(-1)?.path !== '/documents/:id') return
   const id = route.params.id as string
   // The page's own `contentAt`: an explicit revision wins over `?asOf=`.

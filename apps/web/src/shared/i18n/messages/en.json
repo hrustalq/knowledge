@@ -71,6 +71,74 @@
     "indexed": "Indexed",
     "failed": "Indexing failed"
   },
+  "home": {
+    "title": "Home",
+    "widget": {
+      "metrics": "Key numbers",
+      "actions": "Quick actions",
+      "needsYou": "Needs you",
+      "recent": "Recent pages",
+      "activity": "Activity",
+      "agents": "Running agents"
+    },
+    "metrics": {
+      "pages": "Pages",
+      "pagesHint": "Browse all pages",
+      "verified": "Verified",
+      "verifiedHint": "no pages verified | {n} page verified | {n} pages verified",
+      "stale": "Needs attention",
+      "staleHint": "Expired, outdated or inactive",
+      "openChanges": "Open changes",
+      "openChangesHint": "Merge requests waiting",
+      "unanswered": "Unanswered searches",
+      "unansweredHint": "Found nothing, last {n} days"
+    },
+    "actions": {
+      "newPage": "New page",
+      "import": "Import",
+      "ask": "Ask",
+      "workflow": "Start a workflow"
+    },
+    "needsYou": {
+      "empty": "Nothing waits on you: no reviews, no unread notifications.",
+      "reviews": "Your reviews",
+      "allReviews": "All {n}",
+      "unread": "Unread",
+      "inbox": "Inbox | Inbox ({n}) | Inbox ({n})",
+      "untitled": "Notification"
+    },
+    "activity": {
+      "all": "View all activity"
+    },
+    "recent": {
+      "empty": "No pages yet.",
+      "create": "Create the first one",
+      "all": "All pages"
+    },
+    "agents": {
+      "empty": "No agent is running.",
+      "onlyQueued": "No agent is running; {n} queued. | No agent is running; {n} queued. | No agent is running; {n} queued.",
+      "queued": "and {n} queued | and {n} queued | and {n} queued",
+      "all": "All runs"
+    },
+    "customize": {
+      "start": "Customize",
+      "reset": "Reset to default",
+      "saved": "Home layout saved for everyone in this workspace",
+      "hint": "Choose which widgets everyone in this workspace sees, and their order. Members only see the widgets they have access to.",
+      "hidden": "(hidden)",
+      "show": "Show",
+      "hide": "Hide",
+      "moveUp": "Move {name} up",
+      "moveDown": "Move {name} down",
+      "afterSave": "Appears once you save.",
+      "hideNamed": "Hide {name}",
+      "showNamed": "Show {name}",
+      "moved": "{name} moved to {n} of {total}",
+      "nowShown": "{name} shown",
+      "nowHidden": "{name} hidden"
+    }
+  },
   "nav": {
     "toggleSidebar": "Toggle navigation",
     "searchPages": "Search pages",

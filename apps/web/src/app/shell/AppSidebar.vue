@@ -74,7 +74,7 @@ watch(inKnowledge, (inside) => {
        scrolls as one and the panes keep a usable minimum below it. -->
   <aside class="border-sidebar-border bg-sidebar text-sidebar-foreground relative flex h-full w-full shrink-0 flex-col border-r max-lg:overflow-x-hidden max-lg:overflow-y-auto">
     <div class="pt-4 pb-3">
-      <RouterLink to="/documents" class="flex items-center gap-2 px-4">
+      <RouterLink to="/" class="flex items-center gap-2 px-4">
         <span class="bg-primary text-primary-foreground grid size-7 shrink-0 place-items-center rounded-md">
           <Library class="size-4" />
         </span>

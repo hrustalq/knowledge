@@ -4064,6 +4064,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/workspaces/{id}/home": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The workspace home: the layout and the data of every widget the caller may read */
+        get: operations["HomeController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{id}/home/layout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set which home widgets show and in what order (workspace admin) */
+        put: operations["HomeController_setLayout"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/connectors": {
         parameters: {
             query?: never;
@@ -10252,6 +10286,10 @@ export interface components {
             /** @description Monthly token budget; null = unlimited */
             monthlyTokenBudget?: number | null;
         };
+        UpdateHomeLayoutDto: {
+            /** @description The widgets to show, in order; one left out is hidden. Null (or omitted) goes back to the built-in layout. */
+            widgets?: ("metrics" | "actions" | "needs-you" | "recent" | "activity" | "agents")[] | null;
+        };
         CreateConnectorDto: {
             /** Format: uuid */
             workspaceId: string;
@@ -15157,6 +15195,64 @@ export interface components {
         };
         /** @enum {string} */
         HistoryAudience: "everyone" | "editors";
+        HomeAgentRun: {
+            id: string;
+            agentName: string;
+            stage: string | null;
+            startedAt: string;
+        };
+        HomeLayoutResponse: {
+            workspaceId: string;
+            layout: components["schemas"]["HomeWidget"][];
+            custom: boolean;
+        };
+        HomeMetrics: {
+            pages: number;
+            verified: number | null;
+            stale: number | null;
+            openMergeRequests: number | null;
+            unansweredSearches: number | null;
+            searchDays: number;
+        };
+        HomeNeedsYou: {
+            reviews: components["schemas"]["HomeReview"][] | null;
+            reviewCount: number;
+            notifications: components["schemas"]["HomeNotification"][];
+            unreadCount: number;
+        };
+        HomeNotification: {
+            id: string;
+            title: string | null;
+            documentId: string | null;
+            createdAt: string;
+        };
+        HomeRecentPage: {
+            documentId: string;
+            title: string;
+            updatedAt: string;
+        };
+        HomeResponse: {
+            workspaceId: string;
+            layout: components["schemas"]["HomeWidget"][];
+            custom: boolean;
+            widgets: components["schemas"]["HomeWidget"][];
+            metrics?: components["schemas"]["HomeMetrics"];
+            needsYou?: components["schemas"]["HomeNeedsYou"];
+            recent?: components["schemas"]["HomeRecentPage"][];
+            activity?: components["schemas"]["ActivityEntry"][];
+            agents?: {
+                runs: components["schemas"]["HomeAgentRun"][];
+                queued: number;
+            };
+        };
+        HomeReview: {
+            id: string;
+            title: string;
+            authorId: string;
+            createdAt: string;
+        };
+        /** @enum {string} */
+        HomeWidget: "metrics" | "actions" | "needs-you" | "recent" | "activity" | "agents";
         IdentityProviderView: {
             id: string;
             workspaceId: string;
@@ -15385,6 +15481,7 @@ export interface components {
         KnowledgeHealthSummaryResponse: {
             workspaceId: string;
             total: number;
+            verified: number;
             counts: {
                 stale: number;
                 unowned: number;
@@ -31914,6 +32011,94 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentOutcomesResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    HomeController_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HomeResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    HomeController_setLayout: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateHomeLayoutDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HomeLayoutResponse"];
                 };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */

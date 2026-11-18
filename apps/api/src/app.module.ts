@@ -33,6 +33,7 @@ import { DriftModule } from './connectors/drift/drift.module.js';
 import { ScribePublishModule } from './connectors/handoff/scribe-publish.module.js';
 import { LintModule } from './documents/lint/lint.module.js';
 import { AiModule } from './ai/ai.module.js';
+import { HomeModule } from './home/home.module.js';
 import { GlossaryModule } from './glossary/glossary.module.js';
 import { ImportModule } from './import/import.module.js';
 import { MemosModule } from './memos/memos.module.js';
@@ -92,6 +93,7 @@ import { MemoryModule } from './memory/memory.module.js';
     CollabModule,
     AssistantModule,
     AiModule,
+    HomeModule,
     ConnectorsModule,
     // Publishes finished drift checks (docs/features/35); API-only, sweeper.
     DriftModule,

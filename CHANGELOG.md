@@ -17,6 +17,17 @@ in the pull request that introduces them — see
 
 ### Added
 
+- A workspace **home** at `/`, which used to redirect to the page browser (`/documents` is unchanged). It shows the
+  key numbers: pages, verified share, pages needing attention, open merge requests, and, for admins while
+  analytics is on, unanswered searches. Each number links to the list behind it. Below them are quick actions (new
+  page, import, ask, start a workflow), **Needs you** (merge requests you review and your unread notifications),
+  recent pages, the activity feed and running agents. Every number and list covers only pages the reader may open.
+  Guests see pages, activity and their own inbox, but not merge requests, agents, health or analytics. A section
+  switched off in **Features** drops what it backs. A workspace admin presses **Customize** to hide widgets and
+  reorder them for everyone, or to reset to the default layout. The page renders server-side and works without
+  JavaScript. Home, the brand mark, sign-in, a workspace switch and a refused section now land on `/`. New routes:
+  `GET /v1/workspaces/:id/home` and the admin-only `PUT /v1/workspaces/:id/home/layout`.
+  `GET /v1/knowledge-health/summary` adds a `verified` count. (#1243)
 - The admin console's **Errors** section lists the errors the platform logged, grouped so a repeat shows once with
   how many times it happened, when it was first and last seen, and which processes and how many workspaces it hit.
   Two errors are the same when they come from the same place and differ only in ids, numbers or quoted values; a
@@ -80,6 +91,9 @@ in the pull request that introduces them — see
   baseline is `docs/performance/2026-11-18-api.md`. (#1242)
 
 ### Operations
+
+- Migration `20270208100000_home_widgets` adds a nullable `home_widgets` JSONB column to `workspace_settings`;
+  null is the built-in home layout. It is additive and survives a rollback by retag. (#1243)
 
 - New env var `OPS_QUERY_COUNT_ENABLED` (default `false`). Leave it off in production: it wraps every database
   operation to count it. Turn it on for a profiling session together with `OPS_JSONL_ENABLED`. (#1242)

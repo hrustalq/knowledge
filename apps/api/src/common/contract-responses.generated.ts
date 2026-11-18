@@ -163,6 +163,8 @@ import type {
   GraphQueryResponse,
   GraphTimelineResponse,
   GroupMappingView,
+  HomeLayoutResponse,
+  HomeResponse,
   IdentityProviderView,
   ImpactAnalysisResponse,
   ImportContentResponse,
@@ -552,6 +554,8 @@ export interface ContractResponses {
   GraphQueryResponse: GraphQueryResponse;
   GraphTimelineResponse: GraphTimelineResponse;
   GroupMappingView: GroupMappingView;
+  HomeLayoutResponse: HomeLayoutResponse;
+  HomeResponse: HomeResponse;
   IdentityProviderView: IdentityProviderView;
   ImpactAnalysisResponse: ImpactAnalysisResponse;
   ImportContentResponse: ImportContentResponse;

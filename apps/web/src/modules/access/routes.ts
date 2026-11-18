@@ -34,13 +34,12 @@ export const settingsRoutes: RouteRecordRaw[] = [
   // themselves are the admin console's (/admin/users, #1239).
   { path: 'access', component: () => import('./pages/AccessControlPage.vue') },
   // Sign-in and the audit trail (#75): workspace administration, so the
-  // page gates on auth.canAdminWorkspace and the API enforces admin.
-  { path: 'security', component: () => import('./pages/SecuritySettingsPage.vue') },
-  // Which sections the workspace shows (#604): workspace administration, so
-  // the page gates on auth.canAdminWorkspace and the API enforces admin.
-  { path: 'features', component: () => import('./pages/FeaturesSettingsPage.vue') },
-  // How an edit reaches a page (#958): admin-gated the same way.
-  { path: 'editing', component: () => import('./pages/EditingSettingsPage.vue') },
+  // router refuses anyone else (#1299) and the API enforces admin.
+  { path: 'security', component: () => import('./pages/SecuritySettingsPage.vue'), meta: { permission: 'workspace:admin' } },
+  // Which sections the workspace shows (#604): admin-only the same way.
+  { path: 'features', component: () => import('./pages/FeaturesSettingsPage.vue'), meta: { permission: 'workspace:admin' } },
+  // How an edit reaches a page (#958): admin-only the same way.
+  { path: 'editing', component: () => import('./pages/EditingSettingsPage.vue'), meta: { permission: 'workspace:admin' } },
   // Accounts were a nav row here, then a tab of /settings/access, and are
   // now the admin console's (#1239). Kept as a redirect: a bookmark lands
   // on the members list, whose header links a platform admin onward.

@@ -8,7 +8,7 @@
  * the column of numbers stays a column instead of wobbling per digit.
  */
 import { useI18n } from 'vue-i18n'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { useProjectsStore } from '@/stores/projects'
 import { ProjectAvatar } from '@/modules/projects'
 import { ChevronRight, Plus } from 'lucide-vue-next'
@@ -18,7 +18,7 @@ const { t } = useI18n()
 
 defineEmits<{ open: [projectId: string]; create: [] }>()
 
-const auth = useAuthStore()
+const canContribute = usePermission('workspace:contribute')
 const projects = useProjectsStore()
 </script>
 
@@ -29,7 +29,7 @@ const projects = useProjectsStore()
         {{ t('nav.projects') }}
       </h2>
       <button
-        v-if="auth.canEdit"
+        v-if="canContribute"
         type="button"
         :title="t('nav.newProject')"
         :aria-label="t('nav.newProject')"
@@ -46,7 +46,7 @@ const projects = useProjectsStore()
       </div>
 
       <p v-else-if="projects.items.length === 0" class="text-muted-foreground px-2.5 pt-1 text-xs">
-        {{ t('nav.noProjects') }}<template v-if="auth.canEdit">
+        {{ t('nav.noProjects') }}<template v-if="canContribute">
           —
           <button type="button" class="text-primary hover:underline" @click="$emit('create')">
             {{ t('nav.createFirstPage') }}

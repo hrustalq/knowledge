@@ -9,11 +9,10 @@ import { RouterLink } from 'vue-router'
 import { Loader2, Lock, NotepadTextDashed } from 'lucide-vue-next'
 import { TreeBranch } from '@/entities/document'
 import { TreeRow } from '@/entities/document'
-import type { DocumentTreeNode as TreeNode } from '@knowledge/contracts'
+import { levelReaches, type DocumentTreeNode as TreeNode } from '@knowledge/contracts'
 import { statusDot } from '@/shared/api/api'
 import { labelFor } from '@/shared/i18n/labels'
 import { useTreeDndRow } from '@/modules/documents'
-import { useAuthStore } from '@/stores/auth'
 import { useDocumentsStore } from '@/stores/documents'
 import { useSidebarStore } from '@/stores/sidebar'
 import { TreeRowMenu } from '@/modules/documents'
@@ -30,7 +29,6 @@ const statusLabel = computed(() => labelFor(t, 'revisionStatus', props.node.head
 
 const store = useDocumentsStore()
 const sidebar = useSidebarStore()
-const auth = useAuthStore()
 
 /**
  * `childCount` rather than `children.length`: the tree loads a level at a time,
@@ -113,12 +111,15 @@ watchPostEffect(() => {
   }
 })
 
+/** The caller may edit this page (#1298): its own level, stamped on the row by the tree read. */
+const editable = computed(() => levelReaches(props.node.accessLevel, 'edit'))
 const dnd = useTreeDndRow({
   id: props.node.documentId,
   title: () => props.node.title,
   parentId: () => props.node.parentId,
   depth: () => props.depth,
   hasChildren: () => hasChildren.value,
+  editable: () => editable.value,
   open,
   indent: TREE_INDENT,
 })
@@ -151,7 +152,7 @@ const dnd = useTreeDndRow({
       :style="{ '--kn-drop-inset': `${dnd.indicatorInset.value}px` }"
       :aria-grabbed="dnd.isSource.value || undefined"
       @pointerdown="dnd.onPointerdown"
-      @keydown="(e: KeyboardEvent) => dnd.onKeydown(e, auth.canEdit)"
+      @keydown="(e: KeyboardEvent) => dnd.onKeydown(e, editable)"
       @toggle="toggle"
     >
       <template #leaf>
@@ -214,7 +215,7 @@ const dnd = useTreeDndRow({
            hover there is no reveal to wait for, so the menu always holds the
            slot (#1031). -->
       <TreeRowMenu
-        v-if="auth.canEdit"
+        v-if="editable"
         :document-id="node.documentId"
         :title="node.title"
         :disabled="dnd.isLocked.value"
@@ -224,7 +225,7 @@ const dnd = useTreeDndRow({
       <span
         v-if="hasChildren"
         class="size-1.5 shrink-0 rounded-full"
-        :class="[statusDot(node.headRevisionStatus), auth.canEdit ? 'group-focus-within:hidden group-hover:hidden group-has-[[data-state=open]]:hidden [@media(hover:none)]:hidden' : '']"
+        :class="[statusDot(node.headRevisionStatus), editable ? 'group-focus-within:hidden group-hover:hidden group-has-[[data-state=open]]:hidden [@media(hover:none)]:hidden' : '']"
         role="img"
         :aria-label="statusLabel"
         :title="statusLabel"

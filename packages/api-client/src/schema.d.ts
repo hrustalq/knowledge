@@ -1017,7 +1017,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Project detail */
+        /** Project detail, with what the caller may do with it (#1298) */
         get: operations["ProjectsController_get"];
         put?: never;
         post?: never;
@@ -1527,6 +1527,23 @@ export interface paths {
         head?: never;
         /** Update title / category / parent (features 07 + 08); parentId: null re-roots */
         patch: operations["DocumentsController_update"];
+        trace?: never;
+    };
+    "/v1/documents/{id}/permissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What the caller may do with the page, one flag per document action of the permission catalogue (#1298) */
+        get: operations["DocumentsController_permissionsOf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/v1/documents/{id}/move": {
@@ -2084,7 +2101,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get merge request state (heads, merge base, approvals, reviewers) */
+        /** Get merge request state (heads, merge base, approvals, reviewers) and what the caller may do with it (#1298) */
         get: operations["MergeRequestsController_get"];
         put?: never;
         post?: never;
@@ -14556,6 +14573,22 @@ export interface components {
             edges: components["schemas"]["DocumentGraphEdge"][];
             resolvedAsOf?: components["schemas"]["ResolvedAsOf"];
         };
+        DocumentPermissionsResponse: {
+            "document:view": boolean;
+            "document:comment": boolean;
+            "document:edit": boolean;
+            "document:manage": boolean;
+            "document:history": boolean;
+            "document:publish": boolean;
+            "branch:edit": boolean;
+            "project:edit": boolean;
+            "project:manage-access": boolean;
+            "project:manage-settings": boolean;
+            "project:manage-gates": boolean;
+            "project:delete": boolean;
+            "merge-request:contribute": boolean;
+            "merge-request:override-checks": boolean;
+        };
         DocumentQualityResponse: {
             documentId: string;
             score: components["schemas"]["QualityScore"] | null;
@@ -14638,6 +14671,7 @@ export interface components {
             childTemplateRef?: string | null;
             childTitlePattern?: string | null;
             restricted?: boolean;
+            accessLevel?: components["schemas"]["EffectiveAccessLevel"];
             draftOwnerId?: string | null;
             hidden?: boolean;
             level?: components["schemas"]["PageLevel"];
@@ -14694,6 +14728,7 @@ export interface components {
             childTemplateRef?: string | null;
             childTitlePattern?: string | null;
             restricted?: boolean;
+            accessLevel?: components["schemas"]["EffectiveAccessLevel"];
             draftOwnerId?: string | null;
             hidden?: boolean;
             level?: components["schemas"]["PageLevel"];
@@ -16272,6 +16307,10 @@ export interface components {
             pages: components["schemas"]["MergeRequestConflictPage"][];
             hiddenPages: number;
         };
+        MergeRequestDetailResponse: {
+            mergeRequest: components["schemas"]["MergeRequestInfo"];
+            permissions: components["schemas"]["MergeRequestPermissions"];
+        };
         MergeRequestDiffResponse: {
             mergeRequest: components["schemas"]["MergeRequestInfo"];
             compare: components["schemas"]["CompareResponse"];
@@ -16311,6 +16350,22 @@ export interface components {
             documentId: string;
             title: string;
             compare: components["schemas"]["CompareResponse"];
+        };
+        MergeRequestPermissions: {
+            "document:view": boolean;
+            "document:comment": boolean;
+            "document:edit": boolean;
+            "document:manage": boolean;
+            "document:history": boolean;
+            "document:publish": boolean;
+            "branch:edit": boolean;
+            "project:edit": boolean;
+            "project:manage-access": boolean;
+            "project:manage-settings": boolean;
+            "project:manage-gates": boolean;
+            "project:delete": boolean;
+            "merge-request:contribute": boolean;
+            "merge-request:override-checks": boolean;
         };
         /** @enum {string} */
         MergeRequestProvenance: "manual" | "agent" | "captured";
@@ -16625,6 +16680,19 @@ export interface components {
             glossaryConflicts: string[];
             cascade: components["schemas"]["ProjectCascadeCounts"];
         };
+        ProjectDetailResponse: {
+            projectId: string;
+            workspaceId: string;
+            name: string;
+            description: string | null;
+            avatarUrl: components["schemas"]["AvatarUrl"];
+            avatarEmoji: string | null;
+            avatarColor: string | null;
+            documentCount: number;
+            createdAt: string;
+            restricted?: boolean;
+            permissions: components["schemas"]["ProjectPermissions"];
+        };
         ProjectGitResponse: {
             url: string | null;
         };
@@ -16665,6 +16733,22 @@ export interface components {
                 title: string;
                 updatedAt: string;
             }[];
+        };
+        ProjectPermissions: {
+            "document:view": boolean;
+            "document:comment": boolean;
+            "document:edit": boolean;
+            "document:manage": boolean;
+            "document:history": boolean;
+            "document:publish": boolean;
+            "branch:edit": boolean;
+            "project:edit": boolean;
+            "project:manage-access": boolean;
+            "project:manage-settings": boolean;
+            "project:manage-gates": boolean;
+            "project:delete": boolean;
+            "merge-request:contribute": boolean;
+            "merge-request:override-checks": boolean;
         };
         /** @enum {string} */
         ProjectSettingKey: "verification" | "breakingChanges" | "lintPolicy" | "workItems" | "captureParent";
@@ -21750,7 +21834,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProjectSummary"];
+                    "application/json": components["schemas"]["ProjectDetailResponse"];
                 };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
@@ -23636,6 +23720,51 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DocumentSummary"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    DocumentsController_permissionsOf: {
+        parameters: {
+            query?: {
+                /** @description The branch the page is read on; branch:edit answers for it */
+                branch?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentPermissionsResponse"];
                 };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
@@ -25622,7 +25751,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CreateMergeRequestResponse"];
+                    "application/json": components["schemas"]["MergeRequestDetailResponse"];
                 };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */

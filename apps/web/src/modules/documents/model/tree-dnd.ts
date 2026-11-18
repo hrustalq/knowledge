@@ -59,6 +59,8 @@ export interface TreeRowHandle {
   title: string
   el: HTMLElement
   hasChildren: boolean
+  /** The caller may edit this page (#1298, the row's `accessLevel`): it may be moved, and pages may land in it. */
+  editable: boolean
   isExpanded: () => boolean
   setExpanded: (open: boolean) => void
 }
@@ -202,6 +204,8 @@ export function provideTreeDnd(
   /** A destination inside the page being dragged would detach it from the tree. */
   function invalidFor(dragId: string, target: TreeDropTarget | null): boolean {
     if (!target?.parentId) return false
+    // The API asks edit on the new parent; a page the caller only reads takes no children.
+    if (rows.get(target.parentId)?.editable === false) return true
     return target.parentId === dragId || store.isDescendantOf(target.parentId, dragId)
   }
 
@@ -317,7 +321,7 @@ export function provideTreeDnd(
   }
 
   function beginPointer(row: TreeRowHandle, ev: PointerEvent): void {
-    if (ev.button !== 0 || state.value || isLocked(row.id)) return
+    if (ev.button !== 0 || state.value || !row.editable || isLocked(row.id)) return
     // A finger on a row is a scroll: the row has `touch-action: auto`, so the
     // browser claims the gesture and cancels the drag a few pixels in (#1031).
     // Touch moves a page through the row menu's Move to… instead.
@@ -394,7 +398,7 @@ export function provideTreeDnd(
   }
 
   function beginKeyboard(row: TreeRowHandle): void {
-    if (state.value || isLocked(row.id)) return
+    if (state.value || !row.editable || isLocked(row.id)) return
     lastFocused = row.el.querySelector<HTMLElement>('a,button') ?? row.el
     const drag = start(row, 'keyboard', 0, 0)
     // Open on the slot the page already occupies, so the first arrow press is
@@ -554,6 +558,7 @@ export function useTreeDndRow(opts: {
   parentId: () => string | null
   depth: () => number
   hasChildren: () => boolean
+  editable: () => boolean
   open: Ref<boolean>
   /** Pixels of indent per level, so the insertion line lands on the row's own rail. */
   indent: number
@@ -567,6 +572,7 @@ export function useTreeDndRow(opts: {
     parentId: opts.parentId(),
     depth: opts.depth(),
     hasChildren: opts.hasChildren(),
+    editable: opts.editable(),
     el: null as unknown as HTMLElement,
     isExpanded: () => opts.open.value,
     setExpanded: (open: boolean) => {
@@ -580,6 +586,7 @@ export function useTreeDndRow(opts: {
       handle.parentId = opts.parentId()
       handle.depth = opts.depth()
       handle.hasChildren = opts.hasChildren()
+      handle.editable = opts.editable()
       if (!el.value) return
       handle.el = el.value
       dnd.register(handle)

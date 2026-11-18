@@ -5,7 +5,8 @@
  * default, and each row says all three: what the workspace set, what the
  * project set, and what applies.
  *
- * Who writes what is the API's rule, read from `settings/access` rather than
+ * Who writes what is the API's rule, read from the project's own permissions
+ * (#1298, `project:manage-settings` and `project:manage-gates`) rather than
  * re-derived here: a workspace admin writes everything; the project's
  * maintainer (an editor holding `manage` on it) writes all but the two merge
  * gates, which they see disabled with the reason. Everyone else reads.
@@ -29,7 +30,6 @@ import {
   type LintPolicySettings,
   type ProjectBreakingChangeSettings,
   type ProjectCaptureParentSettings,
-  type ProjectSettingsAccess,
   type ProjectVerificationKey,
   type ProjectVerificationSettings,
   type ProjectWorkItemRules,
@@ -41,6 +41,7 @@ import { getWorkspaceId } from '@/shared/api/api'
 import { formatNumber } from '@/shared/utils/format'
 import { useDocumentsStore } from '@/stores/documents'
 import { useProjectsStore } from '@/stores/projects'
+import { usePermission } from '@/stores/permissions'
 import { Autocomplete } from '@knowledge/ui/autocomplete'
 import { Badge } from '@knowledge/ui/badge'
 import { Button } from '@knowledge/ui/button'
@@ -61,7 +62,8 @@ const path = computed(() => ({ path: { id: projectId.value } }))
 // A switched-off section answers 404: asking again would not change that.
 const once = { retry: false } as const
 
-const accessQuery = useQuery(computed(() => ({ ...apiQueryOptions('/v1/projects/{id}/settings/access', path.value), ...once })))
+// The project's detail carries what the caller may do with it; a refused one is the page's error state.
+const accessQuery = useQuery(computed(() => ({ ...apiQueryOptions('/v1/projects/{id}', path.value), ...once })))
 const verificationQuery = useQuery(computed(() => ({ ...apiQueryOptions('/v1/projects/{id}/settings/verification', path.value), ...once })))
 const breakingQuery = useQuery(computed(() => ({ ...apiQueryOptions('/v1/projects/{id}/settings/breaking-changes', path.value), ...once })))
 const lintQuery = useQuery(
@@ -71,15 +73,14 @@ const rulesQuery = useQuery(computed(() => ({ ...apiQueryOptions('/v1/projects/{
 const captureQuery = useQuery(computed(() => ({ ...apiQueryOptions('/v1/projects/{id}/settings/capture-parent', path.value), ...once })))
 const queries = [accessQuery, verificationQuery, breakingQuery, lintQuery, rulesQuery, captureQuery]
 
-const access = computed(() => accessQuery.data.value as ProjectSettingsAccess | undefined)
 const verification = computed(() => verificationQuery.data.value as ProjectVerificationSettings | undefined)
 const breaking = computed(() => breakingQuery.data.value as ProjectBreakingChangeSettings | undefined)
 const lint = computed(() => lintQuery.data.value as LintPolicySettings | undefined)
 const rules = computed(() => rulesQuery.data.value as ProjectWorkItemRules | undefined)
 const capture = computed(() => captureQuery.data.value as ProjectCaptureParentSettings | undefined)
 
-const canWrite = computed(() => access.value?.canWrite ?? false)
-const canWriteGates = computed(() => access.value?.canWriteGates ?? false)
+const canWrite = usePermission('project:manage-settings', projectId)
+const canWriteGates = usePermission('project:manage-gates', projectId)
 /** A maintainer sees the gates disabled with this beside them; a reader's page says read-only once, at the top. */
 const gateReason = computed(() => (canWrite.value && !canWriteGates.value ? t('projectSettings.gates.adminOnly') : undefined))
 

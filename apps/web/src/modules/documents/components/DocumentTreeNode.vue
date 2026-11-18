@@ -12,13 +12,12 @@ import { computed, ref, watch, watchEffect } from 'vue'
 import { RouterLink } from 'vue-router'
 import { Archive, ChevronRight, FileText, Loader2, Lock, NotepadTextDashed } from 'lucide-vue-next'
 import { Collapse } from '@knowledge/ui/collapse'
-import type { DocumentTreeNode as TreeNode } from '@knowledge/contracts'
+import { levelReaches, type DocumentTreeNode as TreeNode } from '@knowledge/contracts'
 import { Badge } from '@knowledge/ui/badge'
 import { statusDot } from '@/shared/api/api'
 import { formatDate } from '@/shared/utils/format'
 import { labelFor } from '@/shared/i18n/labels'
 import { useTreeDndRow } from '@/modules/documents/model/tree-dnd'
-import { useAuthStore } from '@/stores/auth'
 import { useDocumentsStore } from '@/stores/documents'
 import { useSidebarStore } from '@/stores/sidebar'
 import TreeRowMenu from './TreeRowMenu.vue'
@@ -30,7 +29,6 @@ const props = defineProps<{ node: TreeNode; depth: number }>()
 
 const store = useDocumentsStore()
 const sidebar = useSidebarStore()
-const auth = useAuthStore()
 
 /** `childCount`, not `children.length` — an unexpanded branch has neither yet. */
 const hasChildren = computed(() => props.node.childCount > 0)
@@ -75,12 +73,15 @@ const archived = computed(() => !!props.node.archivedAt)
 
 /** One level of the index tree indents by 24px; the drop line follows it. */
 const INDEX_INDENT = 24
+/** The caller may edit this page (#1298): its own level, stamped on the row by the tree read. */
+const editable = computed(() => levelReaches(props.node.accessLevel, 'edit'))
 const dnd = useTreeDndRow({
   id: props.node.documentId,
   title: () => props.node.title,
   parentId: () => props.node.parentId,
   depth: () => props.depth,
   hasChildren: () => hasChildren.value,
+  editable: () => editable.value,
   open,
   indent: INDEX_INDENT,
 })
@@ -100,7 +101,7 @@ const dnd = useTreeDndRow({
       :style="{ paddingLeft: `${depth * 24 + 8}px`, '--kn-drop-inset': `${depth * 24 + 8 + dnd.indicatorInset.value}px` }"
       :aria-grabbed="dnd.isSource.value || undefined"
       @pointerdown="dnd.onPointerdown"
-      @keydown="(e: KeyboardEvent) => dnd.onKeydown(e, auth.canEdit)"
+      @keydown="(e: KeyboardEvent) => dnd.onKeydown(e, editable)"
     >
       <button
         v-if="hasChildren"
@@ -180,7 +181,7 @@ const dnd = useTreeDndRow({
       <!-- Dropped below sm: on a phone the title needs the room more than the date (#1039). -->
       <span class="ml-auto hidden shrink-0 text-xs text-muted-foreground sm:inline">{{ formatDate(node.createdAt) }}</span>
       <TreeRowMenu
-        v-if="auth.canEdit"
+        v-if="editable"
         :document-id="node.documentId"
         :title="node.title"
         :disabled="dnd.isLocked.value"

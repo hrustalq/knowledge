@@ -10,6 +10,7 @@ import { SUPPORTED_LOCALES, type DeleteProjectResponse, type Locale } from '@kno
 import { api } from '@/shared/api/queries'
 import { relativeTime } from '@/shared/api/api'
 import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { useProjectsStore } from '@/stores/projects'
 import { useDocumentsStore } from '@/stores/documents'
 import { Badge } from '@knowledge/ui/badge'
@@ -35,6 +36,10 @@ const route = useRoute()
 const router = useRouter()
 
 const project = computed(() => store.items.find((p) => p.projectId === route.params.id) ?? null)
+// What the caller may do with this project (#1298), from its detail read: its own level, not the workspace role.
+const projectId = () => (typeof route.params.id === 'string' ? route.params.id : '')
+const mayEdit = usePermission('project:edit', projectId)
+const mayDelete = usePermission('project:delete', projectId)
 const name = ref('')
 const description = ref('')
 const saving = ref(false)
@@ -231,17 +236,17 @@ async function onDeleted(result: DeleteProjectResponse) {
     <div class="space-y-3">
       <label class="block space-y-1">
         <span class="text-xs font-medium text-muted-foreground">{{ t('project.name') }}</span>
-        <Input v-model="name" :disabled="!auth.canEdit" :placeholder="t('project.name')" />
+        <Input v-model="name" :disabled="!mayEdit" :placeholder="t('project.name')" />
       </label>
       <label class="block space-y-1">
         <span class="text-xs font-medium text-muted-foreground">{{ t('project.description') }}</span>
-        <Input v-model="description" :disabled="!auth.canEdit" :placeholder="t('project.optional')" />
+        <Input v-model="description" :disabled="!mayEdit" :placeholder="t('project.optional')" />
       </label>
 
       <!-- The face. Separate from the name/description Save because an upload
            has already happened by the time it returns, and an emoji is one
            click — pairing either with a Save button would claim otherwise. -->
-      <div v-if="auth.canEdit" class="space-y-2 border-t pt-3">
+      <div v-if="mayEdit" class="space-y-2 border-t pt-3">
         <span class="text-xs font-medium text-muted-foreground">{{ t('project.appearance') }}</span>
         <p class="text-xs text-muted-foreground">{{ t('avatar.projectHint') }}</p>
         <AvatarPicker
@@ -273,7 +278,7 @@ async function onDeleted(result: DeleteProjectResponse) {
         </div>
       </div>
       <div class="flex flex-wrap gap-2 pt-1">
-        <Button v-if="auth.canEdit" :disabled="!dirty || saving || !name.trim()" @click="save">
+        <Button v-if="mayEdit" :disabled="!dirty || saving || !name.trim()" @click="save">
           {{ saving ? t('project.saving') : t('common.save') }}
         </Button>
         <Button
@@ -293,7 +298,7 @@ async function onDeleted(result: DeleteProjectResponse) {
           {{ t('blueprints.save.fromProject') }}
         </Button>
         <Button
-          v-if="auth.canAdminWorkspace"
+          v-if="mayDelete"
           variant="ghost"
           class="ml-auto text-destructive"
           @click="confirmDelete = true"
@@ -317,7 +322,7 @@ async function onDeleted(result: DeleteProjectResponse) {
       :locale="lang"
     />
     <DeleteProjectDialog
-      v-if="auth.canAdminWorkspace"
+      v-if="mayDelete"
       v-model:open="confirmDelete"
       :project="project"
       :siblings="siblings"

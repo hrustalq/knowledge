@@ -3241,6 +3241,16 @@
       "platformAdmin": false
     },
     {
+      "method": "GET",
+      "path": "/v1/documents/{id}/permissions",
+      "tag": "documents",
+      "summary": "What the caller may do with the page, one flag per document action of the permission catalogue (#1298)",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
       "method": "POST",
       "path": "/v1/documents/{id}/publish",
       "tag": "documents",
@@ -4534,7 +4544,7 @@
       "method": "GET",
       "path": "/v1/merge-requests/{id}",
       "tag": "merge-requests",
-      "summary": "Get merge request state (heads, merge base, approvals, reviewers)",
+      "summary": "Get merge request state (heads, merge base, approvals, reviewers) and what the caller may do with it (#1298)",
       "role": "viewer",
       "source": "merge-request",
       "public": false,
@@ -4984,7 +4994,7 @@
       "method": "GET",
       "path": "/v1/projects/{id}",
       "tag": "projects",
-      "summary": "Project detail",
+      "summary": "Project detail, with what the caller may do with it (#1298)",
       "role": "viewer",
       "source": "project",
       "public": false,

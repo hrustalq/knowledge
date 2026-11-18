@@ -52,6 +52,13 @@ function patchDocumentQueries(event: KnowledgeEvent, queryClient: QueryClient): 
   )
 }
 
+/**
+ * The reads that carry what the caller may do with one resource (#1298):
+ * re-asked when a grant or restriction moves (`acl.changed`) and when the
+ * person's own standing does (`permissions.changed`).
+ */
+export const PERMISSION_READS = ['/v1/documents/{id}/permissions', '/v1/projects/{id}', '/v1/merge-requests/{id}'] as const
+
 /** Default tracking rules for the knowledge platform's event vocabulary. */
 export const defaultLiveCacheRules: LiveCacheRule[] = [
   {
@@ -227,6 +234,7 @@ export const defaultLiveCacheRules: LiveCacheRule[] = [
       ['/v1/projects'],
       ['/v1/search'],
       ['/v1/access-requests'],
+      ...PERMISSION_READS.map((key) => [key]),
     ],
   },
   { on: '*', invalidate: () => [['/v1/activity']] },

@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import type {
   CreateMergeRequestResponse,
+  MergeRequestDetailResponse,
   CreateMergeRequestThreadResponse,
   DeleteMergeRequestCommentResponse,
   ListMergeRequestsResponse,
@@ -34,6 +35,7 @@ import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { MergeRequestsService } from './merge-requests.service.js';
 import { PermissionService } from '../permissions/permission.service.js';
+import { PermissionsResolver } from '../permissions/permissions.resolver.js';
 import { AccessService } from '../auth/access.service.js';
 import { MergeRequestThreadsService } from './merge-request-threads.service.js';
 import { SavedFiltersService } from './saved-filters.service.js';
@@ -71,6 +73,7 @@ export class MergeRequestsController {
     private readonly savedFilters: SavedFiltersService,
     private readonly permissions: PermissionService,
     private readonly access: AccessService,
+    private readonly grants: PermissionsResolver,
   ) {}
 
   @Post('documents/:id/merge-requests')
@@ -199,11 +202,13 @@ export class MergeRequestsController {
   }
 
   @Get('merge-requests/:id')
-  @Returns('CreateMergeRequestResponse')
+  @Returns('MergeRequestDetailResponse')
   @Access('viewer', 'merge-request')
-  @ApiOperation({ summary: 'Get merge request state (heads, merge base, approvals, reviewers)' })
-  get(@Param('id', ParseUUIDPipe) id: string): Promise<CreateMergeRequestResponse> {
-    return this.mergeRequests.get(id);
+  @ApiOperation({ summary: 'Get merge request state (heads, merge base, approvals, reviewers) and what the caller may do with it (#1298)' })
+  async get(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<MergeRequestDetailResponse> {
+    // Express's body ETag: the permissions are in the body, so two callers who differ never share one.
+    const mr = await this.mergeRequests.get(id);
+    return { ...mr, permissions: await this.grants.forMergeRequest(principal, mr.mergeRequest.documentId) };
   }
 
   @Patch('merge-requests/:id')

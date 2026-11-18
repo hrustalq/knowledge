@@ -1,6 +1,6 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { Logger } from '@nestjs/common';
-import { SUPPORTED_LOCALES, type Locale } from '@knowledge/contracts';
+import { CHAT_COMMANDS, SUPPORTED_LOCALES, type ChatCommandName, type Locale } from '@knowledge/contracts';
 import { CITE_MARKER_RE } from '../../assistant/citations.js';
 import { t } from '../../i18n/t.js';
 import {
@@ -37,13 +37,14 @@ const SECRET_HEADER = 'x-telegram-bot-api-secret-token';
  * Every name must be a command `ChatAnswersService.dispatch` handles, and every
  * command it handles is listed somewhere (`start` aside: Telegram sends it on
  * its own) — `chat-telegram.spec.ts` holds the two together. `bind`/`unbind`
- * need a workspace admin, so only group admins see them.
+ * need a workspace admin, so only group admins see them. Descriptions come
+ * from `CHAT_COMMANDS` (#1249), which the web composer's menu reads too.
  */
 export const TELEGRAM_COMMANDS = {
   all_private_chats: ['new', 'unlink', 'capture', 'forget', 'help'],
   all_group_chats: ['ask', 'new', 'capture', 'forget', 'help'],
   all_chat_administrators: ['ask', 'new', 'capture', 'forget', 'bind', 'unbind', 'help'],
-} as const;
+} as const satisfies Record<string, readonly ChatCommandName[]>;
 
 /** The SHA-256 a stored inbound secret is compared through. */
 export function hashInboundSecret(secret: string): string {
@@ -366,7 +367,7 @@ export class TelegramAdapter implements ChatAdapter {
         languages.map((lang) =>
           this.call(ctx, 'setMyCommands', {
             scope: { type: scope },
-            commands: names.map((command) => ({ command, description: t(`chat.commands.${command}`, undefined, lang ?? ctx.locale ?? 'en') })),
+            commands: names.map((command) => ({ command, description: CHAT_COMMANDS[command].description[lang ?? ctx.locale ?? 'en'] })),
             ...(lang ? { language_code: lang } : {}),
           }),
         ),

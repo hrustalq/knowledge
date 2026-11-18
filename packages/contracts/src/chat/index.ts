@@ -380,3 +380,50 @@ export interface ChatLinkPending {
 
 /** Wrong numbers after which a link code is spent (#1104). */
 export const CHAT_LINK_PROOF_MAX_ATTEMPTS = 5;
+
+/**
+ * Slash commands (#1249): one catalogue for the bots' `/` menu and the web chat
+ * composer's, so a name both offer is described the same on both. `surfaces`
+ * says where a command runs: `bot` is what `ChatAnswersService.dispatch`
+ * handles (Telegram lists it by scope in `TELEGRAM_COMMANDS`), `web` is what
+ * the composer offers. A command never sends text to a model on the web; on a
+ * bot `ask` takes its argument as the question.
+ */
+export type ChatCommandSurface = 'bot' | 'web';
+
+export interface ChatCommandSpec {
+  surfaces: readonly ChatCommandSurface[];
+  description: Record<Locale, string>;
+}
+
+export const CHAT_COMMANDS = {
+  new: { surfaces: ['bot', 'web'], description: { en: 'Start a new conversation', ru: 'Начать новый разговор' } },
+  ask: {
+    surfaces: ['bot', 'web'],
+    description: { en: 'Ask the knowledge base, changing nothing', ru: 'Спросить базу знаний, ничего не меняя' },
+  },
+  agent: {
+    surfaces: ['web'],
+    description: { en: 'Let the assistant also propose changes (editors)', ru: 'Разрешить ассистенту предлагать правки (для редакторов)' },
+  },
+  model: { surfaces: ['web'], description: { en: 'Pick the model for this conversation', ru: 'Выбрать модель для этого разговора' } },
+  'agent-key': { surfaces: ['web'], description: { en: 'Pick the agent that answers', ru: 'Выбрать агента, который отвечает' } },
+  skill: { surfaces: ['web'], description: { en: 'Apply a skill to the next message', ru: 'Применить навык к следующему сообщению' } },
+  page: { surfaces: ['web'], description: { en: 'Attach a page to the next message', ru: 'Прикрепить страницу к следующему сообщению' } },
+  capture: {
+    surfaces: ['bot', 'web'],
+    description: {
+      en: 'Propose what the conversation settled for the knowledge base (editors)',
+      ru: 'Предложить в базу знаний то, о чём договорились в разговоре (для редакторов)',
+    },
+  },
+  unlink: { surfaces: ['bot'], description: { en: 'Disconnect your account', ru: 'Отвязать аккаунт' } },
+  forget: { surfaces: ['bot'], description: { en: 'Delete the messages of yours I keep', ru: 'Удалить ваши сообщения, которые я храню' } },
+  bind: { surfaces: ['bot'], description: { en: 'Answer in this group (workspace admins)', ru: 'Отвечать в этой группе (администраторы пространства)' } },
+  unbind: {
+    surfaces: ['bot'],
+    description: { en: 'Stop answering in this group (workspace admins)', ru: 'Перестать отвечать в этой группе (администраторы пространства)' },
+  },
+  help: { surfaces: ['bot', 'web'], description: { en: 'What I can do', ru: 'Что я умею' } },
+} as const satisfies Record<string, ChatCommandSpec>;
+export type ChatCommandName = keyof typeof CHAT_COMMANDS;

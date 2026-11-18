@@ -17,6 +17,7 @@ import {
   useSpeechRecognition,
   useTextareaAutosize,
 } from '@vueuse/core'
+import { toast } from 'vue-sonner'
 import { CornerDownLeft, FileText, Mic, MicOff, Paperclip, SendHorizontal, Square, Upload, X } from 'lucide-vue-next'
 import type { AssistantChatAttachment, AssistantChatMode } from '@knowledge/contracts'
 import { ASSISTANT_MESSAGE_MAX_CHARS } from '@knowledge/contracts'
@@ -30,8 +31,10 @@ import SkillPicker from './SkillPicker.vue'
 import AgentPicker from './AgentPicker.vue'
 import ModelPicker from './ModelPicker.vue'
 import LevelPicker from './LevelPicker.vue'
+import ComposerCommandMenu, { type CommandRun } from './ComposerCommandMenu.vue'
 import { assistantMode } from '../model/use-mode'
 import { useAssistantStore } from '../model/assistant.store'
+import { useCaptureReply } from '../model/capture-reply'
 
 const { t } = useI18n()
 
@@ -210,7 +213,7 @@ function canRecall(): boolean {
 onKeyStroke(
   'ArrowUp',
   (e) => {
-    if (props.history.length === 0 || !canRecall()) return
+    if (menuEl.value?.open || props.history.length === 0 || !canRecall()) return
     e.preventDefault()
     if (recallIndex.value === null) recallDraft.value = draft.value
     const next = recallIndex.value === null ? props.history.length - 1 : Math.max(recallIndex.value - 1, 0)
@@ -222,7 +225,7 @@ onKeyStroke(
 onKeyStroke(
   'ArrowDown',
   (e) => {
-    if (recallIndex.value === null) return
+    if (menuEl.value?.open || recallIndex.value === null) return
     e.preventDefault()
     const next = recallIndex.value + 1
     if (next >= props.history.length) {
@@ -240,7 +243,62 @@ onKeyStroke('Escape', () => {
   draft.value = ''
 })
 
+// --- `/` commands (#1249): the menu reads the draft and takes the keys while
+// it is open; what it emits is applied here, through the same refs and store
+// actions the pickers use. A command never reaches the model.
+const menuEl = ref<InstanceType<typeof ComposerCommandMenu> | null>(null)
+const captureReply = useCaptureReply()
+
+function completeCommand(text: string) {
+  draft.value = text
+  void nextTick(() => {
+    const el = inputEl.value
+    if (!el) return
+    el.focus()
+    el.selectionStart = el.selectionEnd = text.length
+  })
+}
+
+async function runCommand({ command, value, label }: CommandRun) {
+  draft.value = ''
+  void nextTick(() => inputEl.value?.focus())
+  switch (command) {
+    case 'new':
+      assistant.startBlank()
+      break
+    case 'ask':
+    case 'agent':
+      mode.value = command
+      break
+    case 'model': {
+      const threadId = assistant.activeThread?.id
+      if (!threadId) break
+      try {
+        await assistant.setThreadModel(threadId, value ?? null)
+      } catch (e) {
+        toast.error((e as Error).message)
+      }
+      break
+    }
+    case 'agent-key':
+      agentKey.value = value ?? ''
+      break
+    case 'skill':
+      if (value && !skillIds.value.includes(value)) skillIds.value = [...skillIds.value, value]
+      break
+    case 'page':
+      if (value && !appliedDocs.value.some((d) => d.documentId === value)) {
+        appliedDocs.value = [...appliedDocs.value, { documentId: value, title: label ?? value }]
+      }
+      break
+    case 'capture':
+      if (value) await captureReply(value)
+      break
+  }
+}
+
 function onKeydown(e: KeyboardEvent) {
+  if (menuEl.value?.handleKey(e)) return
   // Enter sends; Shift+Enter and the platform modifier both open a new line,
   // because muscle memory for "submit this box" differs between the two and
   // losing a half-written question to the wrong one is unforgivable.
@@ -254,6 +312,7 @@ const canSend = computed(
   () =>
     !props.sending &&
     !tooLong.value &&
+    !menuEl.value?.open &&
     (draft.value.trim().length > 0 || attachments.value.length > 0),
 )
 const contextCount = computed(() => attachments.value.length + appliedDocs.value.length)
@@ -341,11 +400,22 @@ function send() {
 
         <form @submit.prevent="send">
           <label class="sr-only" for="chat-input">{{ t('chat.messageAssistant') }}</label>
+          <ComposerCommandMenu
+            ref="menuEl"
+            :draft="draft"
+            :can-edit="canEdit"
+            :sending="sending"
+            @run="runCommand"
+            @complete="completeCommand"
+          />
           <Textarea
             id="chat-input"
             :ref="setInputEl"
             v-model="draft"
             :placeholder="placeholder"
+            :aria-controls="menuEl?.open ? 'chat-slash-menu' : undefined"
+            :aria-activedescendant="menuEl?.activeId"
+            aria-autocomplete="list"
             rows="1"
             class="max-h-56 min-h-0 w-full resize-none rounded-none border-0 bg-transparent px-3.5 py-3 text-sm leading-relaxed shadow-none focus-visible:border-0 focus-visible:ring-0 dark:bg-transparent"
             @keydown="onKeydown"

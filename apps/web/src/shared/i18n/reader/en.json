@@ -149,5 +149,76 @@
       "converting": "Making the PDF",
       "packaging": "Packaging"
     }
+  },
+  "c4": {
+    "tabs": "Diagram or source",
+    "tab": {
+      "diagram": "Diagram",
+      "source": "Source"
+    },
+    "trail": "C4 views",
+    "zoom": "Diagram zoom",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "fit": "Fit to width ({percent}%)",
+    "fullscreen": "Open full screen",
+    "build": "Edit on a canvas",
+    "open": "{name}: open {view}",
+    "showing": "Showing {view}",
+    "level": {
+      "systemContext": "System context",
+      "container": "Containers",
+      "component": "Components"
+    },
+    "studio": {
+      "title": "C4 model",
+      "titleEdit": "C4 builder",
+      "hint": "Click an element that has a view of its own to open it. Drag to pan; Ctrl and the wheel zoom.",
+      "hintEdit": "Drag from the palette to add an element, drag an element to move it, and drag the dot on its edge onto another to connect them. Arrow keys move the selected element, Delete removes it.",
+      "view": "View",
+      "autoLayout": "Automatic layout",
+      "fit": "Fit to screen",
+      "close": "Close",
+      "palette": "Elements",
+      "add": "Add to this view",
+      "addHint": "Click to add beside the diagram, or drag onto the canvas",
+      "inspector": "Selected",
+      "name": "Name",
+      "description": "Description",
+      "technology": "Technology",
+      "technologyHint": "e.g. NestJS, PostgreSQL",
+      "external": "Outside this system",
+      "database": "Database",
+      "openLevel": "Open {view}",
+      "addContainers": "Add its containers",
+      "addComponents": "Add its components",
+      "delete": "Delete",
+      "relationship": "Relationship",
+      "relationshipHint": "e.g. Reads orders",
+      "protocolHint": "e.g. REST, gRPC",
+      "emptyAdd": "Drag a person, system, container or component from the palette onto the canvas.",
+      "emptyConnect": "Drag the dot on an element's edge onto another element to connect them.",
+      "emptyKeys": "Double-click an element with a view of its own to open it. Arrow keys move the selection, Delete removes it, ⌘Z undoes.",
+      "refused": "This part of the model can't be changed here",
+      "deleted": "Deleted",
+      "undo": "Undo",
+      "new": {
+        "person": "Person",
+        "softwareSystem": "Software system",
+        "container": "Container",
+        "component": "Component"
+      },
+      "kind": {
+        "person": "Person",
+        "softwareSystem": "Software system",
+        "container": "Container",
+        "component": "Component"
+      }
+    },
+    "starter": {
+      "user": "User",
+      "system": "System",
+      "uses": "Uses"
+    }
   }
 }

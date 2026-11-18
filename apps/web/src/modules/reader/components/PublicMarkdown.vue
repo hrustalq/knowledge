@@ -7,13 +7,14 @@
  * browser to lay out, and images and diagrams, which open in a lightbox
  * (#467, #476).
  */
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, shallowRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import DOMPurify from 'dompurify'
 import { KN, carryDiagramLayout } from '@/core/markdown/nodes'
 import { useTheme } from '@/shared/utils/theme'
 import { mermaidConfig, mermaidSvg } from '@/shared/utils/mermaid'
 import { DiagramLightbox, ImageLightbox, markDiagrams, markZoomable } from '@knowledge/ui/lightbox'
+import { LazyC4Diagram, takeC4Blocks, type C4Block } from '@/entities/document'
 
 defineOptions({ inheritAttrs: false })
 
@@ -22,6 +23,8 @@ const props = defineProps<{ html: string }>()
 const { t } = useI18n()
 const host = ref<HTMLElement | null>(null)
 const theme = useTheme()
+/** C4 models (#1244), drawn and explored as in the app; the server sent their source as a code block. */
+const c4 = shallowRef<C4Block[]>([])
 
 async function renderMermaid() {
   const root = host.value
@@ -47,6 +50,7 @@ async function renderMermaid() {
 
 onMounted(async () => {
   if (host.value) markZoomable(host.value, t)
+  if (host.value) c4.value = takeC4Blocks(host.value)
   await renderMermaid()
   // Drawings came drawn from the server; mermaid figures exist only now.
   if (host.value) markDiagrams(host.value, t)
@@ -58,4 +62,7 @@ onMounted(async () => {
   <div ref="host" v-bind="$attrs" class="markdown-body max-w-none" v-html="props.html" />
   <ImageLightbox :root="host" />
   <DiagramLightbox :root="host" />
+  <Teleport v-for="(block, i) in c4" :key="i" :to="block.el">
+    <LazyC4Diagram :source="block.source" />
+  </Teleport>
 </template>

@@ -17,6 +17,24 @@ in the pull request that introduces them — see
 
 ### Added
 
+- **C4 architecture diagrams.** Write a C4 model in Structurizr DSL inside a ```` ```structurizr ```` fence, or
+  insert one with **C4 diagram** from the slash menu or the toolbar. It holds people, software systems,
+  containers and components, their relationships, and system context, container and component views. Each block has
+  **Diagram** and **Source** tabs. The drawing shows the first view; an element with a view of its own is outlined,
+  and clicking it (or Enter) zooms into its containers or components, while the trail above leads back out. Pan and
+  zoom work in place with Ctrl and the wheel, a pinch, or the − / + buttons.
+
+  The full-screen button opens the model for exploring on a page and as a **builder** in the editor:
+  - drag people, systems, containers and components in from a palette, move them, and drag the dot on an element's
+    edge onto another to connect them;
+  - edit names, descriptions and technology in an inspector, and open or create the level below;
+  - the keyboard does the same (arrow keys, Delete, Enter, ⌘Z).
+
+  Every change is written into the Structurizr text, never regenerated, so comments and styles survive. Positions are
+  kept as a `// @layout` comment, which Structurizr's own tools ignore. The full-screen view lives in the URL
+  (`?c4=…`), so Back closes it. The public reader explores models the same way. PDF and HTML exports print every
+  view under its title, and DOCX keeps the source. Element names and descriptions are searchable like the rest of
+  the page. (#1244)
 - A workspace **home** at `/`, which used to redirect to the page browser (`/documents` is unchanged). It shows the
   key numbers: pages, verified share, pages needing attention, open merge requests, and, for admins while
   analytics is on, unanswered searches. Each number links to the list behind it. Below them are quick actions (new

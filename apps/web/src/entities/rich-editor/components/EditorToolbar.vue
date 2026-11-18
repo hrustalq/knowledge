@@ -54,7 +54,9 @@ import {
   Underline as UnderlineIcon,
   Undo2,
   Workflow,
+  Boxes,
 } from 'lucide-vue-next'
+import { starterModel } from '@/core/markdown/structurizr-edit'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -73,6 +75,8 @@ import { deleteBlock, duplicateBlock, moveBlock, selectedBlockPos } from './exte
 import { editorStreams, readFormatState } from '../model/editor-streams'
 
 const { t } = useI18n()
+/** A person using a system, in the reader's language: a C4 block that draws from the start. */
+const c4Starter = () => starterModel({ user: t('c4.starter.user'), system: t('c4.starter.system'), uses: t('c4.starter.uses') })
 
 const props = withDefaults(
   defineProps<{
@@ -548,6 +552,9 @@ const ALIGNMENTS = [
         <DropdownMenuSeparator />
         <DropdownMenuItem @select="editor.chain().focus().setMermaid().run()">
           <Workflow class="size-4" /> {{ t('toolbar.mermaid') }}
+        </DropdownMenuItem>
+        <DropdownMenuItem @select="editor.chain().focus().setC4(c4Starter()).run()">
+          <Boxes class="size-4" /> {{ t('toolbar.c4') }}
         </DropdownMenuItem>
         <DropdownMenuItem v-if="!compact" @select="editor.chain().focus().setDrawing().run()">
           <PenLine class="size-4" /> {{ t('toolbar.whiteboard') }}

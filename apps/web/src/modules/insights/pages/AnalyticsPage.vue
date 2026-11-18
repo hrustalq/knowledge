@@ -32,7 +32,7 @@ import {
 import { apiQueryOptions } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
 import { formatDate, formatDuration, formatNumber, formatPercent, formatRelative, formatDayMonth } from '@/shared/utils/format'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { Button } from '@knowledge/ui/button'
 import { PageLayout, PageState, PageTabs, panelId, tabId, usePageTabs, type PageTab } from '@knowledge/ui/layout'
 import AnalyticsList, { type AnalyticsListRow } from '@/modules/insights/components/AnalyticsList.vue'
@@ -41,7 +41,7 @@ import { DailyBars } from '@knowledge/ui/daily-bars'
 import { TRAFFIC_BAR, TRAFFIC_SEGMENTS, trafficPoints } from '@/entities/insight'
 
 const { t } = useI18n()
-const auth = useAuthStore()
+const isWorkspaceAdmin = usePermission('workspace:admin')
 const workspaceId = getWorkspaceId()
 
 type TabKey = 'overview' | 'pages' | 'search' | 'agents' | 'settings'
@@ -66,7 +66,7 @@ function tabQuery<P extends '/v1/analytics/overview' | '/v1/analytics/pages' | '
     computed(() => ({
       // The four routes take the same query; the generic cannot prove it per path.
       ...apiQueryOptions(path, { query: params.value } as never),
-      enabled: auth.canAdminWorkspace && tab.value === key,
+      enabled: isWorkspaceAdmin.value && tab.value === key,
     })),
   )
 }
@@ -201,10 +201,10 @@ const contextPoints = computed(() => {
 <template>
   <PageLayout variant="list" :title="t('analytics.title')" :subtitle="t('analytics.subtitle')">
     <template #tabs>
-      <PageTabs v-if="auth.canAdminWorkspace" v-model="tab" :tabs="tabs" :label="t('analytics.title')" />
+      <PageTabs v-if="isWorkspaceAdmin" v-model="tab" :tabs="tabs" :label="t('analytics.title')" />
     </template>
 
-    <PageState v-if="!auth.canAdminWorkspace" state="forbidden" :description="t('analytics.adminOnly')" />
+    <PageState v-if="!isWorkspaceAdmin" state="forbidden" :description="t('analytics.adminOnly')" />
 
     <template v-else>
       <div v-if="tab !== 'settings'" class="flex flex-wrap items-center gap-x-5 gap-y-2">

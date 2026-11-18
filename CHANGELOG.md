@@ -71,8 +71,18 @@ in the pull request that introduces them — see
   `GET /v1/ai/agents/runs/:id/steps` (cursor) and `POST /v1/ai/agents/runs/:id/cancel` are new, `agent.run.step`
   and `agent.run.cancelled` join the live events, and run summaries carry `model`. A run that is private to its
   owner (a memo's analysis, a restricted project's check) stays a 404 for everyone else, steps included. (#1247)
+- `make backtest ARGS="--report"` lists every API route with its request count, p50 and p95, and, when the API ran
+  with `OPS_QUERY_COUNT_ENABLED=true`, how many database operations each request made and the routes making the
+  most. Each `http.request` event then carries `queries` and `queryMs`. Search events also record the query-embedding
+  time (`embedMs`) and the PostgreSQL permission and trust join (`joinMs`), and the report prints both. The report
+  now reads `LOG_DIR` when it is set, as the writers do, rather than always `<repo>/logs`.
+  `apps/api/scripts/measure-api.mjs` is a repeatable API session to run before reading the report. The first
+  baseline is `docs/performance/2026-11-18-api.md`. (#1242)
 
 ### Operations
+
+- New env var `OPS_QUERY_COUNT_ENABLED` (default `false`). Leave it off in production: it wraps every database
+  operation to count it. Turn it on for a profiling session together with `OPS_JSONL_ENABLED`. (#1242)
 
 - Migration `20270207100000_ops_events_process` adds a nullable `process` column and a `created_at` index to
   `ops_events`. It is additive and survives a rollback by retag: the previous image neither reads nor writes the

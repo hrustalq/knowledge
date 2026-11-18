@@ -1107,6 +1107,12 @@ export const envSchema = z.object({
    * full corpus re-index emits tens of thousands of them.
    */
   OPS_JSONL_ENABLED: boolish(true),
+  /**
+   * Count Prisma operations per HTTP request onto the `http.request` event
+   * (`queries`, `queryMs`), for N+1 hunting (#1242). Off by default: it wraps
+   * every operation in a client extension.
+   */
+  OPS_QUERY_COUNT_ENABLED: boolish(false),
 
   /**
    * Chat bots (issue #71). Off: the webhook answers 404, settings are still

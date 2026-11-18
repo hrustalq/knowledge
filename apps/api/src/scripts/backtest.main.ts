@@ -254,9 +254,38 @@ async function generate(): Promise<void> {
   process.exit(0);
 }
 
+/** A request path as a route: no query string, ids folded so one route is one row (#1242). */
+function routeOf(path: string): string {
+  return path
+    .split('?')[0]
+    .replace(/\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?=\/|$)/gi, '/:id')
+    .replace(/\/\d+(?=\/|$)/g, '/:n');
+}
+
+/** Per route, slowest p95 first, then the routes running the most queries per request. */
+function printRoutes(byRoute: Map<string, { ms: number[]; queries: number[] }>): void {
+  const sorted = (v: number[]) => [...v].sort((a, b) => a - b);
+  const rows = [...byRoute.entries()].map(([route, { ms, queries }]) => {
+    const t = sorted(ms);
+    const q = sorted(queries);
+    return { route, n: ms.length, p50: percentile(t, 50), p95: percentile(t, 95), q50: q.length ? percentile(q, 50) : undefined, qMax: q.at(-1) };
+  });
+  const line = (r: (typeof rows)[number]) =>
+    `  ${r.route.slice(0, 64).padEnd(64)} n=${String(r.n).padEnd(5)} p50=${r.p50.toFixed(1).padStart(8)}ms  p95=${r.p95.toFixed(1).padStart(8)}ms` +
+    (r.q50 === undefined ? '' : `  queries p50=${r.q50} max=${r.qMax}`);
+  console.log('  by route, slowest p95 first');
+  for (const r of rows.sort((a, b) => b.p95 - a.p95)) console.log(line(r));
+  const counted = rows.filter((r) => r.qMax !== undefined).sort((a, b) => (b.qMax ?? 0) - (a.qMax ?? 0));
+  if (counted.length) {
+    console.log('  by route, most queries per request (OPS_QUERY_COUNT_ENABLED)');
+    for (const r of counted.slice(0, 20)) console.log(line(r));
+  }
+}
+
 /** Aggregate the recorded stream: volumes and latencies, no ground truth needed. */
 function report(): void {
-  const dir = backtestDir();
+  // LOG_DIR as the writers read it: no Nest app runs here to configure the stream.
+  const dir = process.env.LOG_DIR || backtestDir();
   let files: string[];
   try {
     files = readdirSync(dir).filter((f) => f.startsWith('ops-') && f.endsWith('.jsonl'));
@@ -271,8 +300,11 @@ function report(): void {
 
   const http: number[] = [];
   const httpByStatus = new Map<number, number>();
+  const byRoute = new Map<string, { ms: number[]; queries: number[] }>();
   const searchTotal: number[] = [];
   const searchVector: number[] = [];
+  const searchEmbed: number[] = [];
+  const searchJoin: number[] = [];
   const searchFulltext: number[] = [];
   const emptySearches: number[] = [];
   const aiCalls: number[] = [];
@@ -302,11 +334,20 @@ function report(): void {
           http.push(ms);
           const status = Number(e.status ?? 0);
           httpByStatus.set(status, (httpByStatus.get(status) ?? 0) + 1);
+          // The route table is the API's: the web SSR server traces its own page requests too.
+          if (!file.startsWith('ops-api-')) break;
+          const route = `${String(e.method)} ${routeOf(String(e.route ?? ''))}`;
+          const row = byRoute.get(route) ?? { ms: [], queries: [] };
+          row.ms.push(ms);
+          if (typeof e.queries === 'number') row.queries.push(e.queries);
+          byRoute.set(route, row);
           break;
         }
         case 'search.executed': {
           searchTotal.push(ms);
           if (typeof e.vectorMs === 'number') searchVector.push(e.vectorMs);
+          if (typeof e.embedMs === 'number') searchEmbed.push(e.embedMs);
+          if (typeof e.joinMs === 'number') searchJoin.push(e.joinMs);
           if (typeof e.fulltextMs === 'number') searchFulltext.push(e.fulltextMs);
           if (Array.isArray(e.results) && e.results.length === 0) emptySearches.push(ms);
           break;
@@ -344,11 +385,14 @@ function report(): void {
     console.log(summarize('http.request', http));
     const statuses = [...httpByStatus.entries()].sort((a, b) => a[0] - b[0]);
     console.log(`  by status            ${statuses.map(([s, n]) => `${s}:${n}`).join('  ')}`);
+    printRoutes(byRoute);
   }
   if (searchTotal.length) {
     console.log(summarize('search total', searchTotal));
     if (searchVector.length) console.log(summarize('  vector leg', searchVector));
+    if (searchEmbed.length) console.log(summarize('    query embedding', searchEmbed));
     if (searchFulltext.length) console.log(summarize('  fulltext leg', searchFulltext));
+    if (searchJoin.length) console.log(summarize('  PG join', searchJoin));
     // An empty result set is a retrieval failure that returns 200, which is why
     // it needs counting separately — no error rate will ever show it.
     console.log(`  returned nothing     ${emptySearches.length}/${searchTotal.length}`);

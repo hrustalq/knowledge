@@ -32,7 +32,7 @@ import {
 } from '@knowledge/contracts'
 import { api, isApiRequestError } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { useProjectsStore } from '@/stores/projects'
 import { useFeaturesStore } from '@/stores/features'
 import { useTemplatesStore } from '@/entities/template'
@@ -67,7 +67,8 @@ import {
 const { t, locale: uiLocale } = useI18n()
 const route = useRoute()
 const router = useRouter()
-const auth = useAuthStore()
+const canContribute = usePermission('workspace:contribute')
+const isWorkspaceAdmin = usePermission('workspace:admin')
 const projects = useProjectsStore()
 const templatesStore = useTemplatesStore()
 const features = useFeaturesStore()
@@ -219,7 +220,7 @@ async function loadBlueprints() {
   const entry = !resumed.value && typeof wanted === 'string' && blueprints.value.find((e) => e.key === wanted)
   // Settled before the pick pushes Shape, so Back from Shape lands on a clean Start.
   if (typeof wanted === 'string') await toUrl(place.value, 'replace')
-  if (entry && auth.canEdit) pick(entry)
+  if (entry && canContribute.value) pick(entry)
 }
 
 interface StartCard {
@@ -379,7 +380,7 @@ const conventions = computed(() => blueprint.value?.conventions ?? {})
 const outgoing = computed<Blueprint | null>(() => {
   if (!blueprint.value) return null
   const { styleguide, ...rest } = conventions.value
-  const kept = auth.canAdminWorkspace && styleguide ? { ...rest, styleguide } : rest
+  const kept = isWorkspaceAdmin.value && styleguide ? { ...rest, styleguide } : rest
   return { ...blueprint.value, conventions: Object.keys(kept).length ? kept : undefined }
 })
 /** What a blueprint makes, one line each: the Start preview's facts and Create's summary. */
@@ -395,7 +396,7 @@ const summary = computed(() => conventionFacts(pages.value, outgoing.value?.conv
 
 const canContinue = computed(() => {
   if (step.value === 'shape') return !overLimit.value && !untitled.value
-  if (step.value === 'create') return auth.canEdit && !!context.value.name.trim() && !creating.value
+  if (step.value === 'create') return canContribute.value && !!context.value.name.trim() && !creating.value
   return step.value === 'conventions'
 })
 
@@ -487,7 +488,7 @@ function leave() {
         <ProjectBlueprintPicker
           :built-ins="blueprints ?? []"
           :locale="lang"
-          :can-edit="auth.canEdit"
+          :can-edit="canContribute"
           @back="stepBack"
           @pick="picked"
           @pick-entry="pick"
@@ -497,7 +498,7 @@ function leave() {
         <BlueprintDescribePanel
           :entries="blueprints ?? []"
           :locale="lang"
-          :can-edit="auth.canEdit"
+          :can-edit="canContribute"
           :initial="context.interview"
           :initial-brief="describedAs?.brief"
           @back="stepBack"
@@ -513,7 +514,7 @@ function leave() {
             <div class="space-y-2 px-4 pt-5 pb-2 lg:px-6">
               <h2 class="text-lg font-semibold text-balance">{{ t('scaffold.start.title') }}</h2>
               <p class="kn-measure text-muted-foreground text-sm leading-relaxed">{{ t('scaffold.start.body') }}</p>
-              <p v-if="!auth.canEdit" class="kn-callout-warning rounded-lg px-3 py-2 text-xs">{{ t('scaffold.start.readOnly') }}</p>
+              <p v-if="!canContribute" class="kn-callout-warning rounded-lg px-3 py-2 text-xs">{{ t('scaffold.start.readOnly') }}</p>
             </div>
 
             <div class="pb-4 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
@@ -532,10 +533,10 @@ function leave() {
                     <button
                       type="button"
                       class="kn-sc-row"
-                      :disabled="!auth.canEdit && (!card.entry || !wide)"
+                      :disabled="!canContribute && (!card.entry || !wide)"
                       :aria-pressed="wide && card.entry ? previewCard?.key === card.key : undefined"
                       @click="choose(card)"
-                      @dblclick="card.entry && auth.canEdit && pick(card.entry)"
+                      @dblclick="card.entry && canContribute && pick(card.entry)"
                     >
                       <span class="bg-muted text-muted-foreground grid size-8 shrink-0 place-items-center rounded-lg text-base" aria-hidden="true">
                         <template v-if="typeof card.icon === 'string'">{{ card.icon }}</template>
@@ -583,7 +584,7 @@ function leave() {
                     <h3 class="text-base font-semibold text-balance">{{ previewCard.name }}</h3>
                     <p class="text-muted-foreground mt-0.5 text-caption tabular-nums">{{ previewFacts.join(' · ') }}</p>
                   </div>
-                  <Button size="sm" class="gap-1.5" :disabled="!auth.canEdit" @click="pick(previewCard.entry)">
+                  <Button size="sm" class="gap-1.5" :disabled="!canContribute" @click="pick(previewCard.entry)">
                     {{ t('scaffold.start.use') }} <ArrowRight class="size-4" />
                   </Button>
                   <!-- Its own line, so a narrow pane never squeezes it beside the button. -->
@@ -665,7 +666,7 @@ function leave() {
       <motion.div v-else-if="step === 'conventions'" key="conventions" class="h-full overflow-y-auto" v-bind="STEP_MOTION">
         <BlueprintConventions
           :conventions="conventions"
-          :can-admin="auth.canAdminWorkspace"
+          :can-admin="isWorkspaceAdmin"
           :offer="derivedFrom?.glossary.length ? { from: derivedFrom.projectName, terms: derivedFrom.glossary } : null"
           @update:conventions="(c) => blueprint && send({ type: 'SET', patch: { blueprint: { ...blueprint, conventions: c } } })"
         />
@@ -779,7 +780,7 @@ function leave() {
             <ul class="text-muted-foreground mt-4 space-y-1 border-t pt-3 text-ui">
               <li v-for="line in summary" :key="line">{{ line }}</li>
             </ul>
-            <p v-if="!auth.canAdminWorkspace && conventions.styleguide" class="text-muted-foreground mt-3 text-caption leading-snug">
+            <p v-if="!isWorkspaceAdmin && conventions.styleguide" class="text-muted-foreground mt-3 text-caption leading-snug">
               {{ t('scaffold.conventions.styleguideSkipped') }}
             </p>
             <section v-if="pages" class="mt-5 border-t pt-4" :aria-label="t('scaffold.shape.outline')">
@@ -801,7 +802,7 @@ function leave() {
       </Button>
 
       <Button
-        v-if="step === 'shape' && auth.canAdminWorkspace"
+        v-if="step === 'shape' && isWorkspaceAdmin"
         variant="ghost"
         size="sm"
         class="gap-1.5"
@@ -829,7 +830,7 @@ function leave() {
         {{ creating ? t('scaffold.create.creating', { count: pages }, pages) : t('scaffold.create.submitPages', { count: pages }, pages) }}
       </Button>
     </footer>
-    <SaveBlueprintDialog v-if="auth.canAdminWorkspace" v-model:open="saveOpen" :blueprint="blueprint" :origin="origin" :locale="lang" @saved="onSaved" />
+    <SaveBlueprintDialog v-if="isWorkspaceAdmin" v-model:open="saveOpen" :blueprint="blueprint" :origin="origin" :locale="lang" @saved="onSaved" />
   </div>
   </MotionConfig>
 </template>

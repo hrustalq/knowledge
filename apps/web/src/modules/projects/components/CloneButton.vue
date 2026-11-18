@@ -28,6 +28,7 @@ import { errorMessage } from '@/shared/api/errors'
 import { useCopy } from '@/shared/composables/use-copy'
 import { CopyBlock, KEY_ENV } from '@/entities/access'
 import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { useFeaturesStore } from '@/stores/features'
 import { Button } from '@knowledge/ui/button'
 import { Input } from '@knowledge/ui/input'
@@ -37,6 +38,8 @@ const props = defineProps<{ projectId: string; projectName: string }>()
 
 const { t } = useI18n()
 const auth = useAuthStore()
+const canContribute = usePermission('workspace:contribute')
+const canViewWorkspace = usePermission('workspace:view')
 const features = useFeaturesStore()
 const { state: copyState, copy } = useCopy()
 
@@ -44,7 +47,7 @@ const gitQuery = useQuery(
   computed(() => ({
     ...apiQueryOptions('/v1/projects/{id}/git', { path: { id: props.projectId } }),
     // The route 404s with the feature off; a guest is refused by the remote anyway.
-    enabled: features.isOn('git') && auth.canComment,
+    enabled: features.isOn('git') && canViewWorkspace.value,
   })),
 )
 const url = computed(() => (gitQuery.data.value as ProjectGitResponse | undefined)?.url ?? null)
@@ -82,7 +85,7 @@ const commands = computed(() =>
 const PUSH_COMMAND = 'git push -o merge_request.create origin HEAD:<branch>'
 
 /** Push needs edit rights, and a key that carries them when there is a key at all. */
-const canPush = computed(() => auth.canEdit && (!needsKey.value || fresh.value?.scope !== 'read'))
+const canPush = computed(() => canContribute.value && (!needsKey.value || fresh.value?.scope !== 'read'))
 
 function onOpen(next: boolean) {
   if (!next) fresh.value = null
@@ -130,7 +133,7 @@ function onOpen(next: boolean) {
             <Button size="sm" variant="outline" :disabled="busy" @click="createKey('read')">
               <KeyRound class="size-3.5" /> {{ t('git.clone.readKey') }}
             </Button>
-            <Button v-if="auth.canEdit" size="sm" :disabled="busy" @click="createKey('write')">
+            <Button v-if="canContribute" size="sm" :disabled="busy" @click="createKey('write')">
               <KeyRound class="size-3.5" /> {{ t('git.clone.writeKey') }}
             </Button>
           </div>

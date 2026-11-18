@@ -37,8 +37,8 @@ export class UsersController {
   @Post()
   @Returns('UserSummary')
   @ApiOperation({ summary: 'Create a user (platform admin); without a password, the user is mailed an invite to set one' })
-  create(@CurrentPrincipal() principal: Principal, @Body() dto: CreateUserDto): Promise<UserSummary> {
-    return this.users.create(principal, dto);
+  create(@CurrentPrincipal() principal: Principal, @Body() dto: CreateUserDto, @Req() req: Request): Promise<UserSummary> {
+    return this.users.create(principal, dto, requestMeta(req).ip);
   }
 
   @Patch(':id')
@@ -48,8 +48,9 @@ export class UsersController {
     @CurrentPrincipal() principal: Principal,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateUserDto,
+    @Req() req: Request,
   ): Promise<UserSummary> {
-    return this.users.update(principal, id, dto);
+    return this.users.update(principal, id, dto, requestMeta(req).ip);
   }
 
   @Get(':id/sessions')

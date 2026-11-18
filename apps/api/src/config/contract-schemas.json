@@ -26620,10 +26620,45 @@
       "createdAt": {
         "type": "string"
       },
+      "lastSignInAt": {
+        "type": "string",
+        "nullable": true
+      },
       "memberships": {
         "type": "array",
         "items": {
-          "$ref": "#/components/schemas/WorkspaceMembership"
+          "type": "object",
+          "properties": {
+            "workspaceName": {
+              "type": "string"
+            },
+            "workspaceId": {
+              "type": "string"
+            },
+            "role": {
+              "$ref": "#/components/schemas/WorkspaceRole"
+            },
+            "trustedOperator": {
+              "type": "boolean"
+            },
+            "capabilities": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/MemberCapability"
+              }
+            },
+            "source": {
+              "$ref": "#/components/schemas/MembershipSource"
+            }
+          },
+          "required": [
+            "capabilities",
+            "role",
+            "source",
+            "trustedOperator",
+            "workspaceId",
+            "workspaceName"
+          ]
         }
       }
     },
@@ -26638,6 +26673,7 @@
       "emailVerified",
       "hasApiKey",
       "createdAt",
+      "lastSignInAt",
       "memberships"
     ]
   },

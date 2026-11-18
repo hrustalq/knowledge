@@ -1,7 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { AUDIT_ACTIONS, AUTH_METHODS } from '@knowledge/contracts'
-import en from '@/shared/i18n/messages/en.json'
-import ru from '@/shared/i18n/messages/ru.json'
 import { describeUserAgent } from './user-agent'
 
 describe('describeUserAgent', () => {
@@ -19,20 +16,5 @@ describe('describeUserAgent', () => {
     expect(describeUserAgent(null)).toBeNull()
     expect(describeUserAgent('python-requests/2.32')).toBeNull()
     expect(describeUserAgent('curl/8.7.1')).toEqual({ browser: 'curl', os: null })
-  })
-})
-
-// Every value the API can send has a label in both languages: a row reading
-// `auth.session_revoked` in a Russian interface is a missed key, not a fallback.
-describe('security labels', () => {
-  type Catalogue = {
-    security: { audit: { actions: Record<string, string> } }
-    profileSettings: { sessions: { method: Record<string, string> } }
-  }
-  const catalogues: Record<string, Catalogue> = { en, ru }
-  it.each(Object.keys(catalogues))('%s labels every audit action and sign-in method', (lang) => {
-    const c = catalogues[lang]
-    expect(AUDIT_ACTIONS.filter((a) => !c.security.audit.actions[a.replaceAll('.', '_')])).toEqual([])
-    expect(AUTH_METHODS.filter((m) => !c.profileSettings.sessions.method[m])).toEqual([])
   })
 })

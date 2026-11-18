@@ -14,6 +14,7 @@ import type { AdminDependency, AdminProcess, AdminTick } from '@knowledge/contra
 import { PageLayout, PageState } from '@knowledge/ui/layout'
 import { Button } from '@knowledge/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@knowledge/ui/table'
+import { formatDuration, formatNumber, formatRelative, formatTime } from '@knowledge/contracts/format'
 import { apiQueryOptions } from '@/shared/api/queries'
 
 const REFRESH_MS = 10_000
@@ -57,22 +58,10 @@ const problems = computed(() => {
 const TONE_ORDER: Record<Tone, number> = { bad: 0, late: 1, good: 2, off: 3 }
 const ticks = computed(() => [...(data.value?.ticks ?? [])].sort((a, b) => TONE_ORDER[tickTone(a)] - TONE_ORDER[tickTone(b)]))
 
-// ponytail: Intl inline, one page uses it; lift apps/web's shared/utils/format.ts into a package when a second console page formats time.
-const relative = (iso: string) => {
-  const seconds = Math.round((Date.now() - Date.parse(iso)) / 1000)
-  const rtf = new Intl.RelativeTimeFormat(locale.value, { numeric: 'auto' })
-  if (seconds < 60) return rtf.format(-seconds, 'second')
-  if (seconds < 3600) return rtf.format(-Math.round(seconds / 60), 'minute')
-  if (seconds < 86_400) return rtf.format(-Math.round(seconds / 3600), 'hour')
-  return rtf.format(-Math.round(seconds / 86_400), 'day')
-}
-const duration = (ms: number) => {
-  const [value, unit] =
-    ms < 1000 ? [ms, 'millisecond'] : ms < 60_000 ? [ms / 1000, 'second'] : ms < 3_600_000 ? [ms / 60_000, 'minute'] : [ms / 3_600_000, 'hour']
-  return new Intl.NumberFormat(locale.value, { style: 'unit', unit, unitDisplay: 'short', maximumFractionDigits: 1 }).format(value)
-}
-const clock = (iso: string) => new Intl.DateTimeFormat(locale.value, { timeStyle: 'medium' }).format(new Date(iso))
-const count = (n: number) => new Intl.NumberFormat(locale.value).format(n)
+const relative = (iso: string) => formatRelative(iso, locale.value)
+const duration = (ms: number) => formatDuration(ms, locale.value)
+const clock = (iso: string) => formatTime(iso, locale.value)
+const count = (n: number) => formatNumber(n, locale.value)
 </script>
 
 <template>

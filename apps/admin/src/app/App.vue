@@ -5,6 +5,7 @@ import { provide } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterView, useRoute } from 'vue-router'
 import { Toaster } from '@knowledge/ui/sonner'
+import { ConfirmDialog } from '@knowledge/ui/confirm'
 import { ERROR_TEXT } from '@knowledge/ui/layout'
 import { errorMessage } from '@/shared/api/errors'
 import AppSidebar from './shell/AppSidebar.vue'
@@ -25,4 +26,5 @@ provide(ERROR_TEXT, (error) => errorMessage(error, t))
     </main>
   </div>
   <Toaster />
+  <ConfirmDialog />
 </template>

@@ -17,6 +17,15 @@ in the pull request that introduces them — see
 
 ### Added
 
+- The admin console's **Users** section lists every account with its status, platform-admin flag, last sign-in and
+  the workspaces it belongs to (with roles), filterable by status, role, workspace and name or email. Each account
+  has its own page where a platform admin renames it, sets its password, makes or revokes platform admin, disables
+  or enables it, and sees and signs out its sessions; its workspace memberships are listed read-only. Every one of
+  those writes now leaves an audit row: `user.created`, `user.renamed`, `user.admin_granted`, `user.admin_revoked`,
+  `user.disabled`, `user.enabled` and `user.password_set` (never the password itself). `GET /v1/users` adds
+  `lastSignInAt` to each user and `workspaceName` to each membership, and leaves out memberships of deleted
+  workspaces. The **Accounts** tab is gone from **Settings → Access**; platform admins get an **Accounts** link to
+  the console there instead, and `/settings/users` opens the members list. (#1239)
 - The admin console's **Monitoring** section shows whether the platform is healthy, refreshing every 10 s while
   open. **Stores** lists PostgreSQL, Redis, MinIO and ArcadeDB, plus OpenSearch and SearXNG when configured, each
   probed with a 2 s timeout, with its latency and why it is down. **Processes** shows how many API, worker,

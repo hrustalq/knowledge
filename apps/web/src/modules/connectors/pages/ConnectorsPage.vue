@@ -9,7 +9,7 @@ import { useI18n } from 'vue-i18n'
 import { computed } from 'vue'
 import { Badge } from '@knowledge/ui/badge'
 import { PageTabs, panelId, tabId, usePageTabs, type PageTab } from '@knowledge/ui/layout'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { ConnectorList } from '@/entities/connector'
 import ConnectionList from '@/modules/connectors/components/ConnectionList.vue'
 import ConnectorRuns from '@/modules/connectors/components/ConnectorRuns.vue'
@@ -31,11 +31,10 @@ const tabs = computed<PageTab<TabKey>[]>(() => [
 ])
 const tab = usePageTabs(tabs, 'connectors')
 
-const auth = useAuthStore()
 
 // Every write endpoint behind this page is @Access('admin', …) except starting
 // a sync, so a non-admin is told plainly rather than shown a wall of 403s.
-const canManage = computed(() => auth.canAdminWorkspace)
+const canManage = usePermission('workspace:admin')
 // Crawl limits for web sources (#674): workspace administration, and only where sources are on.
 const features = useFeaturesStore()
 const showCrawlSettings = computed(() => canManage.value && features.isOn('sources'))

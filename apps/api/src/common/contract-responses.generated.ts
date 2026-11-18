@@ -3,6 +3,7 @@ import type {
   AccessRequestEntry,
   ActivityCalendarResponse,
   AddFindingTermResponse,
+  AdminConfigResponse,
   AgentLearningSummary,
   AgentOutcomesResponse,
   AgentRouteDecision,
@@ -388,6 +389,7 @@ export interface ContractResponses {
   AccessRequestEntry: AccessRequestEntry;
   ActivityCalendarResponse: ActivityCalendarResponse;
   AddFindingTermResponse: AddFindingTermResponse;
+  AdminConfigResponse: AdminConfigResponse;
   AgentLearningSummary: AgentLearningSummary;
   AgentOutcomesResponse: AgentOutcomesResponse;
   AgentRouteDecision: AgentRouteDecision;

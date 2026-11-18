@@ -152,6 +152,16 @@
     },
     {
       "method": "GET",
+      "path": "/v1/admin/config",
+      "tag": "admin",
+      "summary": "This API process's resolved environment, with each key's source; secrets only as set/unset (platform admin)",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": true
+    },
+    {
+      "method": "GET",
       "path": "/v1/agent-outcomes",
       "tag": "ai",
       "summary": "Per agent, how many findings were accepted, dismissed or are pending, and how answers were voted; optionally split by prompt hash or model. Derived on read from runs, merge requests and votes",

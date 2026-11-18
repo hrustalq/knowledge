@@ -29,6 +29,38 @@
       "forbiddenDescription": "The admin console runs the whole platform, so it is open only to platform admins. A workspace admin manages a workspace from its settings.",
       "errorTitle": "Could not check who is signed in",
       "retry": "Try again"
+    },
+    "config": {
+      "processNote": "This API process, version {version}. Workers, the learner and the git remote resolve their own environment and may differ.",
+      "search": "Search keys and values",
+      "fromEnvOnly": "Only keys the environment sets ({n})",
+      "noMatch": "No keys match",
+      "noMatchHint": "Try another part of the name, or show every key.",
+      "secretSet": "Secret, set",
+      "secretUnset": "Secret, not set",
+      "unset": "Not set",
+      "source": {
+        "env": "Environment",
+        "default": "Default"
+      },
+      "groups": {
+        "core": "Core",
+        "storage": "Storage",
+        "auth": "Sign-in and access",
+        "mail": "Mail",
+        "ai": "AI providers",
+        "agents": "Agents",
+        "memory": "Memory",
+        "ingestion": "Ingestion",
+        "search": "Search and graph",
+        "quality": "Quality and analytics",
+        "publishing": "Sharing and publishing",
+        "connectors": "Connectors",
+        "chat": "Chat",
+        "memos": "Memos",
+        "live": "Live updates and co-editing",
+        "other": "Other"
+      }
     }
   }
 }

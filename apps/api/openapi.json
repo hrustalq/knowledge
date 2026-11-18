@@ -3294,6 +3294,62 @@
         ]
       }
     },
+    "/v1/admin/config": {
+      "get": {
+        "operationId": "AdminConfigController_get",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminConfigResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "This API process's resolved environment, with each key's source; secrets only as set/unset (platform admin)",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/v1/workspaces": {
       "get": {
         "operationId": "WorkspacesController_list",
@@ -54091,6 +54147,73 @@
           "projectId"
         ]
       },
+      "AdminConfigEntry": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "group": {
+            "$ref": "#/components/schemas/EnvGroup"
+          },
+          "source": {
+            "$ref": "#/components/schemas/EnvSource"
+          },
+          "secret": {
+            "type": "boolean"
+          },
+          "set": {
+            "type": "boolean"
+          },
+          "value": {
+            "nullable": true,
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              }
+            ]
+          }
+        },
+        "required": [
+          "key",
+          "group",
+          "source",
+          "secret",
+          "set",
+          "value"
+        ]
+      },
+      "AdminConfigResponse": {
+        "type": "object",
+        "properties": {
+          "process": {
+            "type": "string",
+            "enum": [
+              "api"
+            ]
+          },
+          "version": {
+            "type": "string"
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdminConfigEntry"
+            }
+          }
+        },
+        "required": [
+          "process",
+          "version",
+          "entries"
+        ]
+      },
       "AgentCapability": {
         "type": "string",
         "enum": [
@@ -66065,6 +66188,34 @@
           "type",
           "name",
           "degree"
+        ]
+      },
+      "EnvGroup": {
+        "type": "string",
+        "enum": [
+          "core",
+          "storage",
+          "auth",
+          "mail",
+          "ai",
+          "agents",
+          "memory",
+          "ingestion",
+          "search",
+          "quality",
+          "publishing",
+          "connectors",
+          "chat",
+          "memos",
+          "live",
+          "other"
+        ]
+      },
+      "EnvSource": {
+        "type": "string",
+        "enum": [
+          "env",
+          "default"
         ]
       },
       "ExportCapabilitiesResponse": {

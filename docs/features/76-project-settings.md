@@ -125,7 +125,6 @@ one `unattributed`, which together equal the total. A failed lookup never fails 
 | `GET/PUT /v1/lint-policy` (with `projectId`) | viewer | admin |
 | `GET/PATCH /v1/projects/:id/settings/work-items` | viewer | admin or maintainer |
 | `GET/PATCH /v1/projects/:id/settings/capture-parent` (section `captures`) | viewer | admin or maintainer |
-| `GET /v1/projects/:id/settings/access` | viewer: `{ canWrite, canWriteGates }` | |
 | `GET /v1/projects/setting-overrides?workspaceId=` | viewer: which visible projects override what | |
 | `POST /v1/glossary/:id/promote` | | admin |
 

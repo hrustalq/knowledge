@@ -22,7 +22,6 @@ import type {
   ProjectGitResponse,
   ProjectOverviewResponse,
   ProjectSettingOverridesResponse,
-  ProjectSettingsAccess,
   ProjectDetailResponse,
   ProjectSummary,
   ScaffoldProjectResponse,
@@ -126,14 +125,6 @@ export class ProjectsController {
     @CurrentPrincipal() principal: Principal,
   ): Promise<ProjectSettingOverridesResponse> {
     return this.projects.settingOverrides(await this.permissions.scopeFor(principal, query.workspaceId));
-  }
-
-  @Get(':id/settings/access')
-  @Returns('ProjectSettingsAccess')
-  @Access('viewer', 'project')
-  @ApiOperation({ summary: "What the caller may change on the project's settings page: the non-gate settings, and the merge gates" })
-  async settingsAccess(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<ProjectSettingsAccess> {
-    return { projectId: id, ...(await this.permissions.projectSettingsAccess(principal, id)) };
   }
 
   @Get(':id')

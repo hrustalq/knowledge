@@ -294,7 +294,6 @@ import type {
   ProjectMethodologyResponse,
   ProjectOverviewResponse,
   ProjectSettingOverridesResponse,
-  ProjectSettingsAccess,
   ProjectSiteResponse,
   ProjectSummary,
   ProjectVerificationSettings,
@@ -689,7 +688,6 @@ export interface ContractResponses {
   ProjectMethodologyResponse: ProjectMethodologyResponse;
   ProjectOverviewResponse: ProjectOverviewResponse;
   ProjectSettingOverridesResponse: ProjectSettingOverridesResponse;
-  ProjectSettingsAccess: ProjectSettingsAccess;
   ProjectSiteResponse: ProjectSiteResponse;
   ProjectSummary: ProjectSummary;
   ProjectVerificationSettings: ProjectVerificationSettings;

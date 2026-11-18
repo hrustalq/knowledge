@@ -1,5 +1,6 @@
 import type { DocumentCategory, RelatedDocumentResult, SearchResult } from '@knowledge/contracts/documents';
 import type { FactExtractor } from '@knowledge/contracts/graph';
+import type { EffectiveAccessLevel } from '@knowledge/contracts/identity';
 
 // Shared API contract types for the Dynamic Knowledge Platform.
 // Plain types + dependency-free error-contract helpers — no runtime deps, no server imports.
@@ -173,6 +174,13 @@ export interface DocumentSummary {
    * ancestor is restricted (#76). Drawn as a lock.
    */
   restricted?: boolean;
+  /**
+   * What the caller may do with the page (#1298): `levelOn`, stamped per row
+   * by the tree and the list so a row's "+", drag and menu follow the page's
+   * own permissions. Absent elsewhere; the page itself asks
+   * `GET /v1/documents/:id/permissions`. Not `level`, which is the methodology's.
+   */
+  accessLevel?: EffectiveAccessLevel;
   /**
    * A private draft (#474): the person who created it and may publish it.
    * Drawn as "Draft · private" instead of a lock. Null once published.

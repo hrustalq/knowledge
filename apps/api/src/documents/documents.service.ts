@@ -34,6 +34,7 @@ import type {
   SortOrder,
   WorkspaceGraphNode,
   WorkspaceGraphResponse,
+  EffectiveAccessLevel,
 } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { toRevisionInfo } from './revision-info.js';
@@ -810,11 +811,12 @@ export class DocumentsService {
     const headIds = page
       .map((d) => d.branches.find((b) => b.name === d.defaultBranch)?.headRevisionId)
       .filter((id): id is string => !!id);
-    const [heads, issues, settings, sources] = await Promise.all([
+    const [heads, issues, settings, sources, levelOf] = await Promise.all([
       this.prisma.documentRevision.findMany({ where: { id: { in: headIds } } }),
       this.provenance.openIssueCounts(page.map((d) => d.id)),
       this.policy.thresholds(workspaceId),
       sourceSyncOf(this.prisma, page.map((d) => d.id)),
+      this.permissions.rowLevels(scope),
     ]);
     const headById = new Map(heads.map((r) => [r.id, r]));
 
@@ -832,6 +834,7 @@ export class DocumentsService {
         headRevisionId: headId,
         headRevisionStatus: (head?.status as RevisionStatus) ?? null,
         createdAt: d.createdAt.toISOString(),
+        accessLevel: levelOf(d),
         ...this.trustFields(d, headId, issues.get(d.id) ?? 0, settings(d.projectId).inactiveAfterDays, sources.get(d.id)),
       };
     });
@@ -1929,6 +1932,7 @@ export class DocumentsService {
     };
     const lazy = typeof opts.depth === 'number';
     const parentId = opts.parentId ?? null;
+    const levelOf = await this.permissions.rowLevels(access);
 
     if (!lazy) {
       const docs = await this.prisma.document.findMany({
@@ -1941,7 +1945,7 @@ export class DocumentsService {
         sourceSyncOf(this.prisma, docs.map((d) => d.id)),
       ]);
       const nodes = new Map<string, DocumentTreeNode>();
-      for (const d of docs) nodes.set(d.id, this.toTreeNode(d, null, issues.get(d.id) ?? 0, sources.get(d.id)));
+      for (const d of docs) nodes.set(d.id, this.toTreeNode(d, null, issues.get(d.id) ?? 0, sources.get(d.id), levelOf(d)));
       const heads = await this.headStatuses(docs);
       for (const node of nodes.values()) node.headRevisionStatus = heads.get(node.headRevisionId ?? '') ?? null;
 
@@ -1956,7 +1960,7 @@ export class DocumentsService {
       return { workspaceId, projectId: projectId ?? null, parentId: null, roots };
     }
 
-    const roots = await this.treeLevel(scope, parentId, Math.max(1, Math.floor(opts.depth!)));
+    const roots = await this.treeLevel(scope, parentId, Math.max(1, Math.floor(opts.depth!)), levelOf);
     return { workspaceId, projectId: projectId ?? null, parentId, roots };
   }
 
@@ -1972,6 +1976,7 @@ export class DocumentsService {
     scope: Prisma.DocumentWhereInput,
     parentId: string | null,
     depth: number,
+    levelOf: (row: Document) => EffectiveAccessLevel,
   ): Promise<DocumentTreeNode[]> {
     let where: Prisma.DocumentWhereInput = { ...scope, parentId };
     if (parentId === null) {
@@ -2014,7 +2019,7 @@ export class DocumentsService {
     const countByParent = new Map(counts.map((c) => [c.parentId!, c._count._all]));
 
     const nodes = docs.map((d) => {
-      const node = this.toTreeNode(d, countByParent.get(d.id) ?? 0, issues.get(d.id) ?? 0, sources.get(d.id));
+      const node = this.toTreeNode(d, countByParent.get(d.id) ?? 0, issues.get(d.id) ?? 0, sources.get(d.id), levelOf(d));
       node.headRevisionStatus = heads.get(node.headRevisionId ?? '') ?? null;
       return node;
     });
@@ -2024,7 +2029,7 @@ export class DocumentsService {
         nodes
           .filter((n) => n.childCount > 0)
           .map(async (n) => {
-            n.children = await this.treeLevel(scope, n.documentId, depth - 1);
+            n.children = await this.treeLevel(scope, n.documentId, depth - 1, levelOf);
           }),
       );
     }
@@ -2035,7 +2040,8 @@ export class DocumentsService {
     d: Document & { branches: { name: string; headRevisionId: string | null }[] },
     childCount: number | null,
     openIssues: number,
-    source?: SourceSyncHealth,
+    source: SourceSyncHealth | undefined,
+    accessLevel: EffectiveAccessLevel,
   ): DocumentTreeNode {
     const headId = d.branches.find((b) => b.name === d.defaultBranch)?.headRevisionId ?? null;
     return {
@@ -2056,6 +2062,7 @@ export class DocumentsService {
       ownerId: d.ownerId,
       archivedAt: d.archivedAt?.toISOString() ?? null,
       restricted: d.restrictedBy.length > 0,
+      accessLevel,
       draftOwnerId: d.draftOwnerId,
       children: [],
       childCount: childCount ?? 0,

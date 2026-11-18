@@ -11770,6 +11770,69 @@
       "edges"
     ]
   },
+  "DocumentPermissionsResponse": {
+    "type": "object",
+    "properties": {
+      "document:view": {
+        "type": "boolean"
+      },
+      "document:comment": {
+        "type": "boolean"
+      },
+      "document:edit": {
+        "type": "boolean"
+      },
+      "document:manage": {
+        "type": "boolean"
+      },
+      "document:history": {
+        "type": "boolean"
+      },
+      "document:publish": {
+        "type": "boolean"
+      },
+      "branch:edit": {
+        "type": "boolean"
+      },
+      "project:edit": {
+        "type": "boolean"
+      },
+      "project:manage-access": {
+        "type": "boolean"
+      },
+      "project:manage-settings": {
+        "type": "boolean"
+      },
+      "project:manage-gates": {
+        "type": "boolean"
+      },
+      "project:delete": {
+        "type": "boolean"
+      },
+      "merge-request:contribute": {
+        "type": "boolean"
+      },
+      "merge-request:override-checks": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "document:view",
+      "document:comment",
+      "document:edit",
+      "document:manage",
+      "document:history",
+      "document:publish",
+      "branch:edit",
+      "project:edit",
+      "project:manage-access",
+      "project:manage-settings",
+      "project:manage-gates",
+      "project:delete",
+      "merge-request:contribute",
+      "merge-request:override-checks"
+    ]
+  },
   "DocumentQualityResponse": {
     "type": "object",
     "properties": {
@@ -12141,6 +12204,9 @@
       "restricted": {
         "type": "boolean"
       },
+      "accessLevel": {
+        "$ref": "#/components/schemas/EffectiveAccessLevel"
+      },
       "draftOwnerId": {
         "type": "string",
         "nullable": true
@@ -12383,6 +12449,9 @@
       },
       "restricted": {
         "type": "boolean"
+      },
+      "accessLevel": {
+        "$ref": "#/components/schemas/EffectiveAccessLevel"
       },
       "draftOwnerId": {
         "type": "string",
@@ -19396,6 +19465,21 @@
       "hiddenPages"
     ]
   },
+  "MergeRequestDetailResponse": {
+    "type": "object",
+    "properties": {
+      "mergeRequest": {
+        "$ref": "#/components/schemas/MergeRequestInfo"
+      },
+      "permissions": {
+        "$ref": "#/components/schemas/MergeRequestPermissions"
+      }
+    },
+    "required": [
+      "mergeRequest",
+      "permissions"
+    ]
+  },
   "MergeRequestDiffResponse": {
     "type": "object",
     "properties": {
@@ -19574,6 +19658,69 @@
       "documentId",
       "title",
       "compare"
+    ]
+  },
+  "MergeRequestPermissions": {
+    "type": "object",
+    "properties": {
+      "document:view": {
+        "type": "boolean"
+      },
+      "document:comment": {
+        "type": "boolean"
+      },
+      "document:edit": {
+        "type": "boolean"
+      },
+      "document:manage": {
+        "type": "boolean"
+      },
+      "document:history": {
+        "type": "boolean"
+      },
+      "document:publish": {
+        "type": "boolean"
+      },
+      "branch:edit": {
+        "type": "boolean"
+      },
+      "project:edit": {
+        "type": "boolean"
+      },
+      "project:manage-access": {
+        "type": "boolean"
+      },
+      "project:manage-settings": {
+        "type": "boolean"
+      },
+      "project:manage-gates": {
+        "type": "boolean"
+      },
+      "project:delete": {
+        "type": "boolean"
+      },
+      "merge-request:contribute": {
+        "type": "boolean"
+      },
+      "merge-request:override-checks": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "document:view",
+      "document:comment",
+      "document:edit",
+      "document:manage",
+      "document:history",
+      "document:publish",
+      "branch:edit",
+      "project:edit",
+      "project:manage-access",
+      "project:manage-settings",
+      "project:manage-gates",
+      "project:delete",
+      "merge-request:contribute",
+      "merge-request:override-checks"
     ]
   },
   "MergeRequestProvenance": {
@@ -20901,6 +21048,59 @@
       "cascade"
     ]
   },
+  "ProjectDetailResponse": {
+    "type": "object",
+    "properties": {
+      "projectId": {
+        "type": "string"
+      },
+      "workspaceId": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "description": {
+        "type": "string",
+        "nullable": true
+      },
+      "avatarUrl": {
+        "$ref": "#/components/schemas/AvatarUrl"
+      },
+      "avatarEmoji": {
+        "type": "string",
+        "nullable": true
+      },
+      "avatarColor": {
+        "type": "string",
+        "nullable": true
+      },
+      "documentCount": {
+        "type": "number"
+      },
+      "createdAt": {
+        "type": "string"
+      },
+      "restricted": {
+        "type": "boolean"
+      },
+      "permissions": {
+        "$ref": "#/components/schemas/ProjectPermissions"
+      }
+    },
+    "required": [
+      "avatarColor",
+      "avatarEmoji",
+      "avatarUrl",
+      "createdAt",
+      "description",
+      "documentCount",
+      "name",
+      "permissions",
+      "projectId",
+      "workspaceId"
+    ]
+  },
   "ProjectGitResponse": {
     "type": "object",
     "properties": {
@@ -21081,6 +21281,69 @@
       "contributors",
       "counts",
       "recentPages"
+    ]
+  },
+  "ProjectPermissions": {
+    "type": "object",
+    "properties": {
+      "document:view": {
+        "type": "boolean"
+      },
+      "document:comment": {
+        "type": "boolean"
+      },
+      "document:edit": {
+        "type": "boolean"
+      },
+      "document:manage": {
+        "type": "boolean"
+      },
+      "document:history": {
+        "type": "boolean"
+      },
+      "document:publish": {
+        "type": "boolean"
+      },
+      "branch:edit": {
+        "type": "boolean"
+      },
+      "project:edit": {
+        "type": "boolean"
+      },
+      "project:manage-access": {
+        "type": "boolean"
+      },
+      "project:manage-settings": {
+        "type": "boolean"
+      },
+      "project:manage-gates": {
+        "type": "boolean"
+      },
+      "project:delete": {
+        "type": "boolean"
+      },
+      "merge-request:contribute": {
+        "type": "boolean"
+      },
+      "merge-request:override-checks": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "document:view",
+      "document:comment",
+      "document:edit",
+      "document:manage",
+      "document:history",
+      "document:publish",
+      "branch:edit",
+      "project:edit",
+      "project:manage-access",
+      "project:manage-settings",
+      "project:manage-gates",
+      "project:delete",
+      "merge-request:contribute",
+      "merge-request:override-checks"
     ]
   },
   "ProjectSettingKey": {

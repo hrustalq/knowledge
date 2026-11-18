@@ -124,6 +124,7 @@ import type {
   DocumentDetailResponse,
   DocumentEmbedsResponse,
   DocumentGraphResponse,
+  DocumentPermissionsResponse,
   DocumentQualityResponse,
   DocumentSourceInfo,
   DocumentSourceWebhookResponse,
@@ -269,6 +270,7 @@ import type {
   MergeMergeRequestResponse,
   MergeRequestApiChangesResponse,
   MergeRequestConflictsResponse,
+  MergeRequestDetailResponse,
   MergeRequestDiffResponse,
   MergeRequestThreadResponse,
   MethodologyPreviewResponse,
@@ -286,6 +288,7 @@ import type {
   ProjectBreakingChangeSettings,
   ProjectCaptureParentSettings,
   ProjectDeletionPreview,
+  ProjectDetailResponse,
   ProjectGitResponse,
   ProjectLevelsResponse,
   ProjectMethodologyResponse,
@@ -516,6 +519,7 @@ export interface ContractResponses {
   DocumentDetailResponse: DocumentDetailResponse;
   DocumentEmbedsResponse: DocumentEmbedsResponse;
   DocumentGraphResponse: DocumentGraphResponse;
+  DocumentPermissionsResponse: DocumentPermissionsResponse;
   DocumentQualityResponse: DocumentQualityResponse;
   DocumentSourceInfo: DocumentSourceInfo;
   DocumentSourceWebhookResponse: DocumentSourceWebhookResponse;
@@ -661,6 +665,7 @@ export interface ContractResponses {
   MergeMergeRequestResponse: MergeMergeRequestResponse;
   MergeRequestApiChangesResponse: MergeRequestApiChangesResponse;
   MergeRequestConflictsResponse: MergeRequestConflictsResponse;
+  MergeRequestDetailResponse: MergeRequestDetailResponse;
   MergeRequestDiffResponse: MergeRequestDiffResponse;
   MergeRequestThreadResponse: MergeRequestThreadResponse;
   MethodologyPreviewResponse: MethodologyPreviewResponse;
@@ -678,6 +683,7 @@ export interface ContractResponses {
   ProjectBreakingChangeSettings: ProjectBreakingChangeSettings;
   ProjectCaptureParentSettings: ProjectCaptureParentSettings;
   ProjectDeletionPreview: ProjectDeletionPreview;
+  ProjectDetailResponse: ProjectDetailResponse;
   ProjectGitResponse: ProjectGitResponse;
   ProjectLevelsResponse: ProjectLevelsResponse;
   ProjectMethodologyResponse: ProjectMethodologyResponse;

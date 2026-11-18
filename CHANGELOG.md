@@ -146,6 +146,16 @@ in the pull request that introduces them — see
 
 ### Changed
 
+- **Page, project and review controls follow the page's own permissions.** An editor on a page restricted to view
+  no longer sees Edit, Share, the drift check, verification actions or the branch edit link, and the page-tree row
+  shows no menu and cannot be dragged or dropped into; a guest granted edit on a page sees its Edit button, and a
+  guest granted view gets the comment box, as the API already allowed. With `history_audience: editors` the history
+  widget follows the caller's level on the page. Project name, description, delete and settings, and a merge
+  request's approve, merge, update-branch and check-override controls, are decided the same way. The answers come
+  from the server: `GET /v1/documents/:id/permissions` (a sibling of the page detail, never cached), a
+  `permissions` map on `GET /v1/projects/:id` and `GET /v1/merge-requests/:id`, and an `accessLevel` on every row of
+  `GET /v1/documents/tree` and `GET /v1/documents`. Nobody may do anything they could not do before. (#1298)
+
 - **Open tabs follow a role change without a reload.** When an admin changes someone's role, operator flag or
   capabilities, adds or removes them, or flips their platform-admin flag, and when an SSO sign-in or SCIM sync moves
   their membership, that person's open tabs re-read what they may do within a second or two. Controls they lost

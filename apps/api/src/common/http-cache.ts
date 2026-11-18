@@ -26,7 +26,7 @@ const CACHE_CONTROL: Record<CachePolicyName, string> = {
   'no-store': 'no-store',
 };
 
-const CACHE_POLICY_META = 'knowledge:cache-policy';
+export const CACHE_POLICY_META = 'knowledge:cache-policy';
 
 /** Overrides the default for a route or a whole controller. */
 export const CachePolicy = (policy: CachePolicyName) => SetMetadata(CACHE_POLICY_META, policy);

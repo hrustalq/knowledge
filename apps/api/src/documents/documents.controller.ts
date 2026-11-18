@@ -50,12 +50,14 @@ import type {
   PushDocumentResponse,
   RevisionInfo,
   WorkspaceGraphResponse,
+  DocumentPermissionsResponse,
 } from '@knowledge/contracts';
 import { ConnectorLinksService } from '../connectors/connector-links.service.js';
 import { ConnectorProducer } from '../connectors/connector.producer.js';
 import { ConnectorsService, toRunInfo } from '../connectors/connectors.service.js';
 import { Access, CurrentPrincipal, History } from '../auth/access.decorator.js';
 import { PermissionService } from '../permissions/permission.service.js';
+import { PermissionsResolver } from '../permissions/permissions.resolver.js';
 import type { Principal } from '../auth/principal.js';
 import { DocumentsService } from './documents.service.js';
 import { DocumentRelationsService } from './document-relations.service.js';
@@ -86,7 +88,7 @@ import { TemporalResolverService } from '../temporal/temporal-resolver.service.j
 import { CommunitiesService } from '../communities/communities.service.js';
 import { AnalyticsRecorder, noTrackOf } from '../analytics/analytics.recorder.js';
 import { Returns } from '../common/returns.decorator.js';
-import { notModified, setCachePolicy } from '../common/http-cache.js';
+import { CachePolicy, notModified, setCachePolicy } from '../common/http-cache.js';
 import { ConfigService } from '@nestjs/config';
 import type { Env } from '../config/env.js';
 import { contentLines, parseLinesParam } from './content-lines.js';
@@ -133,6 +135,7 @@ export class DocumentsController {
     private readonly communities: CommunitiesService,
     private readonly analytics: AnalyticsRecorder,
     private readonly config: ConfigService<Env, true>,
+    private readonly grants: PermissionsResolver,
   ) {}
 
   @Post()
@@ -270,6 +273,26 @@ export class DocumentsController {
     const head = await this.documents.getDocumentHead(id, revision);
     if (notModified(req, res, head)) return undefined;
     return this.documents.withChunks(head);
+  }
+
+  /**
+   * What the caller may do with the page (#1298). A sibling of `GET :id`, whose
+   * validator is shared by every reader (docs/architecture/10-caching.md): an
+   * answer that differs per caller cannot ride in that body. Never kept, so no
+   * two callers can ever share a 304 for it.
+   */
+  @Get(':id/permissions')
+  @Returns('DocumentPermissionsResponse')
+  @Access('viewer', 'document')
+  @CachePolicy('no-store')
+  @ApiOperation({ summary: "What the caller may do with the page, one flag per document action of the permission catalogue (#1298)" })
+  @ApiQuery({ name: 'branch', required: false, description: 'The branch the page is read on; branch:edit answers for it' })
+  permissionsOf(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentPrincipal() principal: Principal,
+    @Query('branch') branch?: string,
+  ): Promise<DocumentPermissionsResponse> {
+    return this.grants.forDocument(principal, id, branch || undefined);
   }
 
   @Patch(':id')

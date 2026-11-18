@@ -1,8 +1,10 @@
-import { computed } from 'vue'
+import { computed, toValue, type ComputedRef, type MaybeRefOrGetter } from 'vue'
 import { defineStore } from 'pinia'
-import type { MePermissionsResponse, WorkspaceAction } from '@knowledge/contracts'
+import { useQuery } from '@tanstack/vue-query'
+import type { MePermissionsResponse, PermissionAction, ResourceAction, WorkspaceAction } from '@knowledge/contracts'
 import { apiQueryOptions, bindStoreQuery } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
+import { PERMISSION_READS } from '@/shared/api/live-cache'
 
 const optionsFor = (workspaceId: string) => apiQueryOptions('/v1/me/permissions', { query: { workspaceId } })
 
@@ -63,12 +65,58 @@ export const usePermissionsStore = defineStore('permissions', {
       } catch {
         // see above
       }
+      // The per-resource answers (#1298) moved with the person too.
+      for (const key of PERMISSION_READS) void this.queryClient.invalidateQueries({ queryKey: [key] })
     },
   },
 })
 
-/** `usePermission('workspace:contribute')`: reactive, for a component's setup. */
-export function usePermission(action: WorkspaceAction) {
-  const store = usePermissionsStore()
-  return computed(() => store.allows(action))
+/** `GET /v1/documents/:id/permissions`, on the branch the page is read on (`?branch=`), if any. */
+export const documentPermissionsQuery = (id: string, branch?: string | null) =>
+  apiQueryOptions('/v1/documents/{id}/permissions', { path: { id }, ...(branch ? { query: { branch } } : {}) })
+
+/** The read that carries a resource action's answer (#1298): the page's sibling route, or the project or merge request detail. */
+function resourceQuery(
+  action: ResourceAction,
+  id: string,
+  branch?: string | null,
+): { queryKey: readonly unknown[]; queryFn: (ctx: { signal: AbortSignal }) => Promise<unknown>; staleTime?: number } {
+  if (action.startsWith('project:')) return apiQueryOptions('/v1/projects/{id}', { path: { id } })
+  if (action.startsWith('merge-request:')) return apiQueryOptions('/v1/merge-requests/{id}', { path: { id } })
+  return documentPermissionsQuery(id, branch)
+}
+
+/**
+ * `usePermission('workspace:contribute')`, or `usePermission('document:edit',
+ * documentId)` for a resource: reactive, for a component's setup. A resource
+ * answer is read from the query that carries it, which the page has usually
+ * asked already (same key, one request); `branch` is `branch:edit`'s. Until it
+ * lands, and on a failed read, the answer is `false`: the API enforces either way.
+ */
+export function usePermission(action: WorkspaceAction): ComputedRef<boolean>
+export function usePermission(
+  action: ResourceAction,
+  id: MaybeRefOrGetter<string | null | undefined>,
+  branch?: MaybeRefOrGetter<string | null | undefined>,
+): ComputedRef<boolean>
+export function usePermission(
+  action: PermissionAction,
+  id?: MaybeRefOrGetter<string | null | undefined>,
+  branch?: MaybeRefOrGetter<string | null | undefined>,
+): ComputedRef<boolean> {
+  if (id === undefined) {
+    const store = usePermissionsStore()
+    return computed(() => store.allows(action as WorkspaceAction))
+  }
+  const query = useQuery(
+    computed(() => ({
+      ...resourceQuery(action as ResourceAction, toValue(id) ?? '', toValue(branch)),
+      enabled: !!toValue(id),
+    })),
+  )
+  return computed(() => {
+    const data = query.data.value as Record<string, unknown> | undefined
+    const answers = (data && 'permissions' in data ? data.permissions : data) as Record<string, boolean> | undefined
+    return answers?.[action] === true
+  })
 }

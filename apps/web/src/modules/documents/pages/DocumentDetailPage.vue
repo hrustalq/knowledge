@@ -87,6 +87,7 @@ import { CollabDraftBadge } from '@/entities/rich-editor'
 import { ComponentDeclarationNotice } from '@/entities/code'
 import { UsedByRail } from '@/entities/code'
 import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { useFeaturesStore } from '@/stores/features'
 import { useDocumentsStore } from '@/stores/documents'
 import { useEventsStore } from '@/stores/events'
@@ -151,12 +152,19 @@ const queryClient = useQueryClient()
 const auth = useAuthStore()
 const layout = useLayoutStore()
 const store = useDocumentsStore()
+/*
+ * What the caller may do with this page (#1298): the server's answer for the
+ * page's own level, not the workspace role. An editor on a page restricted to
+ * view sees no Edit, and a guest granted edit does. entry-server prefetches it.
+ */
+const pageId = () => route.params.id as string
+const mayEdit = usePermission('document:edit', pageId)
 
 /*
  * The info rail shown or hidden (#698): the reader's choice once made
- * (`kn_pagerail`), else their role — a viewer or guest came to read, and most
- * of the rail is editor actions. The role is loaded before render on both
- * sides, so SSR and hydration agree. A `?tab=` link shows a hidden rail for
+ * (`kn_pagerail`), else whether they may edit the page — a reader came to
+ * read, and most of the rail is editor actions. The answer is prefetched for
+ * the render, so SSR and hydration agree. A `?tab=` link shows a hidden rail for
  * that visit only and leaves the stored choice alone.
  */
 const tabShowsRail = ref(typeof route.query.tab === 'string')
@@ -164,7 +172,7 @@ watch(
   () => route.query.tab,
   (tab) => (tabShowsRail.value = typeof tab === 'string'),
 )
-const railShown = computed(() => tabShowsRail.value || (layout.pageRail ?? auth.canEdit))
+const railShown = computed(() => tabShowsRail.value || (layout.pageRail ?? mayEdit.value))
 function setRailShown(shown: boolean) {
   tabShowsRail.value = false
   layout.setPageRail(shown)
@@ -240,7 +248,7 @@ onMounted(() => {
 const features = useFeaturesStore()
 const WIDGET_FEATURE: Partial<Record<RailWidget, WorkspaceFeature>> = { conflicts: 'conflicts', insights: 'analytics', workflows: 'workflows', source: 'sources' }
 
-const canReadHistory = computed(() => features.historyAudience === 'everyone' || auth.canEdit)
+const canReadHistory = usePermission('document:history', pageId)
 
 const visibleWidgets = computed(() =>
   RAIL_WIDGETS.filter(
@@ -425,14 +433,11 @@ function onAccessSaved() {
 }
 
 /**
- * Publish is the draft's owner's (#474), or a workspace admin's; the API asks
- * for manage on the page, which a manager the owner shared it with also holds
- * and can reach from the Access dialog.
+ * Publish is the draft's owner's (#474), or a workspace admin's: the API asks
+ * for manage on the page, which a manager the owner shared it with also holds.
  */
-const canPublish = computed(() => {
-  const owner = detail.value?.document.draftOwnerId
-  return !!owner && !archived.value && (owner === auth.me?.userId || auth.canAdminWorkspace)
-})
+const mayPublish = usePermission('document:publish', pageId)
+const canPublish = computed(() => !!detail.value?.document.draftOwnerId && !archived.value && mayPublish.value)
 const publishing = ref(false)
 async function publishDraft() {
   publishing.value = true
@@ -476,6 +481,8 @@ const asOfParam = computed(() => (revisionParam.value ? null : ((route.query.asO
 const viewingBranch = computed(() =>
   revisionParam.value || route.query.asOf ? null : ((route.query.branch as string | undefined) ?? null),
 )
+/** Write the branch being read (#474): a private one narrows the page's own level. */
+const mayEditBranch = usePermission('branch:edit', pageId, viewingBranch)
 /**
  * Through the cache (#628), so a hover in the tree can have it ready before the
  * click, and a revisit draws at once. The live rules invalidate it on every
@@ -859,7 +866,9 @@ const isSpec = computed(() => detail.value?.document.kind === 'openapi' || detai
 const isFixture = computed(() => detail.value?.document.kind === 'test-fixture')
 // One state for the rail's operation index and the main column's operation.
 const apiRef = useApiReference(documentId, viewingRevision, isSpec)
-const canComment = computed(() => auth.canComment && !viewingRevision.value)
+// A reader's act (feature 15): a guest granted the page comments, as the API lets them.
+const mayComment = usePermission('document:comment', pageId)
+const canComment = computed(() => mayComment.value && !viewingRevision.value)
 // Usage analytics (#79): opening this page is one view, once it is known to be
 // readable — a refused or missing page records nothing. The insights read
 // waits for it; if the fallback already read, it is read again (#336).
@@ -932,9 +941,9 @@ watch(
     <template v-if="detail">
       <WatchButton subject-type="document" :subject-id="detail.document.documentId" compact />
       <!-- Handing the page to people outside the workspace is an editor's act
-           (docs/features/43); the server checks the role and the workspace switch. -->
+           (docs/features/43); the server checks the page level and the workspace switch. -->
       <SharePopover
-        v-if="auth.canEdit && !archived"
+        v-if="mayEdit && !archived"
         :document-id="detail.document.documentId"
         :restricted="!!detail.document.restricted"
         compact
@@ -994,7 +1003,7 @@ watch(
         <Globe class="size-3.5" aria-hidden="true" />
         <span class="kn-bar-label">{{ t('sources.follows') }}</span>
       </span>
-      <Button v-else-if="auth.canEdit && !archived" variant="outline" size="sm" as-child>
+      <Button v-else-if="mayEdit && !archived" variant="outline" size="sm" as-child>
         <RouterLink
           :to="`/documents/${detail.document.documentId}/${isSpec ? 'spec' : isFixture ? 'fixture' : 'edit'}`"
           :title="hasUnstaged ? t('editor.unstaged.label') : t('common.edit')"
@@ -1196,7 +1205,7 @@ watch(
           </template>
 
           <template #widget-source>
-            <SourceRail :document-id="documentId" :can-edit="auth.canEdit && !archived" @synced="load()" />
+            <SourceRail :document-id="documentId" :can-edit="mayEdit && !archived" @synced="load()" />
           </template>
 
           <!-- What this page *is*: the facts a reader checks before trusting it. -->
@@ -1274,7 +1283,7 @@ watch(
             <pre class="overflow-x-auto rounded bg-muted/40 p-2 text-xs">{{ JSON.stringify(content?.frontmatter, null, 2) }}</pre>
           </template>
 
-          <template #widget-revisions><RevisionsView :document-id="documentId" :source-backed="sourceBacked && auth.canEdit && !archived" @restored="load()" /></template>
+          <template #widget-revisions><RevisionsView :document-id="documentId" :source-backed="sourceBacked && mayEdit && !archived" @restored="load()" /></template>
           <template #widget-merge-requests><MergeRequestList :document-id="documentId" /></template>
           <template #widget-conflicts>
             <ConflictsRail :document-id="documentId" />
@@ -1305,7 +1314,7 @@ watch(
           <template #widget-connectors>
             <ConnectorRail
               :document-id="documentId"
-              :drift-check="detail?.document.kind === 'openapi' && auth.canEdit && !archived && !viewingRevision"
+              :drift-check="detail?.document.kind === 'openapi' && mayEdit && !archived && !viewingRevision"
             />
           </template>
           <!-- Bounded to sit inside the widget's own cap rather than past it.
@@ -1372,7 +1381,7 @@ watch(
             }}
           </span>
           <RouterLink
-            v-if="auth.canEdit && !archived && !sourceBacked"
+            v-if="mayEditBranch && !archived && !sourceBacked"
             :to="branchOwner === auth.me?.userId ? `/documents/${documentId}/edit` : `/documents/${documentId}/edit?branch=${encodeURIComponent(viewingBranch)}`"
             class="underline"
           >
@@ -1438,7 +1447,7 @@ watch(
           <DialogTitle>{{ expandedWidget?.label }} — {{ detail.document.title }}</DialogTitle>
         </DialogHeader>
         <div class="max-h-[70vh] max-sm:max-h-none max-sm:min-h-0 overflow-auto pr-1">
-          <RevisionsView v-if="expanded === 'revisions'" :document-id="documentId" :source-backed="sourceBacked && auth.canEdit && !archived" @restored="load()" />
+          <RevisionsView v-if="expanded === 'revisions'" :document-id="documentId" :source-backed="sourceBacked && mayEdit && !archived" @restored="load()" />
           <MergeRequestList v-else-if="expanded === 'merge-requests'" :document-id="documentId" />
           <!-- Sized under the dialog's own 70vh so the feed keeps the scroll,
                for the same reason it does in the rail. -->

@@ -6,9 +6,9 @@
  *
  * Everything shown is the derived state the API already computed
  * (`verificationStateFor`); nothing here decides what the page *is*. The
- * actions are the REST routes one to one, hidden when the caller's role cannot
- * take them — the same roles the routes enforce, so a hidden button is never a
- * surprise 403 and a visible one never a lie.
+ * actions are the REST routes one to one, hidden when the caller cannot take
+ * them on this page — the server's answer (#1298), so a hidden button is never
+ * a surprise 403 and a visible one never a lie.
  *
  * An archived page swaps the bar for a banner: the stamp and the flag mean
  * nothing on a page that has been put away, and the one action left is to
@@ -24,7 +24,7 @@ import { api } from '@/shared/api/queries'
 import { relativeTime } from '@/shared/api/api'
 import { formatDate, formatDateTime } from '@/shared/utils/format'
 import { errorMessage } from '@/shared/api/errors'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { useMembers } from '@/entities/person'
 import { Button } from '@knowledge/ui/button'
 import { Badge } from '@knowledge/ui/badge'
@@ -65,10 +65,12 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const auth = useAuthStore()
 const { nameOf } = useMembers()
 
 const doc = computed(() => props.detail.document)
+// The page's own level (#1298), not the workspace role: an editor on a page restricted to view sees no verify.
+const mayEdit = usePermission('document:edit', () => props.detail.document.documentId)
+const mayComment = usePermission('document:comment', () => props.detail.document.documentId)
 const state = computed(() => doc.value.verification ?? 'unverified')
 const dotClass = computed(() => verificationDotClass(state.value))
 const archived = computed(() => !!doc.value.archivedAt)
@@ -231,7 +233,7 @@ const archivedBy = computed(() => nameOf(doc.value.archivedBy))
       <Archive class="mt-0.5 size-3.5 shrink-0 text-panel-warning-ink" aria-hidden="true" />
       <span class="min-w-0">{{ t('verification.archived.banner', { when: relativeTime(doc.archivedAt!), who: archivedBy }) }}</span>
     </p>
-    <Button v-if="auth.canEdit" variant="outline" size="xs" :disabled="busy" @click="unarchive">
+    <Button v-if="mayEdit" variant="outline" size="xs" :disabled="busy" @click="unarchive">
       <ArchiveRestore class="size-3" />
       {{ t('verification.action.unarchive') }}
     </Button>
@@ -261,10 +263,10 @@ const archivedBy = computed(() => nameOf(doc.value.archivedBy))
     <q v-if="note" class="line-clamp-3 text-xs leading-snug text-muted-foreground italic" :title="note">{{ note }}</q>
     <!-- #424: a flagged page can be handed off as a "check this page" ticket;
          the ticket stays shown after the flag clears, until it is unlinked. -->
-    <WorkItemChips source-kind="verification" :source-id="id" :can-handoff="auth.canEdit && !!doc.verificationFlag" class="pt-1" />
+    <WorkItemChips source-kind="verification" :source-id="id" :can-handoff="mayEdit && !!doc.verificationFlag" class="pt-1" />
 
     <div class="flex flex-wrap items-center gap-1 pt-1.5">
-      <OwnerPicker :owner-id="doc.ownerId ?? null" :can-edit="auth.canEdit" :disabled="busy" @change="setOwner" />
+      <OwnerPicker :owner-id="doc.ownerId ?? null" :can-edit="mayEdit" :disabled="busy" @change="setOwner" />
       <span class="flex-1" aria-hidden="true" />
 
       <!-- Any member may ask; it is the comment role, not the editor one. An
@@ -272,7 +274,7 @@ const archivedBy = computed(() => nameOf(doc.value.archivedBy))
            verifying is what an editor mostly does here, asking is the
            exception. -->
       <Button
-        v-if="auth.canComment && !auth.canEdit && canRequest"
+        v-if="mayComment && !mayEdit && canRequest"
         variant="outline"
         size="xs"
         :disabled="busy"
@@ -281,7 +283,7 @@ const archivedBy = computed(() => nameOf(doc.value.archivedBy))
         {{ t('verification.action.request') }}
       </Button>
 
-      <DropdownMenu v-if="auth.canEdit && !sync">
+      <DropdownMenu v-if="mayEdit && !sync">
         <DropdownMenuTrigger as-child>
           <Button variant="outline" size="xs" :disabled="busy" :aria-pressed="state === 'verified'">
             <BadgeCheck class="size-3" :class="state === 'verified' ? 'text-panel-tip-ink' : ''" />
@@ -303,7 +305,7 @@ const archivedBy = computed(() => nameOf(doc.value.archivedBy))
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <DropdownMenu v-if="auth.canEdit">
+      <DropdownMenu v-if="mayEdit">
         <DropdownMenuTrigger as-child>
           <Button variant="ghost" size="icon-xs" :disabled="busy" :aria-label="t('verification.action.more')">
             <MoreHorizontal class="size-3.5" />

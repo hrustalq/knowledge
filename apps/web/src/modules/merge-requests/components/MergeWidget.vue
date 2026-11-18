@@ -27,6 +27,7 @@ import type {
 } from '@knowledge/contracts'
 import { apiQueryOptions, useApiMutation, isApiRequestError } from '@/shared/api/queries'
 import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { useFeaturesStore } from '@/stores/features'
 import { Button } from '@knowledge/ui/button'
 import {
@@ -72,6 +73,9 @@ const strategy = ref<MergeStrategy>('merge-commit')
 const mr = computed(() => props.mergeRequest)
 const id = computed(() => ({ path: { id: mr.value.mergeRequestId } }))
 const isOpen = computed(() => mr.value.status === 'open')
+// The merge request's page level (#1298), from its detail read: not the workspace role.
+const mayContribute = usePermission('merge-request:contribute', () => mr.value.mergeRequestId)
+const mayOverride = usePermission('merge-request:override-checks', () => mr.value.mergeRequestId)
 // What the merge gate will ask (#958): the workspace's number, the author's own approval never counted.
 const requiredApprovals = computed(() => features.editing?.requiredApprovals.effective ?? null)
 const countedApprovals = computed(() => mr.value.approvedBy.filter((id) => id !== mr.value.authorId).length)
@@ -123,7 +127,7 @@ const lintHold = computed<'override' | 'blocking' | 'waiting' | 'clear' | null>(
   return 'clear'
 })
 const canOverride = computed(
-  () => auth.canAdminWorkspace && !!lintGate.value?.checkId && (lintHold.value === 'blocking' || lintHold.value === 'waiting'),
+  () => mayOverride.value && !!lintGate.value?.checkId && (lintHold.value === 'blocking' || lintHold.value === 'waiting'),
 )
 const overrideOpen = ref(false)
 const overrideReason = ref('')
@@ -149,7 +153,7 @@ function onOverride() {
 /** A head can be checked again once its check has settled, while lint is on. */
 const canRelint = computed(
   () =>
-    auth.canEdit &&
+    mayContribute.value &&
     lintPolicy.value?.effective !== 'off' &&
     !['pending', 'running'].includes(lintCheck.value?.status ?? ''),
 )
@@ -305,7 +309,7 @@ function toggleDraft() {
           {{ requiredApprovals === 0 ? t('mr.approvalsNoneRequired') : t('mr.approvalsOf', { have: countedApprovals, required: requiredApprovals }) }}
         </span>
         <Button
-          v-if="auth.canEdit"
+          v-if="mayContribute"
           variant="outline"
           size="xs"
           class="ml-auto"
@@ -365,7 +369,7 @@ function toggleDraft() {
           </Button>
         </span>
         <p
-          v-if="lintGate?.blocked && !auth.canAdminWorkspace && lintHold === 'blocking'"
+          v-if="lintGate?.blocked && !mayOverride && lintHold === 'blocking'"
           class="w-full pl-6 text-xs text-muted-foreground"
         >
           {{ t('mr.lint.adminHint') }}
@@ -393,7 +397,7 @@ function toggleDraft() {
         </span>
         <template v-if="api.breaking > 0 && api.policy === 'block'">
           <Button
-            v-if="auth.canAdminWorkspace && !api.ack?.current"
+            v-if="mayOverride && !api.ack?.current"
             variant="outline"
             size="xs"
             class="ml-auto"
@@ -403,7 +407,7 @@ function toggleDraft() {
             {{ t('mr.api.acknowledge') }}
           </Button>
           <Button
-            v-else-if="auth.canAdminWorkspace"
+            v-else-if="mayOverride"
             variant="ghost"
             size="xs"
             class="ml-auto"
@@ -422,7 +426,7 @@ function toggleDraft() {
           <AlertTriangle class="size-4 shrink-0 text-panel-caution" />
           <span class="font-medium">{{ t('mr.branch.conflicts', { n: conflicted }, conflicted) }}</span>
           <Button
-            v-if="auth.canEdit && branchState.pages.length > 0"
+            v-if="mayContribute && branchState.pages.length > 0"
             variant="outline"
             size="xs"
             class="ml-auto"
@@ -443,7 +447,7 @@ function toggleDraft() {
           <span class="text-muted-foreground">
             {{ t('mr.branch.behind', { n: branchState.behind, target: mr.targetBranch }, branchState.behind) }}
           </span>
-          <Button v-if="auth.canEdit" variant="ghost" size="xs" class="ml-auto" :disabled="busy" @click="onUpdateBranch">
+          <Button v-if="mayContribute" variant="ghost" size="xs" class="ml-auto" :disabled="busy" @click="onUpdateBranch">
             {{ t('mr.branch.update') }}
           </Button>
         </template>
@@ -469,7 +473,7 @@ function toggleDraft() {
     </div>
 
     <!-- controls -->
-    <div v-if="auth.canEdit" class="flex flex-wrap items-center gap-2 px-4 py-3">
+    <div v-if="mayContribute" class="flex flex-wrap items-center gap-2 px-4 py-3">
       <template v-if="isOpen">
         <Select v-model="strategy" :disabled="busy">
           <SelectTrigger size="sm" class="text-xs" :aria-label="t('mr.mergeStrategy')">

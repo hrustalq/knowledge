@@ -15,6 +15,7 @@ import { useAuthStore } from './stores/auth'
 import { useDocumentsStore } from './stores/documents'
 import { usePermissionsStore } from './stores/permissions'
 import { useProjectsStore } from './stores/projects'
+import { documentPermissionsQuery } from './stores/permissions'
 import { useWorkspacesStore } from './stores/workspaces'
 
 interface SsrRequestContext {
@@ -105,7 +106,7 @@ async function prefetchShell(router: Router, pinia: Pinia, queryClient: QueryCli
 }
 
 /**
- * A page view's detail and content (#643): the page draws its title, meta line
+ * A page view's detail, content and permissions (#643, #1298): the page draws its title, meta line
  * and body from these two on the server instead of skeletons, and the client
  * hydrates from the same answers without asking again. Workspace-independent
  * keys, so the fallback above cannot strand them.
@@ -120,9 +121,13 @@ async function prefetchPage(router: Router, queryClient: QueryClient) {
   const q = route.query
   const at: ContentAt =
     typeof q.revision === 'string' ? { revision: q.revision } : typeof q.asOf === 'string' ? { asOf: q.asOf } : null
+  const branch = typeof q.branch === 'string' ? q.branch : null
   await Promise.all([
     prefetchForRender(queryClient, documentDetailQuery(id)),
     prefetchForRender(queryClient, documentContentQuery(id, at)),
+    // What the caller may do with it (#1298), so the server draws the same controls the client will.
+    prefetchForRender(queryClient, documentPermissionsQuery(id)),
+    ...(branch ? [prefetchForRender(queryClient, documentPermissionsQuery(id, branch))] : []),
     installSsrDocument(),
   ])
 }

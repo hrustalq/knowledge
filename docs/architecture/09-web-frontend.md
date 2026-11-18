@@ -190,7 +190,10 @@ server and per page load in the browser. `entry-server.ts` pushes the URL,
 awaits `router.isReady()`, renders, and serializes `pinia.state.value` into
 `window.__PINIA__` with `<` escaped to `<` so a string in the state cannot
 break out of the script tag. `entry-client.ts` assigns that back into
-`pinia.state.value` before mounting.
+`pinia.state.value` before mounting. Both client entries wrap the synchronous
+`app.mount` in a `knowledge:hydration` User Timing measure, so a production audit
+can separate hydration from script download and route work without adding a
+reporting dependency.
 
 `createI18nFor(locale)` is the sharpest case of the rule: created at module
 scope, two concurrent SSR renders share one `locale` object and one request

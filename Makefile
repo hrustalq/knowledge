@@ -129,10 +129,14 @@ deps-graph: ## Render dependency graphs to apps/*/dependency-graph.svg (needs gr
 	$(WEB) run depcruise:graph
 
 .PHONY: verify
-verify: db-generate lint typecheck deps test ## Pre-push gate: everything in `check` except build (.husky/pre-push)
+verify: db-generate lint typecheck deps test ## Pre-push gate: everything in `check` except build and its bundle budget (.husky/pre-push)
+
+.PHONY: bundle-budget
+bundle-budget: ## Fail if either web entry's initial, uncompressed JS exceeds its budget
+	$(WEB) run check:bundle
 
 .PHONY: check
-check: lint typecheck deps test build ## Lint + typecheck + dependency rules + tests + build (CI gate)
+check: lint typecheck deps test build bundle-budget ## Lint + typecheck + dependency rules + tests + build + bundle budget (CI gate)
 
 .PHONY: backtest
 backtest: ## Retrieval/pipeline backtest. ARGS="--generate --limit 120" | "--report" | "--export-feedback --workspace <id> --out fb.ndjson" | "--feedback fb.ndjson --k 10" | "--captures --workspace <id>" | "--learner"

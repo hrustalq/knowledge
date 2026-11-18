@@ -33,7 +33,7 @@ make dev-git            # the git remote (#636) on :3002; 404s unless GIT_REMOTE
 make dev-admin          # the platform admin console (#1236) on :5174; open it as :5173/admin (part of `make dev`)
 
 make verify             # PRE-PUSH GATE: db-generate + lint + typecheck + deps + test (no build)
-make check              # CI gate: lint + typecheck + deps + test + build
+make check              # CI gate: lint + typecheck + deps + test + build + web bundle budget
 make deps               # dependency-cruiser: process boundaries, layering, cycles, buildless rules
 make deps-baseline      # re-record known violations (shrink-only: drops fixed ones, never adds)
 make smoke              # health-check every service
@@ -54,7 +54,7 @@ make api-schema         # emit apps/api/openapi.json from the Nest app (no serve
 make api-client         # api-schema + docs-reference + openapi-typescript → packages/api-client/src/schema.d.ts (both web apps)
 ```
 
-**Use `make verify`, not `make check`, while a dev server is running.** `check` rebuilds `apps/api/dist` under the running `nest start --watch` and takes :3000 and :5173 down with it. `verify` is everything in `check` except `build`, and is what `.husky/pre-push` runs.
+**Use `make verify`, not `make check`, while a dev server is running.** `check` rebuilds `apps/api/dist` under the running `nest start --watch` and takes :3000 and :5173 down with it. `verify` is everything in `check` except `build` and its bundle budget, and is what `.husky/pre-push` runs.
 
 Per-workspace: `pnpm --filter @knowledge/api run dev`, `pnpm --filter @knowledge/web run typecheck`. Verification is `make verify` plus the e2e flow (upload → finalize → poll `indexed` → search).
 

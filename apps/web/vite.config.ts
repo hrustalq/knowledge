@@ -3,6 +3,7 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
+import { visualizer } from 'rollup-plugin-visualizer'
 
 // https://vite.dev/config/
 export default defineConfig(({ isSsrBuild }) => ({
@@ -36,6 +37,9 @@ export default defineConfig(({ isSsrBuild }) => ({
         globPatterns: ['assets/**/*.{js,css,woff2,svg,png}', 'offline.html', 'favicon.svg'],
       },
     }),
+    ...(!isSsrBuild && process.env.BUNDLE_ANALYZE === '1'
+      ? [visualizer({ filename: 'dist/bundle-report.html', gzipSize: true, brotliSize: true })]
+      : []),
   ],
   resolve: {
     alias: {
@@ -43,6 +47,7 @@ export default defineConfig(({ isSsrBuild }) => ({
     },
   },
   build: {
+    manifest: !isSsrBuild,
     rolldownOptions: {
       // Two apps from one build (docs/features/43): the member app and the
       // public reader, each with its own HTML shell and SSR entry, so nothing

@@ -466,7 +466,7 @@ done
 gh pr view <n> --json mergeable,mergeStateStatus,state
 ```
 
-CI runs the full `make check` (lint, typecheck, dependency rules, tests, build)
+CI runs the full `make check` (lint, typecheck, dependency rules, tests, build, web bundle budget)
 on a GitHub-hosted runner, on every PR regardless of base. Merge only on
 `SUCCESS` — never on "it passed locally", because the pre-push hook skips
 `build`.

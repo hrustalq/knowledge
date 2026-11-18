@@ -533,6 +533,110 @@ is a constant, not a column.
   on an IdP-managed row needs no `convertToManual`. Existing members were not
   backfilled.
 
+## Permission actions (#1245)
+
+**The rule.** The API owns every "may I". The web never compares a role, an
+operator flag or a capability; it reads named booleans the API computed, one
+per `resource:action` key of `PERMISSION_ACTIONS`
+(`packages/contracts/src/permissions/index.ts`), through `usePermission` in
+`apps/web/src/stores/permissions.ts`. A missing or failed read answers `false`:
+a control the API would allow stays hidden until the next load, and the API
+enforces either way.
+
+**How an action is answered.** Each catalogue entry states its rule in the
+terms the enforcing guard already uses (`PermissionRule`): a workspace role
+with the operator flag, guests or a capability; a page or project level; or a
+guard with no role behind it (`project-manage`, `platform-admin`,
+`workspace-create`). `PermissionsResolver`
+(`apps/api/src/permissions/permissions.resolver.ts`) asks that same guard
+without throwing, `allowed(guard)` in `permission.service.ts`, which turns a
+`ForbiddenException` into `false` and rethrows anything else. A workspace
+action goes through `requireRole`, so key narrowing, an enforced SSO policy and
+the dev principal answer as they would on a route. A resource action is
+`requireResource` asked without throwing or auditing: the workspace half, then
+`levelOn` over one scope and one chain, plus `requireHistory`, the branch level
+or `requireProjectManage` where the rule names it. Never `requireResource`
+itself, which audits an admin's bypass per resource.
+
+The catalogue and the routes are two spellings of one rule, and the drift
+spec, `apps/api/test/permission-actions.spec.ts`, keeps them together. It holds
+each action to the route that enforces it (`ROUTES` for workspace actions,
+`RESOURCE_ROUTES` for resource ones) and fails when a rule changes on one side
+alone. The three guards with no route role (`platform:admin`,
+`workspace:create`, `project:manage-settings`) get a test of their own. Both
+maps are `Record`s keyed by the action type, so **a new action without a row
+there fails the typecheck.**
+
+**Where the flags travel.**
+
+| Action kind                     | Where the web reads it                                                                                                                                                                                                                                            |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Workspace (`WORKSPACE_ACTIONS`) | `GET /v1/me/permissions?workspaceId=` (`MePermissionsResponse`), loaded by the router guard on the server and the client, so the SSR frame and the hydrated one draw the same controls. Guests get an answer, mostly `false`, rather than a 403.                |
+| `document:*`, `branch:*`        | `GET /v1/documents/:id/permissions?branch=`, a sibling of the page detail, `no-store`: the detail's validator is shared by every reader ([10](10-caching.md)), so a per-caller answer cannot ride in that body. `branch:edit` answers for the branch named. |
+| `project:*`                     | `permissions` on `GET /v1/projects/:id` (`ProjectDetailResponse`). Express's body ETag differs per caller, so no two callers share a 304.                                                                                                                         |
+| `merge-request:*`               | `permissions` on `GET /v1/merge-requests/:id` (`MergeRequestDetailResponse`), answered on the merge request's page.                                                                                                                                              |
+| A tree or list row              | `accessLevel` on the row (`levelOn`, stamped per row), read with `levelReaches`. Not `level`, which is the methodology's ([82](../features/82-methodologies.md)).                                                                                                  |
+
+**Derived, never stored.** No column holds an action. SSO, SCIM and a person's
+hand edit keep writing what they always wrote (a role, `trusted_operator`,
+capabilities, grants), and every answer is computed from those on the read.
+
+**Liveness.** `AclEventsService.permissionsChanged` publishes an addressed
+`permissions.changed` frame after the commit, once per person whose role,
+operator flag, capabilities or membership moved, including every role-sync
+change that was not refused (`role-sync.service.ts:199`). The web re-reads
+`/v1/me`, the workspace grants and every per-resource permission read
+(`PERMISSION_READS`), and does the same before every reopen of a dropped
+stream, which is how a removal and a platform-admin flip reach a tab. The
+emitters and the transport are in [08](08-events-live.md).
+
+### What an identity provider can grant
+
+The catalogue raises an obvious question: can a group mapping now grant
+`document:edit` or `api-test-suites:run`? It cannot, and it never could.
+Every line cited below is in `apps/api/src/auth/sso/role-sync.service.ts`
+unless it names another file.
+
+- **A mapping yields a role and the operator flag, nothing else.** A sync
+  target is `{ role, trustedOperator, source, matched }` (28–33). `fromHits`
+  keeps only mappings whose role is a `WORKSPACE_ROLES` value (44, 63), takes
+  the highest and ORs the flag (65–70). The JIT fallback and the SCIM default
+  role give the operator flag `false` (181, 163).
+- **Capabilities and `is_admin` are never synced.** The service writes only
+  `workspace_members`, and only `role`, `trusted_operator` and `source`: the
+  insert (214–218), the role through `setRoleGuarded` (244) and the update
+  (245–248). It never reads or writes `capabilities`, and it holds no handle
+  on `users`, where `is_admin` lives. Nothing under `auth/sso/` or `scim/`
+  names `capabilities`. A page grant is not a membership row at all.
+- **So a mapping grants exactly the actions its role and flag imply.** The
+  resolver reads the same row a route does; a synced editor holds
+  `workspace:contribute` for the same reason a hand-made one does. A
+  capability-gated action like `api-test-suites:run` still needs a capability
+  an admin granted by hand.
+- **`additive` only raises.** Off authoritative mode, the role moves only to a
+  higher rank and the operator flag is only ever turned on (234–235), and a
+  target of nothing removes nothing (225).
+- **`authoritative` makes the row follow the IdP, when groups are known.** The
+  mode applies only while `groupsKnown` holds (113); then the row takes the
+  target's role and flag exactly (234–235) and is removed when the groups say
+  nothing (224–229). With groups unknown (an Entra overage), nothing is taken
+  away and the no-op is audited (123–127). SCIM is always authoritative (153).
+- **The last-admin guard is unchanged.** Demotion and removal go through
+  `setRoleGuarded` and `removeMemberGuarded`
+  (`apps/api/src/workspaces/membership-guards.ts:34`, `:65`), whose single
+  statement refuses to leave a workspace with no admin (50–53, 80–83). A
+  refusal is audited as `role_sync.blocked_last_admin` and returned, never
+  thrown (257–274), and publishes no frame (199).
+- **SCIM still owns `jit`, `group` and `scim` rows; sign-in owns `jit` and
+  `group`.** The owned sources are `SIGN_IN_SOURCES` (48) and `SCIM_SOURCES`
+  (54), passed as `owned` (112, 153). A row of any other source, a `manual`
+  one, is left alone (210), and the guarded writes repeat the source filter
+  inside the statement (226, 244, 246), so an admin taking a row over mid-sync
+  wins.
+
+Granting a capability or a page grant from an IdP group would be a new
+feature with its own issue, not a side effect of the catalogue.
+
 ## WebSockets are a separate door
 
 `APP_GUARD`s do not run on a WebSocket upgrade. `TokenAuthService` — extracted
@@ -592,7 +696,11 @@ judge a report on a page the clamp hides fails the run with
 `AccessService` and `AuditService` for worker-side use, and
 `PermissionsCoreModule` carries `GroupsService`, `PermissionService` and
 `ResourceAccessService` for every process; `AuthModule` imports it because
-`AclGuard` asks it about the page behind a `:id`.
+`AclGuard` asks it about the page behind a `:id`. It also carries
+`PermissionsResolver`, the permission-action answers, which the `/v1/me`,
+documents, projects and merge-request controllers inject, and
+`AclEventsService`, whose `permissionsChanged` `WorkspacesModule`,
+`UsersModule` and `RoleSyncService` call.
 `AuthCoreModule` also carries `AuthPolicyService`, because `requireRole`
 enforces a workspace's sign-in policy in every process. `SsoModule` (providers,
 the login flow, group mappings, policy and domain routes, the maintenance
@@ -610,6 +718,9 @@ POST /v1/auth/verify-email                                        @Public()
 POST /v1/auth/logout | resend-verification                        authenticated, @UnverifiedOk() (resend: rate-limited)
 POST /v1/auth/change-password                                     authenticated
 GET  /v1/me   PATCH /v1/me                                        self
+GET  /v1/me/permissions?workspaceId=                              @Access(viewer, 'query', { guests: true }); workspace actions
+GET  /v1/documents/:id/permissions?branch=                        @Access(viewer, 'document'), no-store; document + branch actions
+GET  /v1/projects/:id | /v1/merge-requests/:id                    @Access(viewer, 'project'|'merge-request'); body carries permissions
 GET/POST/PATCH /v1/users                                          @PlatformAdmin()
 GET/POST /v1/workspaces                                           creator → admin+operator
 *    /v1/workspaces/:id/members                                   @Access(viewer|admin, 'workspace'); writes audit capabilities

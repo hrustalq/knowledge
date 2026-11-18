@@ -528,7 +528,7 @@ describe('#656 revoke and offboard commit with the change', () => {
     it('admin disable: the account is not disabled while its sessions live', async () => {
       const { prisma, committed } = fakePrisma({ 'user.findUnique': { id: U, disabledAt: null }, 'user.update': {} });
       const mail = { enqueue: vi.fn() };
-      const svc = new UsersService(prisma, failingSessions() as never, mail as never, config({}), _);
+      const svc = new UsersService(prisma, failingSessions() as never, mail as never, config({}), _, { permissionsChanged: () => {} } as never);
       await expect(svc.update({ userId: 'u1' } as never, U, { disabled: true, password: 'override password 3' })).rejects.toThrow('boom');
       expect(committed).toEqual([]);
       expect(mail.enqueue).not.toHaveBeenCalled();
@@ -573,7 +573,7 @@ describe('#656 revoke and offboard commit with the change', () => {
       });
       const a = audit(prisma);
       // Real RoleSyncService: removeMemberGuarded → dropWorkspaceAccess, which must join the boundary, not open a raw $transaction.
-      const roleSync = new RoleSyncService(prisma, a as never);
+      const roleSync = new RoleSyncService(prisma, a as never, { permissionsChanged: () => {} } as never);
       await expect(scim(prisma, { roleSync, a }).deleteUser(caller, U)).rejects.toThrow('boom');
       expect(committed).toEqual([]);
       expect(a.fired).toEqual([]);
@@ -800,7 +800,7 @@ describe('#816 one commit, effects after it', () => {
       'passwordResetToken.create': boom,
     });
     const mail = { enqueue: vi.fn() };
-    const svc = new UsersService(prisma, _, mail as never, config({}), _);
+    const svc = new UsersService(prisma, _, mail as never, config({}), _, { permissionsChanged: () => {} } as never);
     await expect(svc.create({ mode: 'session', displayName: 'Admin' } as never, { email: 'a@x.test', displayName: 'A' } as never)).rejects.toThrow('boom');
     expect(committed).toEqual([]);
     expect(mail.enqueue).not.toHaveBeenCalled();

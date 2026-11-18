@@ -235,7 +235,7 @@ describe('removing a workspace member', () => {
       userGroupMember: { deleteMany },
       accessGrant: { deleteMany: grantsDeleteMany },
     };
-    await new WorkspacesService(prisma as never).removeMember(WS, BOB);
+    await new WorkspacesService(prisma as never, {} as never, {} as never, {} as never, {} as never, { permissionsChanged: () => {} } as never).removeMember(WS, BOB);
     expect(deleteMany).toHaveBeenCalledWith({ where: { userId: BOB, group: { workspaceId: WS } } });
     expect(grantsDeleteMany).toHaveBeenCalledWith({ where: { workspaceId: WS, subjectType: 'user', subjectId: BOB } });
   });
@@ -248,7 +248,7 @@ describe('removing a workspace member', () => {
       withTransaction: async (fn: () => Promise<unknown>) => fn(),
       userGroupMember: { deleteMany },
     };
-    await expect(new WorkspacesService(prisma as never).removeMember(WS, BOB)).rejects.toThrow(/lastAdminRemove/);
+    await expect(new WorkspacesService(prisma as never, {} as never, {} as never, {} as never, {} as never, { permissionsChanged: () => {} } as never).removeMember(WS, BOB)).rejects.toThrow(/lastAdminRemove/);
     expect(deleteMany).not.toHaveBeenCalled();
   });
 });

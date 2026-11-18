@@ -15,6 +15,7 @@ import { hashPassword } from '../auth/password.js';
 import type { Principal } from '../auth/principal.js';
 import { SessionsService } from '../auth/sessions.service.js';
 import { AuditService } from '../auth/audit.service.js';
+import { AclEventsService } from '../permissions/acl-events.service.js';
 import { mintToken } from '../auth/auth-tokens.js';
 import { MailProducer } from '../mail/mail.producer.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -41,6 +42,7 @@ export class UsersService {
     private readonly mail: MailProducer,
     private readonly config: ConfigService<Env, true>,
     private readonly audit: AuditService,
+    private readonly aclEvents: AclEventsService,
   ) {}
 
   async list(): Promise<ListUsersResponse> {
@@ -123,6 +125,11 @@ export class UsersService {
       if (dto.password !== undefined) this.prisma.onCommit(() => this.mail.enqueue({ template: 'password-changed', userId }));
       return this.prisma.user.update({ where: { id: userId }, data, include: SUMMARY_INCLUDE });
     });
+    // The platform-admin flag reaches every workspace (#1297): one frame per
+    // membership. A workspace they only visit as admin hears it on reconnect.
+    if (dto.isAdmin !== undefined && dto.isAdmin !== user.isAdmin) {
+      for (const m of updated.memberships) this.aclEvents.permissionsChanged(m.workspaceId, [userId]);
+    }
     for (const row of accountChanges(user, dto)) {
       void this.audit.record({ workspaceId: null, actor: actor.userId, ok: true, ip, target: userId, ...row });
     }

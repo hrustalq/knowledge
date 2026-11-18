@@ -38,7 +38,7 @@ function harness() {
     return { count: hit.length };
   });
   const audit = { record: vi.fn(async () => undefined) };
-  const service = new SsoLoginService(prisma as never, audit as never, new RoleSyncService(prisma as never, audit as never));
+  const service = new SsoLoginService(prisma as never, audit as never, new RoleSyncService(prisma as never, audit as never, { permissionsChanged: () => {} } as never));
   const provider = { id: 'idp-1', workspaceId: WS, kind: 'oidc', preset: 'keycloak', platformWide: false, jitEnabled: true, defaultRole: null, allowedDomains: ['corp.example'], groupsClaim: null, groupSyncMode: 'additive' } as never;
   const person = { subject: 'sub-1', email: 'newhire@corp.example', emailVerified: true, displayName: null, groups: [], notes: [] } as never;
 

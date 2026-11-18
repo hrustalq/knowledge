@@ -146,6 +146,12 @@ in the pull request that introduces them — see
 
 ### Changed
 
+- **Open tabs follow a role change without a reload.** When an admin changes someone's role, operator flag or
+  capabilities, adds or removes them, or flips their platform-admin flag, and when an SSO sign-in or SCIM sync moves
+  their membership, that person's open tabs re-read what they may do within a second or two. Controls they lost
+  disappear and new ones appear. A tab whose workspace they were removed from starts over at home. The API already
+  enforced the new role on the next request; only the UI lagged. The new live event `permissions.changed` reaches
+  only the person it names and carries nothing else. (#1297)
 - Clicking a page in a graph (the Pages graph, a page's graph widget and its full-screen view) opens the page in a
   side sheet beside the graph instead of navigating away: title, breadcrumbs, verification and the rendered page,
   with **Open page** and **Center graph here**. Clicking another page swaps the sheet; Esc or a click on empty canvas

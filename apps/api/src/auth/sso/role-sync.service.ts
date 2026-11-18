@@ -3,6 +3,7 @@ import type { IdentityProvider, IdpGroupMapping, WorkspaceMember } from '@prisma
 import { SCIM_DEFAULT_ROLES, WORKSPACE_ROLES, type MembershipSource, type ScimDefaultRole, type WorkspaceRole } from '@knowledge/contracts';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { lockMembership, removeMemberGuarded, setRoleGuarded } from '../../workspaces/membership-guards.js';
+import { AclEventsService } from '../../permissions/acl-events.service.js';
 import { AuditService } from '../audit.service.js';
 import { ROLE_ORDER } from '../principal.js';
 
@@ -96,6 +97,7 @@ export class RoleSyncService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly aclEvents: AclEventsService,
   ) {}
 
   async apply(input: RoleSyncInput): Promise<RoleSyncChange[]> {
@@ -181,7 +183,24 @@ export class RoleSyncService {
     return null;
   }
 
+  /**
+   * Bring one membership to its target, and tell the person when it moved
+   * (#1297): sign-in and SCIM both land here, so neither can forget. A
+   * refusal (`blocked`) changed nothing and says nothing.
+   */
   private async reconcile(
+    ctx: SyncContext,
+    userId: string,
+    workspaceId: string,
+    current: WorkspaceMember | null,
+    target: Target | null,
+  ): Promise<RoleSyncChange | null> {
+    const change = await this.write(ctx, userId, workspaceId, current, target);
+    if (change && change.kind !== 'blocked') this.aclEvents.permissionsChanged(workspaceId, [userId]);
+    return change;
+  }
+
+  private async write(
     ctx: SyncContext,
     userId: string,
     workspaceId: string,

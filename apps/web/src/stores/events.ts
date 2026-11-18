@@ -10,6 +10,8 @@ import type { KnowledgeEvent } from '@knowledge/contracts'
 import { api, isApiRequestError } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
 import { useDocumentsStore } from '@/stores/documents'
+import { useAuthStore } from '@/stores/auth'
+import { usePermissionsStore } from '@/stores/permissions'
 
 /** Reconnect backoff after the stream drops: 1 s, doubling, capped at 30 s. */
 const RETRY_MIN_MS = 1_000
@@ -33,6 +35,22 @@ export async function eventsStreamUrl(workspaceId: string): Promise<string> {
 const listeners = new Set<(event: KnowledgeEvent) => void>()
 export function onKnowledgeEvent(listener: (event: KnowledgeEvent) => void): void {
   listeners.add(listener)
+}
+
+/**
+ * Re-read who this person is and what they may do (#1297): on their own
+ * `permissions.changed` frame, and before every reopen of a dropped stream.
+ * The reopen is how two changes no frame can carry reach the tab: a removal
+ * (the server ends the stream of someone who may no longer read the
+ * workspace) and a platform-admin flip seen from a workspace they are not a
+ * member of. `adopt` leaves a workspace the person lost; the app then starts
+ * over at home, as it does when the active workspace is deleted.
+ */
+async function rereadStanding(): Promise<void> {
+  const workspaceId = getWorkspaceId()
+  await useAuthStore().reload()
+  if (getWorkspaceId() !== workspaceId) return window.location.assign('/')
+  await usePermissionsStore().refresh()
 }
 
 let source: EventSource | null = null
@@ -93,6 +111,9 @@ export const useEventsStore = defineStore('events', {
           toast.error(t('activity.indexingFailed', { name: event.title ?? event.documentId }))
         } else if (event.type === 'revision.dependent-reindex') {
           toast.info(t('activity.reindexingDependent', { name: event.title ?? event.documentId }))
+        } else if (event.type === 'permissions.changed') {
+          // Addressed: the server delivers it to the person it names only.
+          void rereadStanding()
         } else if (event.type === 'acl.changed') {
           // A restriction or grant moved (#76): the tree and lists may now
           // show more or less. Pages watching `lastEvent` re-read themselves.
@@ -110,7 +131,7 @@ export const useEventsStore = defineStore('events', {
     retry(t: ComposerTranslation) {
       const wait = retryMs
       retryMs = Math.min(retryMs * 2, RETRY_MAX_MS)
-      setTimeout(() => void this.open(t), wait)
+      setTimeout(() => void rereadStanding().finally(() => this.open(t)), wait)
     },
   },
 })

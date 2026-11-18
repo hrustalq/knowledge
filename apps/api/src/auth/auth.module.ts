@@ -44,6 +44,8 @@ import { RedisModule } from '../redis/redis.module.js';
   // and AuthTokensModule so they keep getting SessionsService and TokenAuthService.
   // AuthFlowService + the limiter: SSO sign-in (#75) opens its sessions and
   // counts its routes the way a password login does.
-  exports: [AuthCoreModule, AuthTokensModule, AuthFlowService, PublicRateLimiter, AuthRateLimitGuard],
+  // PermissionsCoreModule: role sync (SsoModule) tells a person their standing
+  // moved (`AclEventsService.permissionsChanged`, #1297).
+  exports: [AuthCoreModule, AuthTokensModule, PermissionsCoreModule, AuthFlowService, PublicRateLimiter, AuthRateLimitGuard],
 })
 export class AuthModule {}

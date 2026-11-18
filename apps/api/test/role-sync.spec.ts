@@ -31,12 +31,18 @@ type Row = Record<string, any>;
 function fakeDb(members: Row[], mappings: Row[] = []) {
   const db = { members: members.map((m) => ({ trustedOperator: false, source: 'manual', ...m })), mappings };
   const find = (ws: string, user: string) => db.members.find((m) => m.workspaceId === ws && m.userId === user);
+  // A `where` value is a plain id, `{ in: [...] }`, or absent (applyScim asks for several people).
+  const matches = (w: unknown, v: string) => w === undefined || (typeof w === 'string' ? w === v : (w as { in: string[] }).in.includes(v));
   const otherAdmin = (ws: string, user: string) => db.members.some((m) => m.workspaceId === ws && m.role === 'admin' && m.userId !== user);
   const prisma = {
     idpGroupMapping: { findMany: vi.fn(async ({ where }: Row) => db.mappings.filter((m) => m.providerId === where.providerId)) },
+    // SCIM (#1297): nobody is provisioned, so applyScim takes everything a SCIM-owned row holds away.
+    scimUser: { findMany: vi.fn(async () => []) },
+    scimGroupMember: { findMany: vi.fn(async () => []) },
+    workspaceSettings: { findUnique: vi.fn(async () => null) },
     workspaceMember: {
       findMany: vi.fn(async ({ where }: Row) =>
-        db.members.filter((m) => m.userId === where.userId && (!where.workspaceId || where.workspaceId.in.includes(m.workspaceId))),
+        db.members.filter((m) => matches(where.userId, m.userId) && matches(where.workspaceId, m.workspaceId)),
       ),
       findUnique: vi.fn(async ({ where }: Row) => find(where.workspaceId_userId.workspaceId, where.workspaceId_userId.userId) ?? null),
       createMany: vi.fn(async ({ data }: Row) => {
@@ -111,12 +117,15 @@ const mapping = (externalGroup: string, role: string, over: Row = {}) => ({
 function sync(members: Row[], mappings: Row[] = []) {
   const { db, prisma } = fakeDb(members, mappings);
   const audit = { record: vi.fn(async () => undefined) };
-  const service = new RoleSyncService(prisma as never, audit as never);
+  const events = { permissionsChanged: vi.fn() };
+  const service = new RoleSyncService(prisma as never, audit as never, events as never);
   const run = (p: Row, groups: string[], groupsKnown = true) =>
     service.apply({ provider: p as never, userId: ADA, groups, groupsKnown });
   const entries = (action: string) => (audit.record.mock.calls as unknown as Row[][]).map((c) => c[0]).filter((e) => e.action === action);
   const ada = (ws = HOME) => db.members.find((m) => m.userId === ADA && m.workspaceId === ws);
-  return { db, run, entries, ada };
+  /** Every `permissionsChanged` call, as `[workspaceId, userIds]` (#1297). */
+  const published = () => events.permissionsChanged.mock.calls;
+  return { db, run, entries, ada, service, published };
 }
 
 describe('RoleSyncService', () => {
@@ -217,16 +226,18 @@ describe('RoleSyncService', () => {
   });
 });
 
-describe('editing an IdP-managed member by hand', () => {
-  function service(source: string) {
-    const { db, prisma } = fakeDb([{ workspaceId: HOME, userId: ADA, role: 'editor', source }]);
-    const listMembers = vi.fn(async () => ({ workspaceId: HOME, members: [] }));
-    const audit = { record: vi.fn(async () => undefined) };
-    const workspaces = new WorkspacesService(prisma as never, audit as never);
-    Object.assign(workspaces, { listMembers });
-    return { db, workspaces, audit };
-  }
+/** One managed or manual member, ADA, behind WorkspacesService. */
+function service(source: string) {
+  const { db, prisma } = fakeDb([{ workspaceId: HOME, userId: ADA, role: 'editor', source }]);
+  const listMembers = vi.fn(async () => ({ workspaceId: HOME, members: [] }));
+  const audit = { record: vi.fn(async () => undefined) };
+  const events = { permissionsChanged: vi.fn() };
+  const workspaces = new WorkspacesService(prisma as never, audit as never, {} as never, {} as never, {} as never, events as never);
+  Object.assign(workspaces, { listMembers });
+  return { db, workspaces, audit, events };
+}
 
+describe('editing an IdP-managed member by hand', () => {
   it.each(['jit', 'group', 'scim'])('a %s row answers 409 managedByIdp', async (source) => {
     const { db, workspaces } = service(source);
     const err = await workspaces.updateMember(HOME, ADA, { role: 'viewer' }, BOB).catch((e) => e);
@@ -276,5 +287,74 @@ describe('role sync and capabilities (#468)', () => {
     );
     await down.run(provider({ groupSyncMode: 'authoritative' }), ['readers']);
     expect(down.ada()).toMatchObject({ role: 'viewer', trustedOperator: true, capabilities: CAP });
+  });
+});
+
+/**
+ * permissions.changed (#1297): every write that moves a person's standing in a
+ * workspace tells exactly that person, and a write that moved nothing tells
+ * nobody. The frame itself is pinned in permissions-changed.spec.ts.
+ */
+describe('membership writers publish permissions.changed', () => {
+  it('sign-in sync: added, updated and removed each name the one person; a no-op names nobody', async () => {
+    const s = sync([], [mapping('writers', 'editor'), mapping('readers', 'viewer')]);
+    await s.run(provider({ groupSyncMode: 'authoritative' }), ['writers']);
+    await s.run(provider({ groupSyncMode: 'authoritative' }), ['writers']);
+    await s.run(provider({ groupSyncMode: 'authoritative' }), ['readers']);
+    await s.run(provider({ groupSyncMode: 'authoritative' }), []);
+    expect(s.published()).toEqual([
+      [HOME, [ADA]],
+      [HOME, [ADA]],
+      [HOME, [ADA]],
+    ]);
+    expect(s.ada()).toBeUndefined();
+  });
+
+  it('a refused demotion of the last admin publishes nothing', async () => {
+    const s = sync([{ workspaceId: HOME, userId: ADA, role: 'admin', source: 'group' }], [mapping('readers', 'viewer')]);
+    const changes = await s.run(provider({ groupSyncMode: 'authoritative' }), ['readers']);
+    expect(changes).toEqual([{ workspaceId: HOME, kind: 'blocked' }]);
+    expect(s.published()).toEqual([]);
+  });
+
+  it('SCIM: a deactivation names each person whose row it removed, and no one else', async () => {
+    const s = sync([
+      { workspaceId: HOME, userId: ADA, role: 'editor', source: 'scim' },
+      { workspaceId: HOME, userId: BOB, role: 'editor', source: 'manual' },
+      { workspaceId: HOME, userId: 'admin', role: 'admin', source: 'manual' },
+    ]);
+    const changes = await s.service.applyScim(HOME, [ADA, BOB]);
+    expect(changes).toEqual([{ workspaceId: HOME, kind: 'removed' }]);
+    expect(s.published()).toEqual([[HOME, [ADA]]]);
+  });
+
+  it('a hand edit of role, operator flag or capabilities names the member; a refused one and a takeover alone do not', async () => {
+    const { workspaces, events } = service('manual');
+    await workspaces.updateMember(HOME, ADA, { role: 'viewer' }, BOB);
+    await workspaces.updateMember(HOME, ADA, { trustedOperator: true }, BOB);
+    await workspaces.updateMember(HOME, ADA, { capabilities: ['api-test-suites.run'] }, BOB);
+    expect(events.permissionsChanged.mock.calls).toEqual([
+      [HOME, [ADA]],
+      [HOME, [ADA]],
+      [HOME, [ADA]],
+    ]);
+
+    const managed = service('group');
+    await managed.workspaces.updateMember(HOME, ADA, { role: 'viewer' }, BOB).catch(() => undefined);
+    await managed.workspaces.updateMember(HOME, ADA, { convertToManual: true }, BOB);
+    expect(managed.events.permissionsChanged).not.toHaveBeenCalled();
+  });
+
+  it('adding and removing a member names that member; a refused removal names nobody', async () => {
+    const { workspaces, events, db } = service('manual');
+    db.members.splice(0); // ADA (the fake's user lookup) is not a member yet
+    db.members.push({ workspaceId: HOME, userId: BOB, role: 'admin', source: 'manual', trustedOperator: false });
+    await workspaces.addMember(HOME, { email: 'ada@corp.example', role: 'editor' }, BOB);
+    await workspaces.removeMember(HOME, ADA);
+    await expect(workspaces.removeMember(HOME, BOB)).rejects.toThrow(/lastAdminRemove/);
+    expect(events.permissionsChanged.mock.calls).toEqual([
+      [HOME, [ADA]],
+      [HOME, [ADA]],
+    ]);
   });
 });

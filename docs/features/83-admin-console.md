@@ -7,7 +7,7 @@ platform: configuration, monitoring, users and errors. Workspace settings keep w
 | --- | --- | --- | --- |
 | 1 | [#1236] | [#1275] | `apps/admin`, its image and route; the platform-admin gate; `@knowledge/api-client` |
 | 2 | [#1237] | [#1276] | The configuration view: `GET /v1/admin/config` |
-| 3 | [#1238] | — | Monitoring: `GET /v1/admin/health`, `GET /health`, heartbeats and sweeper ticks |
+| 3 | [#1238] | [#1277] | Monitoring: `GET /v1/admin/health`, `GET /health`, heartbeats and sweeper ticks |
 | 4 | [#1239] | — | Users across workspaces |
 | 5 | [#1240] | — | Errors over `ops_events` |
 
@@ -18,6 +18,7 @@ platform: configuration, monitoring, users and errors. Workspace settings keep w
 [#1240]: https://github.com/hrustalq/knowledge/issues/1240
 [#1275]: https://github.com/hrustalq/knowledge/pull/1275
 [#1276]: https://github.com/hrustalq/knowledge/pull/1276
+[#1277]: https://github.com/hrustalq/knowledge/pull/1277
 
 ## The app and its door
 

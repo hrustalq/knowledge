@@ -30,7 +30,7 @@ import { validateGraph } from '@knowledge/workflow'
 import { apiQueryOptions, useApiMutation } from '@/shared/api/queries'
 import { relativeTime } from '@/shared/api/api'
 import { labelFor } from '@/shared/i18n/labels'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { useWorkflowsStore } from '@/entities/workflow'
 import { Badge } from '@knowledge/ui/badge'
 import { Button, buttonVariants } from '@knowledge/ui/button'
@@ -58,14 +58,13 @@ import { describeChain } from '@/entities/workflow'
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
-const auth = useAuthStore()
 const store = useWorkflowsStore()
 
 // `:id?` — absent on `/settings/workflows` itself, where the rail is showing
 // but nothing has been picked yet.
 const id = computed(() => (route.params.id ? String(route.params.id) : ''))
 const selected = computed(() => id.value !== '')
-const canManage = computed(() => auth.canAdminWorkspace)
+const canManage = usePermission('workspace:admin')
 
 const query = useQuery(
   computed(() => ({

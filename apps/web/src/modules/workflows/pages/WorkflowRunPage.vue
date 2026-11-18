@@ -15,7 +15,7 @@ import type {
 import { allowedRunEvents } from '@knowledge/workflow'
 import { apiQueryOptions, useApiMutation } from '@/shared/api/queries'
 import { relativeTime } from '@/shared/api/api'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { Button } from '@knowledge/ui/button'
 import { confirm } from '@knowledge/ui/confirm'
 import { Skeleton } from '@knowledge/ui/skeleton'
@@ -35,7 +35,7 @@ const { t } = useI18n()
  * a reviewer who comes back a week later sees exactly where it parked.
  */
 const route = useRoute()
-const auth = useAuthStore()
+const canContribute = usePermission('workspace:contribute')
 const runId = computed(() => String(route.params.id))
 
 const query = useQuery(
@@ -107,7 +107,7 @@ const runEvent = useApiMutation('post', '/v1/workflows/runs/{id}/events', { inva
 const busy = computed(() => nodeEvent.isPending.value || runEvent.isPending.value)
 
 const runActions = computed<WorkflowRunEventType[]>(() =>
-  data.value && auth.canEdit ? allowedRunEvents(data.value.run.status) : [],
+  data.value && canContribute.value ? allowedRunEvents(data.value.run.status) : [],
 )
 
 // The draft carries relations and frontmatter as well as prose, so a reviewer's
@@ -252,7 +252,7 @@ const RUN_ACTION = {
             :node="selected"
             :graph="data.graph"
             :nodes="nodes"
-            :can-edit="auth.canEdit"
+            :can-edit="canContribute"
             :busy="busy"
             @event="sendNodeEvent"
             @save="persistDraft"

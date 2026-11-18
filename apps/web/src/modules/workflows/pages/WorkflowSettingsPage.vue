@@ -33,7 +33,7 @@ import type { ListWorkflowsResponse, WorkflowDefinitionInfo } from '@knowledge/c
 import { validateGraph } from '@knowledge/workflow'
 import { apiQueryOptions } from '@/shared/api/queries'
 import { getProjectId, getWorkspaceId } from '@/shared/api/api'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { useWorkflowsStore } from '@/entities/workflow'
 import { revealStackedPane } from '@/shared/utils/reveal-pane'
 import { Button } from '@knowledge/ui/button'
@@ -41,7 +41,6 @@ import { Input } from '@knowledge/ui/input'
 import { Skeleton } from '@knowledge/ui/skeleton'
 
 const { t } = useI18n()
-const auth = useAuthStore()
 const store = useWorkflowsStore()
 const route = useRoute()
 
@@ -49,7 +48,7 @@ const route = useRoute()
 const ROW_HEIGHT = 36
 
 const workspaceId = getWorkspaceId()
-const canManage = computed(() => auth.canAdminWorkspace)
+const canManage = usePermission('workspace:admin')
 
 const query = useQuery(
   computed(() =>

@@ -98,7 +98,7 @@ function workspaces(signup = true) {
     $transaction: vi.fn(async (fn: (tx: unknown) => unknown) => fn(prisma)),
   };
   const config = { get: vi.fn((k: string) => (k === 'AUTH_SIGNUP_ENABLED' ? signup : undefined)) };
-  const svc = new WorkspacesService(prisma as never, {} as never, {} as never, {} as never, config as never, { permissionsChanged: () => {} } as never);
+  const svc = new WorkspacesService(prisma as never, { record: async () => {} } as never, {} as never, {} as never, config as never, { permissionsChanged: () => {} } as never);
   return { svc, prisma };
 }
 

@@ -14,6 +14,7 @@ import { PublishingSettingsService } from './publishing-settings.service.js';
 import { CreateShareLinkDto, UpdatePublishingSettingsDto, UpdateShareLinkDto } from './share-links.dto.js';
 import { ShareLinksService } from './share-links.service.js';
 import { Returns } from '../common/returns.decorator.js';
+import { AuditService } from '../auth/audit.service.js';
 
 /**
  * Managing share links and the workspace's publishing switches
@@ -30,6 +31,7 @@ export class ShareLinksController {
   constructor(
     private readonly shares: ShareLinksService,
     private readonly settings: PublishingSettingsService,
+    private readonly audit: AuditService,
   ) {}
 
   @Get('documents/:id/shares')
@@ -92,10 +94,22 @@ export class ShareLinksController {
   @Returns('PublishingSettingsResponse')
   @Access('admin', 'workspace')
   @ApiOperation({ summary: 'Override the publishing switches; null on a key goes back to the default (off)' })
-  updateSettings(
+  async updateSettings(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdatePublishingSettingsDto,
+    @CurrentPrincipal() principal: Principal,
   ): Promise<PublishingSettingsResponse> {
-    return this.settings.update(id, dto);
+    const before = await this.settings.override(id);
+    const res = await this.settings.update(id, dto);
+    // What leaves the workspace is an admin's call worth a trail (#1251): each switch that moved, null = default.
+    const moved = Object.fromEntries(
+      Object.entries(res.override)
+        .filter(([k, v]) => before[k as keyof typeof before] !== v)
+        .map(([k, v]) => [k, { from: before[k as keyof typeof before], to: v }]),
+    );
+    if (Object.keys(moved).length) {
+      void this.audit.record({ workspaceId: id, actor: principal.userId, action: 'publishing.settings_updated', params: moved, target: id, ok: true });
+    }
+    return res;
   }
 }

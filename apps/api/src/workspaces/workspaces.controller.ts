@@ -222,7 +222,8 @@ export class WorkspacesController {
   removeMember(
     @Param('id', ParseUUIDPipe) id: string,
     @Param('userId', ParseUUIDPipe) userId: string,
+    @CurrentPrincipal() principal: Principal,
   ): Promise<ListWorkspaceMembersResponse> {
-    return this.workspaces.removeMember(id, userId);
+    return this.workspaces.removeMember(id, userId, principal.userId);
   }
 }

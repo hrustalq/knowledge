@@ -6,13 +6,14 @@ import type {
   ActivityKind,
   ListActivityResponse,
 } from '@knowledge/contracts';
-import { ACTIVITY_KINDS, activityKindFor, FRESHNESS_ACTIONS } from '@knowledge/contracts';
+import { ACTIVITY_KINDS, activityKindFor, FRESHNESS_ACTIONS, isAuditAction } from '@knowledge/contracts';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { activeTransaction } from '../prisma/transaction.js';
 import { visibilitySql, type AccessScope } from '../permissions/access-scope.js';
 import { actorIdentities, DEV_ACTOR } from './actor.js';
 import { EventsPublisher } from '../events/events.publisher.js';
+import { AuditService } from '../auth/audit.service.js';
 
 export interface ActivityRecordInput {
   workspaceId: string;
@@ -48,6 +49,7 @@ export class ActivityService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly events: EventsPublisher,
+    private readonly audit: AuditService,
   ) {}
 
   /**
@@ -74,6 +76,18 @@ export class ActivityService {
           metadata: (input.metadata ?? {}) as object,
         },
       });
+      // An admin write's feed row is also an audit row (#1251): one `action:` at the call site, and the
+      // trail outlives the workspace teardown that deletes the feed. Before the publish, so a Redis outage loses no row. The recorder redacts the metadata.
+      if (isAuditAction(input.action)) {
+        await this.audit.record({
+          workspaceId: input.workspaceId,
+          actor: input.actor ?? DEV_ACTOR,
+          action: input.action,
+          params: { ...input.metadata, ...(projectId ? { projectId } : {}) },
+          target: input.subjectId ?? input.documentId ?? null,
+          ok: true,
+        });
+      }
       // A page's freshness clock (docs/features/39), bumped here rather than at
       // each call site so a new writer cannot forget it. The set is the same
       // one the migration backfilled from, so "inactive" means one thing.

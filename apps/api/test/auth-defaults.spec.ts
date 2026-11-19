@@ -248,7 +248,7 @@ describe('rows from before the #75 migration', () => {
         return 1;
       }),
     };
-    const workspaces = new WorkspacesService(prisma as never, {} as never, {} as never, {} as never, {} as never, { permissionsChanged: () => {} } as never);
+    const workspaces = new WorkspacesService(prisma as never, { record: async () => {} } as never, {} as never, {} as never, {} as never, { permissionsChanged: () => {} } as never);
     expect((await workspaces.listMembers(WS)).members[0].source).toBe('manual');
     const after = await workspaces.updateMember(WS, 'u1', { role: 'viewer' });
     expect(after.members[0]).toMatchObject({ role: 'viewer', source: 'manual' });

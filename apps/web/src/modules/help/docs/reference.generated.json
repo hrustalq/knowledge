@@ -1602,9 +1602,29 @@
     },
     {
       "method": "GET",
+      "path": "/v1/admin/audit-logs/export",
+      "tag": "auth",
+      "summary": "The filtered platform trail as CSV or JSON (platform admin, capped); audited",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": true
+    },
+    {
+      "method": "GET",
       "path": "/v1/audit-logs",
       "tag": "auth",
-      "summary": "Workspace audit trail, newest first (admin) — graph queries, ACL changes, the workspace's sign-in config",
+      "summary": "Workspace audit trail, newest first (admin), filtered by action, category, actor, target, dates and outcome",
+      "role": "admin",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/audit-logs/export",
+      "tag": "auth",
+      "summary": "The filtered workspace trail as CSV or JSON (admin, capped); the export is itself audited",
       "role": "admin",
       "source": "query",
       "public": false,

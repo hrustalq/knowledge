@@ -1102,6 +1102,11 @@ export const envSchema = z.object({
   /** Days ops_events rows are kept; the worker's OpsRetentionSweeper deletes older ones (#1240). */
   OPS_EVENTS_RETENTION_DAYS: z.coerce.number().int().positive().default(30),
   /**
+   * Days audit_logs rows are kept (#1251). 0 (the default) keeps them forever, so an install that never
+   * sets it loses nothing; otherwise the API's AuditRetentionSweeper deletes older rows once an hour.
+   */
+  AUDIT_RETENTION_DAYS: z.coerce.number().int().min(0).default(0),
+  /**
    * Write the backtest event stream (search / ai / ingest) to LOG_DIR. Separate
    * from LOG_LEVEL on purpose: these are measurements, not diagnostics, and a
    * full corpus re-index emits tens of thousands of them.

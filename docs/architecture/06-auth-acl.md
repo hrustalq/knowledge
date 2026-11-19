@@ -500,9 +500,56 @@ the graph an arbitrary question. It is fenced on six sides:
    `foo (bar)` is refused as well: the fence errs closed. As a second line, a
    returned row holding another tenant's `workspaceId` at any depth is dropped.
    That cannot catch a projected scalar, which is why it is the second line.
-6. **Audited** into `audit_logs`, readable at `GET /v1/audit-logs` (admin).
+6. **Audited** into `audit_logs`, readable at `GET /v1/audit-logs` (admin; see [the audit trail](#the-audit-trail-1251)).
    The row carries `aclBypass: true`: the query reads the stores past every page
    restriction, as only an admin operator may.
+
+## The audit trail (#1251)
+
+`audit_logs` is the security record: who did what to whom, with a redacted
+`params` diff. It is admin-only, and it is the one table workspace teardown keeps.
+
+- **Writers.** `AuditService.record` is the only one. Inside a transaction the
+  row waits for the commit. Before it stores anything, `redactParams` replaces
+  any value whose key names a credential (`password`, `…Secret`, `…Token`,
+  `apiKey`, `credential`, `privateKey`), and any string shaped like one
+  (`SECRET_PATTERNS`). Booleans like `hasToken` stay. A call site therefore
+  cannot leak a secret by passing its DTO.
+- **Two ways in.** Administration that records no feed row calls `record`
+  directly:
+  - members (`member.added` / `updated` / `removed`; `updated` holds a `{ from, to }`
+    per field that moved)
+  - `workspace.created`, `workspace.features_updated`, `workspace.purpose_updated`
+  - `publishing.settings_updated`
+  - `api-key.created` / `revoked`, filed under the pinned workspace, else a
+    platform event
+  - `audit.exported`
+
+  Administration that already records an activity row (AI providers, agents,
+  triggers, plugins, skills, styleguides, lint policy, connectors, workflows,
+  templates, glossary) is copied by `ActivityService`: an activity whose action
+  is in `AUDIT_ACTIONS` is also written to the trail, with the feed metadata as
+  `params` and the subject as `target`. The call site writes one `action:` and
+  the two logs cannot disagree. Those `params` name what moved, not the values.
+  The feed's metadata never carried a secret's value.
+- **Content writes are not audited, on purpose.** Page create, edit, move,
+  archive, publish and merge are already in `activity_log`, whose rows have no FK
+  and outlive the page. The revisions are immutable and record who wrote each
+  one. A page is never hard-deleted (it is archived). A second copy in
+  `audit_logs` would add no fact the revision DAG and the feed lack. The one
+  thing the feed cannot do is survive workspace deletion, and
+  `workspace.deleted` records what the workspace held.
+- **Reading.** `GET /v1/audit-logs` (workspace admin) and `GET /v1/admin/audit-logs`
+  (platform admin) take `action`, `category`, `actor`, `target`, `from`, `to`
+  (inclusive ISO instants) and `ok`. The category is derived by
+  `auditCategoryOf`, never stored, and filters as `action IN auditActionsIn(c)`.
+  An action outside the chosen category matches nothing. `…/export?format=csv|json`
+  runs the same `where`, newest first, capped at `AUDIT_EXPORT_MAX_ROWS`
+  (10,000). `X-Audit-Truncated` reports the cap, and the JSON body repeats it.
+  Each export writes an `audit.exported` row with the filter and row count.
+- **Retention.** `AUDIT_RETENTION_DAYS` defaults to 0, which keeps rows forever.
+  When set, `AuditRetentionSweeper` (in the API-only `AdminModule`, never MCP or
+  the worker) deletes older rows once an hour, in batches.
 
 ## Member capabilities
 
@@ -723,7 +770,7 @@ GET  /v1/documents/:id/permissions?branch=                        @Access(viewer
 GET  /v1/projects/:id | /v1/merge-requests/:id                    @Access(viewer, 'project'|'merge-request'); body carries permissions
 GET/POST/PATCH /v1/users                                          @PlatformAdmin()
 GET/POST /v1/workspaces                                           creator → admin+operator
-*    /v1/workspaces/:id/members                                   @Access(viewer|admin, 'workspace'); writes audit capabilities
+*    /v1/workspaces/:id/members                                   @Access(viewer|admin, 'workspace'); writes audit member.* + capabilities
 GET  /v1/groups?workspaceId=   POST /v1/groups                    @Access(viewer, 'query') | (admin, 'body')
 PATCH|DELETE /v1/groups/:id   PUT /v1/groups/:id/members          @Access(admin, 'group')
 GET  /v1/groups/:id/members                                       @Access(viewer, 'group')
@@ -733,8 +780,8 @@ POST /v1/access-requests   GET /v1/access-requests?workspaceId=   @Access(viewer
 POST /v1/access-requests/:id/approve | deny                     @Access(viewer, 'access-request') + manage on every grant target
 POST /v1/access-requests/:id/cancel                             @Access(viewer, 'access-request', { guests: true }), requester only
 POST /v1/graph/query                                              trusted_operator
-GET  /v1/audit-logs                                               admin
-GET  /v1/admin/audit-logs                                         @PlatformAdmin()
+GET  /v1/audit-logs   GET /v1/audit-logs/export                   @Access(admin, 'query'); export audited
+GET  /v1/admin/audit-logs   GET /v1/admin/audit-logs/export       @PlatformAdmin(); export audited
 GET  /v1/me/sessions   DELETE /v1/me/sessions/:sessionId          self
 GET  /v1/users/:id/sessions   POST /v1/users/:id/revoke-sessions  @PlatformAdmin()
 GET  /v1/auth/sso/providers   POST /v1/auth/sso/discover | exchange      @Public(), SSO on

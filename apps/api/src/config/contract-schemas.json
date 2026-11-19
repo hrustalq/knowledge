@@ -9094,6 +9094,34 @@
       "to"
     ]
   },
+  "ConfigurationAppliedValue": {
+    "type": "object",
+    "properties": {
+      "value": {},
+      "source": {
+        "type": "string",
+        "enum": [
+          "project",
+          "workspace",
+          "default"
+        ]
+      },
+      "held": {
+        "type": "string",
+        "enum": [
+          "ceiling",
+          "agent-off",
+          null
+        ],
+        "nullable": true
+      }
+    },
+    "required": [
+      "value",
+      "source",
+      "held"
+    ]
+  },
   "ConfigurationChange": {
     "type": "object",
     "properties": {
@@ -9130,7 +9158,8 @@
         "type": "string",
         "enum": [
           "admin",
-          "editor"
+          "editor",
+          "maintainer"
         ]
       },
       "appliedAt": {
@@ -9176,6 +9205,15 @@
       },
       {
         "$ref": "#/components/schemas/PageTemplateChangeSpec"
+      },
+      {
+        "$ref": "#/components/schemas/ProjectSettingChangeSpec"
+      },
+      {
+        "$ref": "#/components/schemas/MethodologyLinkChangeSpec"
+      },
+      {
+        "$ref": "#/components/schemas/CustomAgentChangeSpec"
       }
     ]
   },
@@ -9195,7 +9233,22 @@
         "type": "string"
       },
       "before": {},
-      "after": {}
+      "after": {},
+      "applies": {
+        "type": "object",
+        "properties": {
+          "before": {
+            "$ref": "#/components/schemas/ConfigurationAppliedValue"
+          },
+          "after": {
+            "$ref": "#/components/schemas/ConfigurationAppliedValue"
+          }
+        },
+        "required": [
+          "before",
+          "after"
+        ]
+      }
     },
     "required": [
       "field",
@@ -9256,7 +9309,8 @@
       "triggers-off",
       "section-off",
       "name-taken",
-      "invalid"
+      "invalid",
+      "stale"
     ]
   },
   "ConflictCodeRef": {
@@ -11362,6 +11416,28 @@
     },
     "required": [
       "credentials"
+    ]
+  },
+  "CustomAgentChangeSpec": {
+    "type": "object",
+    "properties": {
+      "kind": {
+        "type": "string",
+        "enum": [
+          "custom-agent"
+        ]
+      },
+      "blueprintKey": {
+        "type": "string"
+      },
+      "agentKey": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "kind",
+      "blueprintKey",
+      "agentKey"
     ]
   },
   "DecisionCapturePayload": {
@@ -20219,6 +20295,32 @@
       "squash"
     ]
   },
+  "MethodologyLinkChangeSpec": {
+    "type": "object",
+    "properties": {
+      "kind": {
+        "type": "string",
+        "enum": [
+          "methodology-link"
+        ]
+      },
+      "projectId": {
+        "type": "string"
+      },
+      "blueprintKey": {
+        "type": "string"
+      },
+      "locale": {
+        "$ref": "#/components/schemas/Locale"
+      }
+    },
+    "required": [
+      "kind",
+      "projectId",
+      "blueprintKey",
+      "locale"
+    ]
+  },
   "MethodologyPreviewResponse": {
     "type": "object",
     "properties": {
@@ -21673,6 +21775,196 @@
       "project:delete",
       "merge-request:contribute",
       "merge-request:override-checks"
+    ]
+  },
+  "ProjectSettingChangeSpec": {
+    "anyOf": [
+      {
+        "type": "object",
+        "properties": {
+          "setting": {
+            "type": "string",
+            "enum": [
+              "verification"
+            ]
+          },
+          "values": {
+            "type": "object",
+            "properties": {
+              "reviewIntervalDays": {
+                "type": "number",
+                "nullable": true
+              },
+              "remindBeforeDays": {
+                "type": "number",
+                "nullable": true
+              },
+              "inactiveAfterDays": {
+                "type": "number",
+                "nullable": true
+              },
+              "emptyMaxChars": {
+                "type": "number",
+                "nullable": true
+              }
+            }
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "project-setting"
+            ]
+          },
+          "projectId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "projectId",
+          "setting",
+          "values"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "setting": {
+            "type": "string",
+            "enum": [
+              "workItems"
+            ]
+          },
+          "values": {
+            "type": "object",
+            "properties": {
+              "issues": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/WorkItemIssueRule"
+                  }
+                ],
+                "nullable": true
+              },
+              "conflicts": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/WorkItemConflictRule"
+                  }
+                ],
+                "nullable": true
+              },
+              "verification": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/WorkItemVerificationRule"
+                  }
+                ],
+                "nullable": true
+              }
+            }
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "project-setting"
+            ]
+          },
+          "projectId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "projectId",
+          "setting",
+          "values"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "setting": {
+            "type": "string",
+            "enum": [
+              "breakingChanges"
+            ]
+          },
+          "values": {
+            "type": "object",
+            "properties": {
+              "policy": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ApiBreakingChangePolicy"
+                  }
+                ],
+                "nullable": true
+              }
+            },
+            "required": [
+              "policy"
+            ]
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "project-setting"
+            ]
+          },
+          "projectId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "projectId",
+          "setting",
+          "values"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "setting": {
+            "type": "string",
+            "enum": [
+              "lintPolicy"
+            ]
+          },
+          "values": {
+            "type": "object",
+            "properties": {
+              "policy": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/LintPolicy"
+                  }
+                ],
+                "nullable": true
+              }
+            },
+            "required": [
+              "policy"
+            ]
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "project-setting"
+            ]
+          },
+          "projectId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "projectId",
+          "setting",
+          "values"
+        ]
+      }
     ]
   },
   "ProjectSettingKey": {

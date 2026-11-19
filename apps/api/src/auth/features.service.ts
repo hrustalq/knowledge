@@ -5,6 +5,7 @@ import { WORKSPACE_FEATURES, isWorkspaceFeature, isWorkspaceUse, suggestedDisabl
 import { PrismaService } from '../prisma/prisma.service.js';
 import { t } from '../i18n/t.js';
 import { ttlCache } from '../common/ttl-cache.js';
+import { AuditService } from './audit.service.js';
 
 const FEATURES_TTL_MS = 30_000;
 
@@ -37,6 +38,7 @@ export class FeaturesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService<Env, true>,
+    private readonly audit: AuditService,
   ) {}
 
   /**
@@ -52,9 +54,7 @@ export class FeaturesService {
   }
 
   state(workspaceId: string): Promise<FeatureState> {
-    return this.cache.get(workspaceId, async () =>
-      stateOf(await this.prisma.workspaceSettings.findUnique({ where: { workspaceId }, select: STATE_SELECT })),
-    );
+    return this.cache.get(workspaceId, () => this.stored(workspaceId));
   }
 
   async disabled(workspaceId: string): Promise<WorkspaceFeature[]> {
@@ -87,13 +87,23 @@ export class FeaturesService {
 
   async set(workspaceId: string, disabled: WorkspaceFeature[], actorId: string): Promise<WorkspaceFeature[]> {
     const disabledFeatures = [...new Set(disabled)];
+    const before = await this.stored(workspaceId);
     await this.prisma.workspaceSettings.upsert({
       where: { workspaceId },
       create: { workspaceId, disabledFeatures, updatedBy: actorId },
       update: { disabledFeatures, updatedBy: actorId },
     });
     this.cache.delete(workspaceId);
+    const moved = switched(before.disabled, disabledFeatures);
+    if (moved) {
+      void this.audit.record({ workspaceId, actor: actorId, action: 'workspace.features_updated', params: moved, target: workspaceId, ok: true });
+    }
     return disabledFeatures;
+  }
+
+  /** The stored row, uncached: an audit diff must not compare against another process's stale copy. */
+  private async stored(workspaceId: string): Promise<FeatureState> {
+    return stateOf(await this.prisma.workspaceSettings.findUnique({ where: { workspaceId }, select: STATE_SELECT }));
   }
 
   /** The admin's read (#934): the stored purpose with its description. Uncached — it is a settings page, not a guard. */
@@ -124,6 +134,7 @@ export class FeaturesService {
     input: { uses: WorkspaceUse[]; description?: string | null; disabled: WorkspaceFeature[] },
     actorId: string,
   ): Promise<WorkspacePurposeResponse> {
+    const before = await this.stored(workspaceId);
     const data = {
       purposeUses: [...new Set(input.uses)],
       purposeDescription: input.description?.trim() || null,
@@ -133,6 +144,22 @@ export class FeaturesService {
     };
     await this.prisma.workspaceSettings.upsert({ where: { workspaceId }, create: { workspaceId, ...data }, update: data });
     this.cache.delete(workspaceId);
+    // Every save is recorded, a Skip included: it stamps the question as asked. The description is the admin's prose, not a setting.
+    void this.audit.record({
+      workspaceId,
+      actor: actorId,
+      action: 'workspace.purpose_updated',
+      params: { uses: { from: before.uses, to: data.purposeUses }, ...switched(before.disabled, data.disabledFeatures) },
+      target: workspaceId,
+      ok: true,
+    });
     return this.purpose(workspaceId);
   }
+}
+
+/** Sections switched off and on between two stored lists; null when nothing moved. */
+function switched(before: readonly WorkspaceFeature[], after: readonly WorkspaceFeature[]) {
+  const disabled = after.filter((f) => !before.includes(f));
+  const enabled = before.filter((f) => !after.includes(f));
+  return disabled.length || enabled.length ? { disabled, enabled } : null;
 }

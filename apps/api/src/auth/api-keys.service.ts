@@ -6,6 +6,7 @@ import type { Principal } from './principal.js';
 import type { CreateApiKeyDto } from './api-keys.dto.js';
 import { t } from '../i18n/t.js';
 import { mintToken } from './auth-tokens.js';
+import { AuditService } from './audit.service.js';
 
 /** Plenty for "one per machine per client"; a ceiling so a script loop cannot fill the table. */
 const MAX_ACTIVE_KEYS = 50;
@@ -19,7 +20,10 @@ const MAX_ACTIVE_KEYS = 50;
  */
 @Injectable()
 export class ApiKeysService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
   async list(principal: Principal): Promise<ListApiKeysResponse> {
     this.requireSession(principal);
@@ -64,17 +68,33 @@ export class ApiKeysService {
         expiresAt: dto.expiresInDays ? new Date(Date.now() + dto.expiresInDays * 86_400_000) : null,
       },
     });
+    // Filed under the workspace it is pinned to, so that workspace's admins see it (#1251); else a platform event.
+    void this.audit.record({
+      workspaceId: row.workspaceId,
+      actor: principal.userId,
+      action: 'api-key.created',
+      params: { name: row.name, prefix: row.prefix, scope: row.scope, projectIds, toolsets: row.toolsets, expiresAt: row.expiresAt },
+      target: row.id,
+      ok: true,
+    });
     return { key: toInfo(row), apiKey };
   }
 
   /** Soft: the row stays so a 401 from an old config can still be traced to a name. */
   async revoke(principal: Principal, id: string): Promise<void> {
     this.requireSession(principal);
-    const { count } = await this.prisma.apiKey.updateMany({
-      where: { id, userId: principal.userId, revokedAt: null },
-      data: { revokedAt: new Date() },
-    });
+    const where = { id, userId: principal.userId, revokedAt: null };
+    const key = await this.prisma.apiKey.findFirst({ where, select: { name: true, prefix: true, workspaceId: true } });
+    const { count } = key ? await this.prisma.apiKey.updateMany({ where, data: { revokedAt: new Date() } }) : { count: 0 };
     if (count === 0) throw new NotFoundException(t('error.auth.apiKeyNotFound', { id }));
+    void this.audit.record({
+      workspaceId: key!.workspaceId,
+      actor: principal.userId,
+      action: 'api-key.revoked',
+      params: { name: key!.name, prefix: key!.prefix },
+      target: id,
+      ok: true,
+    });
   }
 
   /**
@@ -85,10 +105,13 @@ export class ApiKeysService {
     this.requireSession(principal);
     // One commit (#816): a failed mint must not leave the caller with no key at all.
     return this.prisma.withTransaction(async () => {
-      await this.prisma.apiKey.updateMany({
+      const { count } = await this.prisma.apiKey.updateMany({
         where: { userId: principal.userId, revokedAt: null },
         data: { revokedAt: new Date() },
       });
+      if (count) {
+        void this.audit.record({ workspaceId: null, actor: principal.userId, action: 'api-key.revoked', params: { rotated: count }, ok: true });
+      }
       return this.create(principal, { name: 'Rotated key' });
     });
   }

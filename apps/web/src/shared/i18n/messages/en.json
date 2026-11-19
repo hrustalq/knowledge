@@ -7474,7 +7474,7 @@
     "adminOnly": "Only workspace admins can see the security settings.",
     "audit": {
       "title": "Audit log",
-      "hint": "Graph queries, access-control changes and bypasses, and sign-ins. Newest first.",
+      "hint": "Admin changes, access control, sign-ins and data leaving the workspace. Newest first.",
       "scope": {
         "label": "Show",
         "workspace": "This workspace",
@@ -7482,8 +7482,16 @@
       },
       "platformHint": "Includes sign-ins and other events that belong to no workspace.",
       "filter": {
-        "label": "Action",
-        "all": "All actions"
+        "empty": "Filter the log",
+        "category": "Category",
+        "action": "Action",
+        "actor": "By",
+        "target": "Subject",
+        "targetPlaceholder": "A user or object id",
+        "result": "Result",
+        "from": "From",
+        "to": "to",
+        "clear": "Clear filters"
       },
       "columns": {
         "when": "When",
@@ -7495,7 +7503,7 @@
       },
       "anonymous": "Anonymous",
       "empty": "Nothing recorded yet.",
-      "emptyFiltered": "Nothing recorded for this action.",
+      "emptyFiltered": "Nothing matches these filters.",
       "actions": {
         "graph_query": "Graph query",
         "acl_bypass": "Admin read past a restriction",
@@ -7576,7 +7584,83 @@
         "user_admin_revoked": "Platform admin revoked",
         "user_disabled": "Account disabled",
         "user_enabled": "Account enabled",
-        "user_password_set": "Password set by an admin"
+        "user_password_set": "Password set by an admin",
+        "member_added": "Member added",
+        "member_updated": "Member role changed",
+        "member_removed": "Member removed",
+        "workspace_created": "Workspace created",
+        "workspace_features_updated": "Sections switched on or off",
+        "workspace_purpose_updated": "Workspace purpose saved",
+        "publishing_settings_updated": "Publishing switches changed",
+        "api-key_created": "API key created",
+        "api-key_revoked": "API key revoked",
+        "audit_exported": "Audit log exported",
+        "ai_settings_updated": "AI settings changed",
+        "ai_provider_created": "AI provider added",
+        "ai_provider_updated": "AI provider changed",
+        "ai_provider_deleted": "AI provider removed",
+        "ai_agent_created": "Agent created",
+        "ai_agent_updated": "Agent changed",
+        "ai_agent_deleted": "Agent deleted",
+        "ai_agent_reset": "Agent reset to defaults",
+        "ai_agent_trigger_created": "Agent trigger created",
+        "ai_agent_trigger_updated": "Agent trigger changed",
+        "ai_agent_trigger_deleted": "Agent trigger deleted",
+        "ai_agent_recipe_applied": "Agent recipe applied",
+        "ai_plugin_created": "MCP plugin added",
+        "ai_plugin_updated": "MCP plugin changed",
+        "ai_plugin_deleted": "MCP plugin removed",
+        "ai_skill_created": "Skill created",
+        "ai_skill_updated": "Skill changed",
+        "ai_skill_deleted": "Skill deleted",
+        "ai_skill_imported": "Skill imported",
+        "ai_styleguide_updated": "Styleguide changed",
+        "ai_styleguide_deleted": "Styleguide removed",
+        "ai_lint-policy_updated": "Lint policy changed",
+        "connector_created": "Connector added",
+        "connector_updated": "Connector changed",
+        "connector_deleted": "Connector removed",
+        "connector_link_removed": "Connector link removed",
+        "workflow_created": "Workflow created",
+        "workflow_updated": "Workflow changed",
+        "workflow_deleted": "Workflow deleted",
+        "template_created": "Template created",
+        "template_updated": "Template changed",
+        "template_archived": "Template archived",
+        "template_unarchived": "Template restored",
+        "template_reset": "Template reset to built-in",
+        "glossary_term_created": "Glossary term added",
+        "glossary_term_updated": "Glossary term changed",
+        "glossary_term_deleted": "Glossary term removed"
+      },
+      "categories": {
+        "sign-in": "Sign-in & SSO",
+        "people": "People & keys",
+        "access": "Page access",
+        "workspace": "Workspace",
+        "ai": "AI",
+        "integrations": "Connectors",
+        "content": "Templates, workflows & glossary",
+        "memory": "Memory",
+        "data": "Queries & exports"
+      },
+      "export": {
+        "label": "Export",
+        "csv": "CSV",
+        "json": "JSON",
+        "working": "Exporting…",
+        "hint": "Downloads what the filters show, up to 10,000 entries. The export is recorded here too."
+      },
+      "detail": {
+        "toggle": "Show details",
+        "onlyActor": "Only this actor",
+        "onlyTarget": "Only this subject",
+        "error": "Error",
+        "rows": "Rows",
+        "duration": "Duration",
+        "ms": "{n} ms",
+        "params": "Parameters",
+        "noParams": "None recorded"
       }
     },
     "tabs": {
@@ -8451,46 +8535,46 @@
       "memory": "Agent memory"
     },
     "serverOff": "Off on this server ({env}), whatever is chosen here.",
-      "sectionsTitle": "Sections",
-      "purpose": {
-        "title": "Purpose",
-        "subtitle": "Tick what this workspace is used for. The sections below follow: one no chosen use needs is suggested off, and a section you set yourself stays as you left it. Nothing changes until you apply.",
-        "descriptionLabel": "In your own words (optional)",
-        "descriptionPlaceholder": "We document our public REST API and hold a weekly design review.",
-        "askMe": "Ask me a few questions instead.",
-        "descriptionHint": "Only workspace admins see this.",
-        "apply": "Apply",
-        "switchesOn": "Will switch on.",
-        "switchesOff": "Will switch off.",
-        "suggestsOn": "Your purpose suggests this on.",
-        "suggestsOff": "Your purpose suggests this off.",
-        "uses": {
-          "team-wiki": {
-            "name": "Team wiki",
-            "description": "How the team works: processes, onboarding, decisions and how-tos."
-          },
-          "engineering-docs": {
-            "name": "Engineering docs",
-            "description": "Architecture, services and runbooks, kept next to the code they describe."
-          },
-          "api-docs": {
-            "name": "API product docs",
-            "description": "Reference for an API or SDK: specs, test suites and try-it."
-          },
-          "meeting-notes": {
-            "name": "Meeting notes",
-            "description": "Recordings and notes from meetings, turned into pages."
-          },
-          "support-kb": {
-            "name": "Support knowledge base",
-            "description": "The answers a support team and its bots give customers."
-          },
-          "public-docs": {
-            "name": "Public docs",
-            "description": "Documentation published for readers outside the team."
-          }
+    "sectionsTitle": "Sections",
+    "purpose": {
+      "title": "Purpose",
+      "subtitle": "Tick what this workspace is used for. The sections below follow: one no chosen use needs is suggested off, and a section you set yourself stays as you left it. Nothing changes until you apply.",
+      "descriptionLabel": "In your own words (optional)",
+      "descriptionPlaceholder": "We document our public REST API and hold a weekly design review.",
+      "askMe": "Ask me a few questions instead.",
+      "descriptionHint": "Only workspace admins see this.",
+      "apply": "Apply",
+      "switchesOn": "Will switch on.",
+      "switchesOff": "Will switch off.",
+      "suggestsOn": "Your purpose suggests this on.",
+      "suggestsOff": "Your purpose suggests this off.",
+      "uses": {
+        "team-wiki": {
+          "name": "Team wiki",
+          "description": "How the team works: processes, onboarding, decisions and how-tos."
+        },
+        "engineering-docs": {
+          "name": "Engineering docs",
+          "description": "Architecture, services and runbooks, kept next to the code they describe."
+        },
+        "api-docs": {
+          "name": "API product docs",
+          "description": "Reference for an API or SDK: specs, test suites and try-it."
+        },
+        "meeting-notes": {
+          "name": "Meeting notes",
+          "description": "Recordings and notes from meetings, turned into pages."
+        },
+        "support-kb": {
+          "name": "Support knowledge base",
+          "description": "The answers a support team and its bots give customers."
+        },
+        "public-docs": {
+          "name": "Public docs",
+          "description": "Documentation published for readers outside the team."
         }
       }
+    }
   },
   "git": {
     "clone": {

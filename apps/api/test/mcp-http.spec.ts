@@ -565,7 +565,7 @@ describe('McpService over a principal', () => {
           findUnique: vi.fn(async ({ where }: { where: { workspaceId: string } }) => ({ disabledFeatures: disabled[where.workspaceId] ?? [] })),
         },
       };
-      const features = new FeaturesService(prisma as never, { get: () => true } as never);
+      const features = new FeaturesService(prisma as never, { get: () => true } as never, { record: async () => {} } as never);
       Object.assign(s.mcp as unknown as { prisma: object; features: object }, { prisma, features });
       const offered = async (principal: Principal) =>
         s.mcp.toolsFor(principal, { drafts: fakeDrafts(), offSections: await s.mcp.sectionsOffFor(principal) }).map((t) => t.name);
@@ -1975,7 +1975,7 @@ describe('a key limited to toolsets (#945)', () => {
 
   it('stores core with the chosen toolsets, and refuses an unknown one before anything is written', async () => {
     const create = vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({ id: 'k', createdAt: new Date(), expiresAt: null, lastUsedAt: null, ...data }));
-    const keys = new ApiKeysService({ apiKey: { count: vi.fn(async () => 0), create } } as never);
+    const keys = new ApiKeysService({ apiKey: { count: vi.fn(async () => 0), create } } as never, { record: async () => {} } as never);
     const session = keyPrincipal(undefined as never, { mode: 'session', apiKey: undefined });
     const made = await keys.create(session, { name: 'Graph agent', toolsets: ['graph'] });
     expect(create.mock.calls[0][0].data.toolsets).toEqual(['core', 'graph']);
@@ -2106,7 +2106,7 @@ describe('instructions and skill follow the publish mode (#958)', () => {
       aiLearning: { findMany: vi.fn(async () => []) },
     };
     const projects = { list: vi.fn(async () => ({ projects: [], nextCursor: null })) };
-    Object.assign(s.mcp as unknown as { prisma: object }, { prisma, projects, features: new FeaturesService(prisma as never, { get: () => true } as never) });
+    Object.assign(s.mcp as unknown as { prisma: object }, { prisma, projects, features: new FeaturesService(prisma as never, { get: () => true } as never, { record: async () => {} } as never) });
     const principal = keyPrincipal({ id: 'k', scope: 'write', workspaceId: WS_A });
     expect((await s.mcp.whoami(principal)).workspaces).toMatchObject([{ workspaceId: WS_A, publishMode: 'direct' }]);
     vi.spyOn(s.mcp as unknown as { learningsFor: () => Promise<[]> }, 'learningsFor').mockResolvedValue([]);

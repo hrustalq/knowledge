@@ -84,6 +84,14 @@ export class WorkspacesService {
       }
       return created;
     });
+    void this.audit.record({
+      workspaceId: workspace.id,
+      actor: principal.userId,
+      action: 'workspace.created',
+      params: { name: workspace.name },
+      target: workspace.id,
+      ok: true,
+    });
     return { workspaceId: workspace.id, name: workspace.name };
   }
 
@@ -254,6 +262,14 @@ export class WorkspacesService {
       skipDuplicates: true,
     });
     if (created.count === 1) {
+      void this.audit.record({
+        workspaceId,
+        actor: actorId,
+        action: 'member.added',
+        params: { role: dto.role, trustedOperator: dto.trustedOperator ?? false },
+        target: user.id,
+        ok: true,
+      });
       this.recordCapabilities(workspaceId, user.id, actorId, [], capabilities);
       this.aclEvents.permissionsChanged(workspaceId, [user.id]);
     }
@@ -268,6 +284,7 @@ export class WorkspacesService {
   ): Promise<ListWorkspaceMembersResponse> {
     const member = await this.requireMember(workspaceId, userId);
     const capabilitiesBefore = memberCapabilitiesOf(member.capabilities);
+    const before = { role: member.role, trustedOperator: member.trustedOperator };
     // A row JIT, group sync or SCIM wrote is theirs (#75): a hand edit would be
     // undone at the next sign-in. Taking it over is an explicit act. Read
     // through membershipSourceOf, as the member list is: what shows as manual edits as manual.
@@ -296,6 +313,17 @@ export class WorkspacesService {
         },
       });
     });
+    // One row naming each field that moved, old and new (#1251); a no-op writes nothing.
+    const moved = {
+      ...(dto.role !== undefined && dto.role !== before.role ? { role: { from: before.role, to: dto.role } } : {}),
+      ...(dto.trustedOperator !== undefined && dto.trustedOperator !== before.trustedOperator
+        ? { trustedOperator: { from: before.trustedOperator, to: dto.trustedOperator } }
+        : {}),
+      ...(dto.convertToManual && source !== 'manual' ? { source: { from: source, to: 'manual' } } : {}),
+    };
+    if (Object.keys(moved).length) {
+      void this.audit.record({ workspaceId, actor: actorId, action: 'member.updated', params: moved, target: userId, ok: true });
+    }
     if (dto.capabilities !== undefined) {
       this.recordCapabilities(workspaceId, userId, actorId, capabilitiesBefore, memberCapabilitiesOf(dto.capabilities));
     }
@@ -331,11 +359,19 @@ export class WorkspacesService {
    * cannot fight over, though the next sign-in through that IdP may add them
    * back if a mapping or the default role still says so.
    */
-  async removeMember(workspaceId: string, userId: string): Promise<ListWorkspaceMembersResponse> {
-    await this.requireMember(workspaceId, userId);
+  async removeMember(workspaceId: string, userId: string, actorId: string): Promise<ListWorkspaceMembersResponse> {
+    const member = await this.requireMember(workspaceId, userId);
     if (!(await removeMemberGuarded(this.prisma, workspaceId, userId))) {
       throw new BadRequestException(t('error.workspace.lastAdminRemove'));
     }
+    void this.audit.record({
+      workspaceId,
+      actor: actorId,
+      action: 'member.removed',
+      params: { role: member.role, source: membershipSourceOf(member.source) },
+      target: userId,
+      ok: true,
+    });
     this.aclEvents.permissionsChanged(workspaceId, [userId]);
     return this.listMembers(workspaceId);
   }

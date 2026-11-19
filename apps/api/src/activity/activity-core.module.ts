@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { EventsModule } from '../events/events.module.js';
+import { AuthCoreModule } from '../auth/auth-core.module.js';
 import { ActivityService } from './activity.service.js';
 
 /**
@@ -9,7 +10,9 @@ import { ActivityService } from './activity.service.js';
  * every existing `imports: [ActivityModule]` call site working unchanged.
  */
 @Module({
-  imports: [EventsModule],
+  // AuthCoreModule for AuditService alone (Prisma only, both processes): an admin write's feed row is
+  // copied into the audit trail (#1251).
+  imports: [EventsModule, AuthCoreModule],
   providers: [ActivityService],
   exports: [ActivityService],
 })

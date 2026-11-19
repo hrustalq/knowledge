@@ -9,7 +9,7 @@ platform: configuration, monitoring, users and errors. Workspace settings keep w
 | 2 | [#1237] | [#1276] | The configuration view: `GET /v1/admin/config` |
 | 3 | [#1238] | [#1277] | Monitoring: `GET /v1/admin/health`, `GET /healthz`, heartbeats and sweeper ticks |
 | 4 | [#1239] | [#1278] | Users: the roster, one account's page, `user.*` audit actions; Accounts leaves `/settings/access` |
-| 5 | [#1240] | — | Errors over `ops_events`: `GET /v1/admin/errors`, a `process` column, `OPS_EVENTS_RETENTION_DAYS` |
+| 5 | [#1240] | [#1283] | Errors over `ops_events`: `GET /v1/admin/errors`, a `process` column, `OPS_EVENTS_RETENTION_DAYS` |
 
 [#1236]: https://github.com/hrustalq/knowledge/issues/1236
 [#1237]: https://github.com/hrustalq/knowledge/issues/1237
@@ -20,6 +20,7 @@ platform: configuration, monitoring, users and errors. Workspace settings keep w
 [#1276]: https://github.com/hrustalq/knowledge/pull/1276
 [#1277]: https://github.com/hrustalq/knowledge/pull/1277
 [#1278]: https://github.com/hrustalq/knowledge/pull/1278
+[#1283]: https://github.com/hrustalq/knowledge/pull/1283
 
 ## The app and its door
 

@@ -1071,5 +1071,9 @@
     "splitSpec": "The spec references another file ({ref}). Bundle the spec into one file and link that",
     "specCrawl": "An API spec has no pages under it to crawl. Link it without crawling",
     "kindChanged": "The source now serves {now}, but this page holds {was}"
+  },
+  "configurator": {
+    "notFound": "No configuration proposal {id} that you can see",
+    "nothingToApply": "None of those changes is waiting to be applied"
   }
 }

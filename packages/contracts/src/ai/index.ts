@@ -1434,7 +1434,9 @@ export type AiUsageOperation =
   /** One round of the Describe it interview: the `scaffolder` asking what the brief left open (#731). The draft that ends it is `blueprint-generate`. */
   | 'blueprint-interview'
   /** One call of the workspace purpose interview (#934): a round of questions or the picked uses, on the scaffolder's model. */
-  | 'purpose-interview';
+  | 'purpose-interview'
+  /** The `configurator` drafting a configuration proposal from a goal, with read tools (#1250). One row per model round. */
+  | 'configurator';
 
 export type AiUsageGroupBy = 'user' | 'model' | 'day' | 'project';
 /** The `project` breakdown's bucket for calls made for no single project (#927). */
@@ -1617,6 +1619,8 @@ export const BUILT_IN_AGENT_KEYS = [
   'reflector',
   /** Folds a memory bank's new facts into observations with their evidence (#993). Called only by consolidation, never from the Run button. */
   'consolidator',
+  /** Proposes schedules, triggers and settings for a goal (#1250). Writes only proposals; a person applies them. Never from the Run button. */
+  'configurator',
 ] as const;
 export type BuiltInAgentKey = (typeof BUILT_IN_AGENT_KEYS)[number];
 
@@ -2578,6 +2582,132 @@ export interface ApplyAgentRecipeResponse {
   triggers: AgentTriggerSummary[];
   /** What this press wrote. A re-apply writes nothing that is already there. */
   created: { schedule: boolean; triggers: number };
+}
+
+// ---------------------------------------------------------------------------
+// The configurator (#1250): a goal in, a proposal of concrete configuration
+// changes out. The model only proposes; a person applies, change by change,
+// through the same services the settings screens write with.
+// ---------------------------------------------------------------------------
+
+/**
+ * What a proposal may change. Closed: the model's output, the apply route's
+ * dispatch and the review screen all read this list, so a kind cannot be
+ * proposed without something to apply it (#1311; later phases add kinds).
+ */
+export const CONFIGURATION_CHANGE_KINDS = ['agent-schedule', 'agent-trigger', 'connector-drift-check'] as const;
+export type ConfigurationChangeKind = (typeof CONFIGURATION_CHANGE_KINDS)[number];
+
+/** Give an agent a schedule, or reshape the one it has. Never switches it on or off. */
+export interface AgentScheduleChangeSpec {
+  kind: 'agent-schedule';
+  agentKey: string;
+  scheduleKind: AgentScheduleKind;
+  /** `interval` only. */
+  scheduleMinutes: number | null;
+  /** `daily` / `weekly`: `HH:MM`. */
+  scheduleTime: string | null;
+  /** `weekly`: 0 (Sunday) – 6. */
+  scheduleWeekdays: number[] | null;
+  /** IANA zone; null reads as UTC. */
+  scheduleTimezone: string | null;
+  scheduleNote: string | null;
+}
+
+/** Add a trigger to an agent, disabled. */
+export interface AgentTriggerChangeSpec {
+  kind: 'agent-trigger';
+  agentKey: string;
+  event: AgentTriggerEvent;
+  /** Null hears every project. */
+  projectId: string | null;
+  filter: AgentTriggerFilter;
+  note: string | null;
+}
+
+/** Set a repository connector's drift check (docs/features/35) — what runs the sentinel on its pull requests. */
+export interface ConnectorDriftCheckChangeSpec {
+  kind: 'connector-drift-check';
+  connectorId: string;
+  mode: 'off' | 'report' | 'propose';
+}
+
+export type ConfigurationChangeSpec = AgentScheduleChangeSpec | AgentTriggerChangeSpec | ConnectorDriftCheckChangeSpec;
+
+/**
+ * `unavailable` is decided when the proposal is written and never offered for
+ * apply: the change is already in place, its target does not exist or cannot
+ * take it, or the server's env switches it off.
+ */
+export const CONFIGURATION_CHANGE_STATES = ['pending', 'applied', 'dismissed', 'unavailable'] as const;
+export type ConfigurationChangeState = (typeof CONFIGURATION_CHANGE_STATES)[number];
+
+export const CONFIGURATION_UNAVAILABLE_REASONS = [
+  /** Today's configuration already says this. */
+  'already-configured',
+  /** The agent cannot be scheduled or triggered, or not by this event. */
+  'agent-unsupported',
+  /** The agent, project or connector is not in this workspace. */
+  'not-found',
+  /** The connector's kind has no drift check. */
+  'connector-unsupported',
+  /** `AGENT_SCHEDULE_ENABLED` is off: no schedule would ever run. */
+  'schedules-off',
+  /** `AGENT_TRIGGERS_ENABLED` is off: no trigger would ever fire. */
+  'triggers-off',
+] as const;
+export type ConfigurationUnavailableReason = (typeof CONFIGURATION_UNAVAILABLE_REASONS)[number];
+
+/** One field of a change: what it is today and what applying makes it. */
+export interface ConfigurationDiffRow {
+  /** The spec's field name (`scheduleTime`, `event`, `mode`, …). */
+  field: string;
+  /** Null when nothing is set today (a new trigger has no before). */
+  before: unknown;
+  after: unknown;
+}
+
+export interface ConfigurationChange {
+  /** Stable within its proposal (`c1`, `c2`, …). */
+  id: string;
+  spec: ConfigurationChangeSpec;
+  /** The model's one-line why. Untrusted text. */
+  reason: string;
+  /** Display name of the target (agent, connector), resolved when written. */
+  target: string;
+  diff: ConfigurationDiffRow[];
+  state: ConfigurationChangeState;
+  unavailable: ConfigurationUnavailableReason | null;
+  /** The role apply requires on execution. Every phase-1 kind is workspace-level. */
+  requires: 'admin';
+  appliedAt: string | null;
+  appliedBy: string | null;
+  /** What applying created or changed: the trigger, agent or connector id. */
+  resultId: string | null;
+}
+
+export interface ConfigurationProposal {
+  id: string;
+  workspaceId: string;
+  goal: string;
+  /** The model's closing message. Untrusted text. */
+  summary: string;
+  changes: ConfigurationChange[];
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// POST /v1/ai/configurator/proposals
+export interface ProposeConfigurationResponse {
+  /** Null when the model proposed nothing; `reply` then says why or asks. */
+  proposal: ConfigurationProposal | null;
+  reply: string;
+}
+
+// GET /v1/ai/configurator/proposals
+export interface ListConfigurationProposalsResponse {
+  proposals: ConfigurationProposal[];
 }
 
 /**

@@ -1823,6 +1823,27 @@ model AgentTrigger {
   @@map("agent_triggers")
 }
 
+/// A configuration proposal the configurator wrote (#1250): a goal and the
+/// concrete changes it would take. Nothing here is applied until a person
+/// applies a change; each change's state lives in `changes`, and the
+/// proposal's own status is derived from them, never stored.
+model ConfigurationProposal {
+  id          String @id @default(uuid()) @db.Uuid
+  workspaceId String @map("workspace_id") @db.Uuid
+  goal        String
+  /// The model's closing message.
+  summary     String @default("")
+  /// ConfigurationChange[] (contracts).
+  changes     Json   @default("[]")
+
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@index([workspaceId, createdAt])
+  @@map("configuration_proposals")
+}
+
 /// A correction a person taught an agent (#70): "team guidance" appended to
 /// that agent's later prompts. Only `active` rows reach a prompt, and only an
 /// admin makes a row active — the text is trusted because a person approved

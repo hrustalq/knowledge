@@ -502,6 +502,46 @@
     },
     {
       "method": "GET",
+      "path": "/v1/ai/configurator/proposals",
+      "tag": "ai",
+      "summary": "Recent proposals, newest first: all of them for an admin, your own otherwise",
+      "role": "editor",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/ai/configurator/proposals",
+      "tag": "ai",
+      "summary": "Turn a goal into a configuration proposal",
+      "role": "editor",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/ai/configurator/proposals/{id}/apply",
+      "tag": "ai",
+      "summary": "Apply some of a proposal's pending changes, all or nothing",
+      "role": "editor",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/ai/configurator/proposals/{id}/dismiss",
+      "tag": "ai",
+      "summary": "Set every pending change aside",
+      "role": "editor",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/ai/feedback",
       "tag": "ai",
       "summary": "Votes and implicit signals, newest first (cursor-paginated)",

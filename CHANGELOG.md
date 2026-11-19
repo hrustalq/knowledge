@@ -28,6 +28,14 @@ in the pull request that introduces them — see
 
 ### Added
 
+- **The configurator: describe what should happen and get the setup proposed (#1311).** Settings → AI →
+  Configurator takes a goal such as "every Monday at 09:00 digest what changed, review every page merged in
+  Payments, check pull requests in the api repository for drift". It proposes the agent schedules, agent triggers
+  and repository drift checks that would do it, each shown against what is configured today. Editors can draft a
+  proposal. A workspace admin applies all, some or none of its changes, and each goes through the same settings it
+  would be made in by hand. Schedules and triggers are created switched off, and whoever turns one on owns its
+  runs. A change that is already configured, or that this server switches off, is shown as unavailable with the
+  reason.
 - **Undo and redo in the workflow builder.** Ctrl/Cmd-Z and Ctrl-Y / Shift-Cmd-Z (or the canvas toolbar) step
   through every change to the graph made in the session: moves, connections, added and removed steps, popover and
   drawer edits, imports and architect proposals. Typing a prompt or nudging a step with the arrow keys counts as one
@@ -35,6 +43,14 @@ in the pull request that introduces them — see
 - **Workflow graphs as JSON.** Export a workflow's graph from the builder or the detail page (any member), and import
   one in the builder. An import that is not a graph is refused. One that is a graph but has problems loads as an
   unsaved edit with the problems listed, and Save stays blocked until they are fixed.
+
+### Operations
+
+- Migration `20270209100000_configuration_proposals` adds the `configuration_proposals` table. It is additive and
+  safe under a rollback: the previous image ignores the table. Proposals on a server with
+  `AGENT_SCHEDULE_ENABLED` or `AGENT_TRIGGERS_ENABLED` off mark schedule or trigger changes as unavailable, so
+  turn those on where the configurator should set them up. The configurator uses the `review` route and records
+  usage as the `configurator` operation.
 
 ## [0.60.0] — 2026-11-19
 

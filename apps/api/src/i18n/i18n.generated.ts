@@ -300,6 +300,9 @@ export type I18nTranslations = {
         "interpreterDesc": string;
         "scaffolder": string;
         "scaffolderDesc": string;
+        "configurator": string;
+        "configuratorDesc": string;
+        "configuratorNothingProposed": string;
         "memorist": string;
         "memoristDesc": string;
         "reflector": string;
@@ -1778,6 +1781,10 @@ export type I18nTranslations = {
             "splitSpec": string;
             "specCrawl": string;
             "kindChanged": string;
+        };
+        "configurator": {
+            "notFound": string;
+            "nothingToApply": string;
         };
     };
     "export": {

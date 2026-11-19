@@ -17,6 +17,13 @@ in the pull request that introduces them — see
 
 ### Changed
 
+- **A share link no longer downloads published-site code (#1281).** The public reader now loads only the page for
+  what it is showing: a share link gets the share page, a published site gets the site with its search, Ask and tree,
+  and the Ask widget gets only Ask. A share's Download dialog loads only on links that offer downloads. Together with
+  dropping unused shared definitions from every bundle, a share link's start-up script falls from 534 to 363 KiB
+  (20 files instead of 35), a published site's from 534 to 459 KiB, and the member app's from 795 to 768 KiB.
+  Shares, sites, the password gate and the widget look and behave as before. `make bundle-budget` now checks the
+  reader per view (share 400 KiB, site 505 KiB) instead of the shell alone.
 - **Reading a page no longer downloads the editor (#1280).** The page view and a merge request's review canvas draw
   the body with a read-only view built from the same blocks as the editor, so headings, the outline, links, diagrams,
   comment highlights, glossary links and passage links look and behave as before. The toolbar, slash and `@` menus,

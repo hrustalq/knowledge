@@ -91,6 +91,9 @@ modules/<name>/
   imports `routes.ts` directly rather than through `index.ts`: it imports every
   module, and an index would make the entry chunk depend on whatever it
   re-exports (below). `app-via-module-index` allows exactly these two files.
+  The public reader has no router, so its `routes.ts` is `readerPage(state)`
+  instead: the one lazy page for the view the server resolved (#1281), so a
+  share link never downloads a published site's search, Ask or tree.
 - **`model/api.ts`** holds the module's query keys, `apiQueryOptions` and
   mutation wrappers over the generated client. No hand-written HTTP: the
   `fetch(` ban and its allowlist in `apps/web/eslint.config.js` still apply.

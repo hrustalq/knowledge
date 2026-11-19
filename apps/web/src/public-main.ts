@@ -9,7 +9,8 @@ import ruCatalog from './shared/i18n/reader/ru.json'
 // The UI kit's own strings (`ui.*`): the sheet's close label, the lightboxes, the filter inputs.
 import uiEn from '@knowledge/ui/messages/en.json'
 import uiRuCatalog from '@knowledge/ui/messages/ru.json'
-import { SharePage, SitePage, SiteWidget, type PublicReaderState } from './modules/reader'
+import type { PublicReaderState } from './modules/reader'
+import { readerPage } from './modules/reader/routes'
 import './assets/style.css'
 
 /**
@@ -32,10 +33,10 @@ export function siteReaderMessages(locale: Locale): (typeof en)['siteReader'] {
   return (locale === 'ru' ? ru : en).siteReader
 }
 
-const isSiteView = (state: PublicReaderState) => state.view.kind === 'site' || state.view.kind === 'site-not-found'
-
-export function createPublicApp(state: PublicReaderState) {
-  const root = state.view.kind === 'site-widget' ? SiteWidget : isSiteView(state) ? SitePage : SharePage
+export async function createPublicApp(state: PublicReaderState) {
+  // Only the view's own page is loaded (#1281), and loaded before the app is
+  // built, so the client's mount hydrates synchronously, as it did before.
+  const { default: root } = await readerPage(state)
   const app = createSSRApp({ render: () => h(root, { state }) })
   app.use(
     createI18n({

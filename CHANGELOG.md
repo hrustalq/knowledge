@@ -17,6 +17,12 @@ in the pull request that introduces them — see
 
 ### Changed
 
+- **Reading a page no longer downloads the editor (#1280).** The page view and a merge request's review canvas draw
+  the body with a read-only view built from the same blocks as the editor, so headings, the outline, links, diagrams,
+  comment highlights, glossary links and passage links look and behave as before. The toolbar, slash and `@` menus,
+  drag handle, uploads and AI suggestions now load only on the edit page, and a comment box's editor loads when one is
+  opened. On a 160 KiB test page a read downloads about 132 KiB less script, and the body's interactive view is built
+  once the browser is idle instead of during start-up (mobile hydration 491 → 313 ms in the lab). Editing is unchanged.
 - **Pages in tree or list view no longer download the graph (#1279).** The graph canvas loads the first time the
   Graph view is shown, behind the same skeleton it already used. A cold tree or list load is about 237 KiB of
   script lighter. The graph view itself is unchanged.

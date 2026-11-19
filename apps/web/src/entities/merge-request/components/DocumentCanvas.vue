@@ -26,7 +26,7 @@
  */
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
-import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, toRef, watch } from 'vue'
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, provide, ref, toRef, watch } from 'vue'
 import { useQueryClient } from '@tanstack/vue-query'
 import { Link2, MessageSquarePlus, X } from 'lucide-vue-next'
 import type {
@@ -36,14 +36,13 @@ import type {
   ReviewThreadAnchor,
 } from '@knowledge/contracts'
 import { Button } from '@knowledge/ui/button'
-import { RichEditor } from '@/entities/rich-editor'
+import { RichReader } from '@/entities/rich-editor'
 import { EMBED_DOCUMENT } from '@/entities/rich-editor'
 import { DiagramLightbox, ImageLightbox } from '@knowledge/ui/lightbox'
 import { ANCHOR_ATTR, anchorFromDomSelection, anchorFromRange, anchorsAtEvent, blockRangeAt, linesAt, type AnchorAuthor, type CommentAnchor } from '@/entities/rich-editor'
 import type { TextAnchor } from '@/core/anchor-match'
 import { slugifyHeading } from '@/core/markdown/render'
 import ThreadCard from '@/entities/merge-request/components/ThreadCard.vue'
-import CommentComposer from '@/entities/merge-request/components/CommentComposer.vue'
 import { useMembers } from '@/entities/person'
 import { useAnchoredFloating, type AnchorRect } from '@/shared/composables/use-anchored'
 import { mayContainPageRef } from '@/entities/document'
@@ -55,6 +54,9 @@ import { GLOSSARY_AT_ATTR, GLOSSARY_ATTR, pageTerms } from '@/entities/document'
 import { GlossaryCard } from '@/entities/document'
 import { useDebounceFn, useMediaQuery } from '@vueuse/core'
 import { formatPageRef, splitTitleHeading, type LineSpan } from '@knowledge/editor-schema/markdown'
+
+// The composer is a full editor: loaded when someone starts writing, never for a read (#1280).
+const CommentComposer = defineAsyncComponent(() => import('@/entities/merge-request/components/CommentComposer.vue'))
 
 const { t } = useI18n()
 const queryClient = useQueryClient()
@@ -111,7 +113,7 @@ interface Floater {
 /**
  * The roster behind `[text](Exact Page Title)` references (lib/page-refs).
  * Fetched only when this page actually contains a candidate, so an ordinary
- * page costs nothing; RichEditor re-parses when it lands.
+ * page costs nothing; the reader re-parses when it lands.
  */
 const pageRefs = usePageRefsStore()
 /**
@@ -153,7 +155,7 @@ const lineOffset = computed(() => held.value.heading.split('\n').length - 1)
 
 const canvas = ref<HTMLElement | null>(null)
 const page = ref<HTMLElement | null>(null)
-const editorEl = ref<InstanceType<typeof RichEditor> | null>(null)
+const editorEl = ref<InstanceType<typeof RichReader> | null>(null)
 
 /* ------------------------------------------------------ glossary linking */
 
@@ -809,10 +811,9 @@ function onOutdated(ids: string[]) {
       @pointerover="onGlossaryOver"
       @pointerout="onGlossaryOut"
     >
-      <RichEditor
+      <RichReader
         ref="editorEl"
         :model-value="body"
-        :editable="false"
         :resolve-page="pageRefs.resolve"
         :glossary-terms="glossaryTerms"
         :glossary-exclusions="exclusions"

@@ -340,15 +340,19 @@ without asking again. The page reads the detail from the cache in setup, and
 skips its first re-read and the two-second poll when that copy is fresh and
 its revision settled.
 
-The read view's body is a tiptap editor, built in `onMounted`. Until it
-exists, a read-only `RichEditor` draws the body as static HTML: the markdown
+The read view's body is a read-only tiptap view (`RichReader`, which shares
+`contentExtensions` with `RichEditor` and loads none of its authoring tools,
+#1280). Until it exists, it draws the body as static HTML: the markdown
 parsed and serialized through the editor's own schema (`staticBodyHtml`),
 inside an inert document (jsdom on the server, which `entry-server.ts` loads
 for page routes only). Only nodes, marks and attributes the schema knows
 survive, so it is as safe as the editor itself. The client draws the same once
 more in the hydrating render (`hydration.active`, set by `entry-client.ts`
 around `app.mount`), and skips it on a client navigation, where the editor
-exists in the same tick.
+exists in the same tick. After a hydrating render the view is built once the
+browser is idle (`whenIdle`), not inside `app.mount`: parsing a long page there
+was most of its hydration time, and the static body is already on screen.
+`RichEditor` keeps the same static stand-in for its own read-only uses.
 
 The rail's preview queries and the page's comment threads are off on the server
 and in the hydrating render, and start once the browser is idle after first

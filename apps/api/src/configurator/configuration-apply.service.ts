@@ -1,0 +1,155 @@
+import { BadRequestException, HttpException, Injectable } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
+import { DRIFT_CHECK_CONFIG_KEY, type ConfigurationChange, type ConfigurationProposal } from '@knowledge/contracts';
+import { PrismaService } from '../prisma/prisma.service.js';
+import { AccessService } from '../auth/access.service.js';
+import type { Principal } from '../auth/principal.js';
+import { ActivityService } from '../activity/activity.service.js';
+import { AgentRegistryService } from '../agents/agent-registry.service.js';
+import { AiAgentsService } from '../ai/ai-agents.service.js';
+import { AgentTriggersService } from '../ai/agent-triggers.service.js';
+import { ConnectorsService } from '../connectors/connectors.service.js';
+import { lockSubject } from '../common/subject-lock.js';
+import { t } from '../i18n/t.js';
+import { ConfiguratorService, changesOf, toProposal } from './configurator.service.js';
+
+/**
+ * Applying a configuration proposal (#1250) — a person's act, never the model's.
+ *
+ * Every rule here is the one the change's own settings screen already applies,
+ * because the change goes through that screen's service: `AiAgentsService.update`,
+ * `AgentTriggersService.create`, `ConnectorsService.update`, recorded with the
+ * activity action their route records. On top of that, two checks on execution:
+ *
+ *   1. the role each picked change requires, for the caller, before anything is
+ *      written — an editor who drafted a proposal cannot apply a workspace-level
+ *      change from it (403, nothing written);
+ *   2. each change assessed again against the workspace as it is now, so one
+ *      somebody configured by hand since the proposal was written lands as
+ *      `unavailable`, not as a duplicate.
+ *
+ * All or nothing: the picked changes apply in one transaction under the
+ * proposal's lock, so a refusal on the third change leaves the first two
+ * unwritten, and two admins pressing Apply together apply once.
+ */
+@Injectable()
+export class ConfigurationApplyService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly access: AccessService,
+    private readonly activity: ActivityService,
+    private readonly registry: AgentRegistryService,
+    private readonly agents: AiAgentsService,
+    private readonly triggers: AgentTriggersService,
+    private readonly connectors: ConnectorsService,
+    private readonly configurator: ConfiguratorService,
+  ) {}
+
+  async apply(id: string, workspaceId: string, changeIds: string[], principal: Principal): Promise<ConfigurationProposal> {
+    const seen = await this.configurator.require(id, workspaceId, principal);
+    const wanted = new Set(changeIds);
+    const picked = changesOf(seen).filter((c) => wanted.has(c.id) && c.state === 'pending');
+    if (!picked.length) throw new BadRequestException(t('error.configurator.nothingToApply'));
+    for (const role of new Set(picked.map((c) => c.requires))) {
+      await this.access.requireRole(principal, workspaceId, role);
+    }
+
+    return this.prisma.withTransaction(
+      async () => {
+        await lockSubject(this.prisma, `configuration-proposal:${id}`);
+        // Re-read under the lock: a concurrent apply may have taken some already.
+        const row = await this.prisma.configurationProposal.findUniqueOrThrow({ where: { id } });
+        const now = new Date().toISOString();
+        const changes: ConfigurationChange[] = [];
+        for (const change of changesOf(row)) {
+          if (!wanted.has(change.id) || change.state !== 'pending') {
+            changes.push(change);
+            continue;
+          }
+          const [fresh] = await this.configurator.assess(workspaceId, [{ spec: change.spec, reason: change.reason }]);
+          if (fresh!.unavailable) {
+            changes.push({ ...change, diff: fresh!.diff, state: 'unavailable', unavailable: fresh!.unavailable });
+            continue;
+          }
+          const resultId = await this.applyOne(change, workspaceId, principal, id).catch((error: unknown) => {
+            // Which change was refused, beside the service's own message (flat extras).
+            if (error instanceof HttpException) {
+              throw new HttpException({ statusCode: error.getStatus(), message: error.message, changeId: change.id }, error.getStatus());
+            }
+            throw error;
+          });
+          changes.push({ ...change, spec: fresh!.spec, state: 'applied', appliedAt: now, appliedBy: principal.userId, resultId });
+        }
+        const updated = await this.prisma.configurationProposal.update({
+          where: { id },
+          data: { changes: changes as unknown as Prisma.InputJsonValue },
+        });
+        return toProposal(updated);
+      },
+      { timeout: 20_000 },
+    );
+  }
+
+  /** One change through its own writer. Returns the id of what it wrote. */
+  private async applyOne(change: ConfigurationChange, workspaceId: string, principal: Principal, proposalId: string): Promise<string> {
+    const { spec } = change;
+    const actor = principal.userId;
+    const via = { proposalId, changeId: change.id };
+    switch (spec.kind) {
+      case 'agent-schedule': {
+        // Shape and note only, never `scheduleEnabled`: a new schedule stays off,
+        // and whoever turns it on becomes the owner its runs execute as.
+        const agent = await this.agents.update(
+          workspaceId,
+          spec.agentKey,
+          {
+            workspaceId,
+            scheduleKind: spec.scheduleKind,
+            scheduleMinutes: spec.scheduleMinutes,
+            scheduleTime: spec.scheduleTime,
+            scheduleWeekdays: spec.scheduleWeekdays,
+            scheduleTimezone: spec.scheduleTimezone,
+            ...(spec.scheduleNote === null ? {} : { scheduleNote: spec.scheduleNote }),
+          },
+          actor,
+        );
+        this.afterCommit(workspaceId, actor, 'ai.agent.updated', agent.id ?? undefined, { key: agent.key, ...via });
+        return agent.id ?? spec.agentKey;
+      }
+      case 'agent-trigger': {
+        const trigger = await this.triggers.create(
+          spec.agentKey,
+          { workspaceId, event: spec.event, projectId: spec.projectId, ...spec.filter, note: spec.note, enabled: false },
+          actor,
+        );
+        this.afterCommit(workspaceId, actor, 'ai.agent.trigger.created', trigger.id, {
+          key: trigger.agentKey,
+          event: trigger.event,
+          enabled: false,
+          ...via,
+        });
+        return trigger.id;
+      }
+      case 'connector-drift-check': {
+        const row = await this.connectors.require(spec.connectorId);
+        const config = { ...(row.config as Record<string, string>), [DRIFT_CHECK_CONFIG_KEY]: spec.mode };
+        // No installation reach: the config keeps the installation it has, which needs none.
+        const connector = await this.connectors.update(spec.connectorId, { config });
+        this.afterCommit(workspaceId, actor, 'connector.updated', connector.id, { title: connector.name, fields: ['config'], ...via });
+        return connector.id;
+      }
+    }
+  }
+
+  /**
+   * Activity and the agent cache move only once the writes commit: a record
+   * fired inside the transaction would race its end, and an invalidation before
+   * the commit lets a reader cache the old rows again.
+   */
+  private afterCommit(workspaceId: string, actor: string, action: string, subjectId: string | undefined, metadata: Record<string, unknown>): void {
+    this.prisma.onCommit(async () => {
+      this.registry.invalidate(workspaceId);
+      await this.activity.record({ workspaceId, actor, action, subjectId, metadata });
+    });
+  }
+}

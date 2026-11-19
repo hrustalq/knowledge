@@ -4081,6 +4081,64 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/ai/configurator/proposals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Recent proposals, newest first: all of them for an admin, your own otherwise */
+        get: operations["ConfiguratorController_list"];
+        put?: never;
+        /**
+         * Turn a goal into a configuration proposal
+         * @description The configurator reads the workspace's agents, schedules, triggers, projects and repository connectors and writes a proposal. Nothing is applied: every change waits for a person to apply it. `proposal` is null when it proposed nothing, and `reply` says why.
+         */
+        post: operations["ConfiguratorController_propose"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/ai/configurator/proposals/{id}/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply some of a proposal's pending changes, all or nothing
+         * @description Each change needs its own role, checked now (every current kind: workspace admin); 403 and nothing written otherwise. A change that is already in place by now lands as `unavailable`. Schedules and triggers are written switched off.
+         */
+        post: operations["ConfiguratorController_apply"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/ai/configurator/proposals/{id}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Set every pending change aside */
+        post: operations["ConfiguratorController_dismiss"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workspaces/{id}/home": {
         parameters: {
             query?: never;
@@ -10303,6 +10361,27 @@ export interface components {
             /** @description Monthly token budget; null = unlimited */
             monthlyTokenBudget?: number | null;
         };
+        ProposeConfigurationDto: {
+            /** Format: uuid */
+            workspaceId: string;
+            /** @description What should happen, in the person's words. */
+            goal: string;
+            /**
+             * @description IANA zone a proposed time-of-day schedule is read in when the model names none. Absent reads as UTC.
+             * @example Europe/Moscow
+             */
+            timezone?: string;
+        };
+        ApplyConfigurationDto: {
+            /** Format: uuid */
+            workspaceId: string;
+            /** @description The pending changes to apply, by id (`c1`, …). All or nothing. */
+            changeIds: string[];
+        };
+        ConfiguratorWorkspaceDto: {
+            /** Format: uuid */
+            workspaceId: string;
+        };
         UpdateHomeLayoutDto: {
             /** @description The widgets to show, in order; one left out is hidden. Null (or omitted) goes back to the built-in layout. */
             widgets?: ("metrics" | "actions" | "needs-you" | "recent" | "activity" | "agents")[] | null;
@@ -12351,10 +12430,30 @@ export interface components {
         };
         /** @enum {string} */
         AgentRunTrigger: "manual" | "schedule" | "event" | "webhook" | "report" | "merge-request" | "source";
+        AgentScheduleChangeSpec: {
+            /** @enum {string} */
+            kind: "agent-schedule";
+            agentKey: string;
+            scheduleKind: components["schemas"]["AgentScheduleKind"];
+            scheduleMinutes: number | null;
+            scheduleTime: string | null;
+            scheduleWeekdays: number[] | null;
+            scheduleTimezone: string | null;
+            scheduleNote: string | null;
+        };
         /** @enum {string} */
         AgentScheduleKind: "interval" | "daily" | "weekly";
         /** @enum {string} */
         AgentSurface: "interactive" | "background" | "workflow";
+        AgentTriggerChangeSpec: {
+            /** @enum {string} */
+            kind: "agent-trigger";
+            agentKey: string;
+            event: components["schemas"]["AgentTriggerEvent"];
+            projectId: string | null;
+            filter: components["schemas"]["AgentTriggerFilter"];
+            note: string | null;
+        };
         /** @enum {string} */
         AgentTriggerEvent: "page.merged" | "page.indexed" | "merge-request.opened" | "connector.synced" | "webhook" | "comment.mention" | "work-item.updated";
         AgentTriggerFilter: {
@@ -12647,7 +12746,7 @@ export interface components {
             createdAt: string;
         };
         /** @enum {string} */
-        AiUsageOperation: "ask" | "chat" | "chat-stream" | "review" | "suggest" | "glossary" | "import" | "workflow" | "route" | "agent" | "connector" | "codebase" | "wiki" | "changelog" | "chat-capture" | "component-draft" | "lint" | "audit" | "contradiction" | "community" | "harvest" | "citation_check" | "coach" | "memory-extract" | "memory-recall" | "memory-reflect" | "memory-mental-model" | "memory-consolidate" | "memory-consolidate-screen" | "extraction" | "public_ask" | "test-suite" | "test-fixture-ranking" | "transcription" | "memo" | "memo-triage" | "source-recipe" | "source-judge" | "blueprint-derive" | "blueprint-generate" | "blueprint-interview" | "purpose-interview";
+        AiUsageOperation: "ask" | "chat" | "chat-stream" | "review" | "suggest" | "glossary" | "import" | "workflow" | "route" | "agent" | "connector" | "codebase" | "wiki" | "changelog" | "chat-capture" | "component-draft" | "lint" | "audit" | "contradiction" | "community" | "harvest" | "citation_check" | "coach" | "memory-extract" | "memory-recall" | "memory-reflect" | "memory-mental-model" | "memory-consolidate" | "memory-consolidate-screen" | "extraction" | "public_ask" | "test-suite" | "test-fixture-ranking" | "transcription" | "memo" | "memo-triage" | "source-recipe" | "source-judge" | "blueprint-derive" | "blueprint-generate" | "blueprint-interview" | "purpose-interview" | "configurator";
         AiUsageResponse: {
             from: string;
             to: string;
@@ -13905,6 +14004,40 @@ export interface components {
             from: string;
             to: string | null;
         };
+        ConfigurationChange: {
+            id: string;
+            spec: components["schemas"]["ConfigurationChangeSpec"];
+            reason: string;
+            target: string;
+            diff: components["schemas"]["ConfigurationDiffRow"][];
+            state: components["schemas"]["ConfigurationChangeState"];
+            unavailable: components["schemas"]["ConfigurationUnavailableReason"] | null;
+            /** @enum {string} */
+            requires: "admin";
+            appliedAt: string | null;
+            appliedBy: string | null;
+            resultId: string | null;
+        };
+        ConfigurationChangeSpec: components["schemas"]["AgentScheduleChangeSpec"] | components["schemas"]["AgentTriggerChangeSpec"] | components["schemas"]["ConnectorDriftCheckChangeSpec"];
+        /** @enum {string} */
+        ConfigurationChangeState: "pending" | "applied" | "dismissed" | "unavailable";
+        ConfigurationDiffRow: {
+            field: string;
+            before: unknown;
+            after: unknown;
+        };
+        ConfigurationProposal: {
+            id: string;
+            workspaceId: string;
+            goal: string;
+            summary: string;
+            changes: components["schemas"]["ConfigurationChange"][];
+            createdBy: string;
+            createdAt: string;
+            updatedAt: string;
+        };
+        /** @enum {string} */
+        ConfigurationUnavailableReason: "already-configured" | "agent-unsupported" | "not-found" | "connector-unsupported" | "schedules-off" | "triggers-off";
         ConflictCodeRef: {
             connectorId: string;
             repository: string;
@@ -14022,6 +14155,13 @@ export interface components {
         ConnectorConflictPolicy: "manual" | "external-wins" | "local-wins";
         /** @enum {string} */
         ConnectorDirection: "pull" | "push" | "both";
+        ConnectorDriftCheckChangeSpec: {
+            /** @enum {string} */
+            kind: "connector-drift-check";
+            connectorId: string;
+            /** @enum {string} */
+            mode: "off" | "report" | "propose";
+        };
         ConnectorGithubAccessResponse: {
             configured: boolean;
             /** @enum {string} */
@@ -15738,6 +15878,9 @@ export interface components {
         ListCommunitiesResponse: {
             communities: components["schemas"]["CommunitySummaryDto"][];
         };
+        ListConfigurationProposalsResponse: {
+            proposals: components["schemas"]["ConfigurationProposal"][];
+        };
         ListConflictsResponse: {
             conflicts: components["schemas"]["KnowledgeConflictDto"][];
         };
@@ -16792,6 +16935,10 @@ export interface components {
             documentTitle: string;
             branch: string;
             title: string;
+        };
+        ProposeConfigurationResponse: {
+            proposal: components["schemas"]["ConfigurationProposal"] | null;
+            reply: string;
         };
         ProposeRelationsResponse: {
             documentId: string;
@@ -32146,6 +32293,184 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentOutcomesResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ConfiguratorController_list: {
+        parameters: {
+            query: {
+                workspaceId: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListConfigurationProposalsResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ConfiguratorController_propose: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProposeConfigurationDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProposeConfigurationResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ConfiguratorController_apply: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApplyConfigurationDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigurationProposal"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ConfiguratorController_dismiss: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfiguratorWorkspaceDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigurationProposal"];
                 };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */

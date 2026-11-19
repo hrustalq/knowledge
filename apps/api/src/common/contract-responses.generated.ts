@@ -74,6 +74,7 @@ import type {
   CompareResponse,
   CompleteAttachmentResponse,
   CompleteAvatarUploadResponse,
+  ConfigurationProposal,
   ConnectionBranchesResponse,
   ConnectionLinksResponse,
   ConnectionResourcesResponse,
@@ -207,6 +208,7 @@ import type {
   ListCapturesResponse,
   ListCollabDraftsResponse,
   ListCommunitiesResponse,
+  ListConfigurationProposalsResponse,
   ListConflictsResponse,
   ListConnectionsResponse,
   ListConnectorLinksResponse,
@@ -299,6 +301,7 @@ import type {
   ProjectVerificationSettings,
   ProjectWorkItemRules,
   ProposeAgentFindingResponse,
+  ProposeConfigurationResponse,
   ProposeRelationsResponse,
   PublicShareExport,
   PublicSharePage,
@@ -468,6 +471,7 @@ export interface ContractResponses {
   CompareResponse: CompareResponse;
   CompleteAttachmentResponse: CompleteAttachmentResponse;
   CompleteAvatarUploadResponse: CompleteAvatarUploadResponse;
+  ConfigurationProposal: ConfigurationProposal;
   ConnectionBranchesResponse: ConnectionBranchesResponse;
   ConnectionLinksResponse: ConnectionLinksResponse;
   ConnectionResourcesResponse: ConnectionResourcesResponse;
@@ -601,6 +605,7 @@ export interface ContractResponses {
   ListCapturesResponse: ListCapturesResponse;
   ListCollabDraftsResponse: ListCollabDraftsResponse;
   ListCommunitiesResponse: ListCommunitiesResponse;
+  ListConfigurationProposalsResponse: ListConfigurationProposalsResponse;
   ListConflictsResponse: ListConflictsResponse;
   ListConnectionsResponse: ListConnectionsResponse;
   ListConnectorLinksResponse: ListConnectorLinksResponse;
@@ -693,6 +698,7 @@ export interface ContractResponses {
   ProjectVerificationSettings: ProjectVerificationSettings;
   ProjectWorkItemRules: ProjectWorkItemRules;
   ProposeAgentFindingResponse: ProposeAgentFindingResponse;
+  ProposeConfigurationResponse: ProposeConfigurationResponse;
   ProposeRelationsResponse: ProposeRelationsResponse;
   PublicShareExport: PublicShareExport;
   PublicSharePage: PublicSharePage;

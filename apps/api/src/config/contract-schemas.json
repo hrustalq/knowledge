@@ -2192,6 +2192,60 @@
       "source"
     ]
   },
+  "AgentScheduleChangeSpec": {
+    "type": "object",
+    "properties": {
+      "kind": {
+        "type": "string",
+        "enum": [
+          "agent-schedule"
+        ]
+      },
+      "agentKey": {
+        "type": "string"
+      },
+      "scheduleKind": {
+        "$ref": "#/components/schemas/AgentScheduleKind"
+      },
+      "scheduleMinutes": {
+        "type": "number",
+        "nullable": true
+      },
+      "scheduleTime": {
+        "type": "string",
+        "nullable": true
+      },
+      "scheduleWeekdays": {
+        "anyOf": [
+          {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        ],
+        "nullable": true
+      },
+      "scheduleTimezone": {
+        "type": "string",
+        "nullable": true
+      },
+      "scheduleNote": {
+        "type": "string",
+        "nullable": true
+      }
+    },
+    "required": [
+      "kind",
+      "agentKey",
+      "scheduleKind",
+      "scheduleMinutes",
+      "scheduleTime",
+      "scheduleWeekdays",
+      "scheduleTimezone",
+      "scheduleNote"
+    ]
+  },
   "AgentScheduleKind": {
     "type": "string",
     "enum": [
@@ -2206,6 +2260,42 @@
       "interactive",
       "background",
       "workflow"
+    ]
+  },
+  "AgentTriggerChangeSpec": {
+    "type": "object",
+    "properties": {
+      "kind": {
+        "type": "string",
+        "enum": [
+          "agent-trigger"
+        ]
+      },
+      "agentKey": {
+        "type": "string"
+      },
+      "event": {
+        "$ref": "#/components/schemas/AgentTriggerEvent"
+      },
+      "projectId": {
+        "type": "string",
+        "nullable": true
+      },
+      "filter": {
+        "$ref": "#/components/schemas/AgentTriggerFilter"
+      },
+      "note": {
+        "type": "string",
+        "nullable": true
+      }
+    },
+    "required": [
+      "kind",
+      "agentKey",
+      "event",
+      "projectId",
+      "filter",
+      "note"
     ]
   },
   "AgentTriggerEvent": {
@@ -3532,7 +3622,8 @@
       "blueprint-derive",
       "blueprint-generate",
       "blueprint-interview",
-      "purpose-interview"
+      "purpose-interview",
+      "configurator"
     ]
   },
   "AiUsageResponse": {
@@ -9003,6 +9094,161 @@
       "to"
     ]
   },
+  "ConfigurationChange": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "spec": {
+        "$ref": "#/components/schemas/ConfigurationChangeSpec"
+      },
+      "reason": {
+        "type": "string"
+      },
+      "target": {
+        "type": "string"
+      },
+      "diff": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/ConfigurationDiffRow"
+        }
+      },
+      "state": {
+        "$ref": "#/components/schemas/ConfigurationChangeState"
+      },
+      "unavailable": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/ConfigurationUnavailableReason"
+          }
+        ],
+        "nullable": true
+      },
+      "requires": {
+        "type": "string",
+        "enum": [
+          "admin"
+        ]
+      },
+      "appliedAt": {
+        "type": "string",
+        "nullable": true
+      },
+      "appliedBy": {
+        "type": "string",
+        "nullable": true
+      },
+      "resultId": {
+        "type": "string",
+        "nullable": true
+      }
+    },
+    "required": [
+      "id",
+      "spec",
+      "reason",
+      "target",
+      "diff",
+      "state",
+      "unavailable",
+      "requires",
+      "appliedAt",
+      "appliedBy",
+      "resultId"
+    ]
+  },
+  "ConfigurationChangeSpec": {
+    "anyOf": [
+      {
+        "$ref": "#/components/schemas/AgentScheduleChangeSpec"
+      },
+      {
+        "$ref": "#/components/schemas/AgentTriggerChangeSpec"
+      },
+      {
+        "$ref": "#/components/schemas/ConnectorDriftCheckChangeSpec"
+      }
+    ]
+  },
+  "ConfigurationChangeState": {
+    "type": "string",
+    "enum": [
+      "pending",
+      "applied",
+      "dismissed",
+      "unavailable"
+    ]
+  },
+  "ConfigurationDiffRow": {
+    "type": "object",
+    "properties": {
+      "field": {
+        "type": "string"
+      },
+      "before": {},
+      "after": {}
+    },
+    "required": [
+      "field",
+      "before",
+      "after"
+    ]
+  },
+  "ConfigurationProposal": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "workspaceId": {
+        "type": "string"
+      },
+      "goal": {
+        "type": "string"
+      },
+      "summary": {
+        "type": "string"
+      },
+      "changes": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/ConfigurationChange"
+        }
+      },
+      "createdBy": {
+        "type": "string"
+      },
+      "createdAt": {
+        "type": "string"
+      },
+      "updatedAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id",
+      "workspaceId",
+      "goal",
+      "summary",
+      "changes",
+      "createdBy",
+      "createdAt",
+      "updatedAt"
+    ]
+  },
+  "ConfigurationUnavailableReason": {
+    "type": "string",
+    "enum": [
+      "already-configured",
+      "agent-unsupported",
+      "not-found",
+      "connector-unsupported",
+      "schedules-off",
+      "triggers-off"
+    ]
+  },
   "ConflictCodeRef": {
     "type": "object",
     "properties": {
@@ -9496,6 +9742,33 @@
       "pull",
       "push",
       "both"
+    ]
+  },
+  "ConnectorDriftCheckChangeSpec": {
+    "type": "object",
+    "properties": {
+      "kind": {
+        "type": "string",
+        "enum": [
+          "connector-drift-check"
+        ]
+      },
+      "connectorId": {
+        "type": "string"
+      },
+      "mode": {
+        "type": "string",
+        "enum": [
+          "off",
+          "report",
+          "propose"
+        ]
+      }
+    },
+    "required": [
+      "kind",
+      "connectorId",
+      "mode"
     ]
   },
   "ConnectorGithubAccessResponse": {
@@ -17015,6 +17288,20 @@
       "communities"
     ]
   },
+  "ListConfigurationProposalsResponse": {
+    "type": "object",
+    "properties": {
+      "proposals": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/ConfigurationProposal"
+        }
+      }
+    },
+    "required": [
+      "proposals"
+    ]
+  },
   "ListConflictsResponse": {
     "type": "object",
     "properties": {
@@ -21594,6 +21881,26 @@
       "documentTitle",
       "branch",
       "title"
+    ]
+  },
+  "ProposeConfigurationResponse": {
+    "type": "object",
+    "properties": {
+      "proposal": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/ConfigurationProposal"
+          }
+        ],
+        "nullable": true
+      },
+      "reply": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "proposal",
+      "reply"
     ]
   },
   "ProposeRelationsResponse": {

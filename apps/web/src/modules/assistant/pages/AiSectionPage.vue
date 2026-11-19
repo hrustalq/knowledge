@@ -13,10 +13,12 @@ import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { Badge } from '@knowledge/ui/badge'
 import { usePermission } from '@/stores/permissions'
+import { useFeaturesStore } from '@/stores/features'
 import { aiSectionLabel } from '@/modules/assistant/model/ai-sections'
 import AiConfigPanel from '@/modules/assistant/components/AiConfigPanel.vue'
 import AiCapturePanel from '@/modules/assistant/components/AiCapturePanel.vue'
 import AiAgentsPanel from '@/modules/assistant/components/AiAgentsPanel.vue'
+import ConfiguratorPanel from '@/modules/assistant/components/ConfiguratorPanel.vue'
 import AgentRunsPanel from '@/modules/assistant/components/AgentRunsPanel.vue'
 import AiCoveragePanel from '@/modules/assistant/components/AiCoveragePanel.vue'
 import AiFeedbackPanel from '@/modules/assistant/components/AiFeedbackPanel.vue'
@@ -37,6 +39,7 @@ const label = computed(() => aiSectionLabel(section.value))
 // roster, the styleguide (any member reads the rules they are held to) and the
 // learnings list (any member reads; editors propose), so a non-admin is told plainly rather than shown a wall of 403s.
 const canManage = usePermission('workspace:admin')
+const features = useFeaturesStore()
 </script>
 
 <template>
@@ -45,13 +48,19 @@ const canManage = usePermission('workspace:admin')
   <div class="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-4">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <h1 class="font-display text-2xl font-bold tracking-tight">{{ label ? t(label) : '' }}</h1>
-      <Badge v-if="!canManage" variant="outline">{{ t('ai.readOnlyBadge') }}</Badge>
+      <Badge v-if="!canManage && section !== 'configurator'" variant="outline">{{ t('ai.readOnlyBadge') }}</Badge>
     </div>
 
     <div class="min-h-0 flex-1">
       <AiConfigPanel v-if="section === 'config'" :can-manage="canManage" />
       <AiCapturePanel v-else-if="section === 'capture'" :can-manage="canManage" />
       <AiAgentsPanel v-else-if="section === 'agents'" :can-manage="canManage" />
+      <!-- Its own permission story: editors draft, the API checks the role on apply. Behind the `assistant`
+           section, and v-if rather than v-feature: a hidden panel would still fetch and 404 (#604). -->
+      <template v-else-if="section === 'configurator'">
+        <ConfiguratorPanel v-if="features.isOn('assistant')" />
+        <p v-else class="text-muted-foreground text-sm">{{ t('ai.configurator.assistantOff') }}</p>
+      </template>
       <AgentRunsPanel v-else-if="section === 'runs'" />
       <AiCoveragePanel v-else-if="section === 'coverage'" :can-manage="canManage" />
       <AiFeedbackPanel v-else-if="section === 'feedback'" :can-manage="canManage" />

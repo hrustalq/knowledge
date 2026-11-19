@@ -21,6 +21,8 @@ export const AI_SECTION_GROUPS = [
     sections: [
       { key: 'config', label: 'ai.tabConfig' },
       { key: 'agents', label: 'ai.tabAgents' },
+      // The configurator (#1250): a goal in, schedules and triggers proposed. Editors draft here too.
+      { key: 'configurator', label: 'ai.tabConfigurator' },
       { key: 'skills', label: 'ai.tabSkills' },
       { key: 'learnings', label: 'ai.tabLearnings' },
       { key: 'plugins', label: 'ai.tabPlugins' },

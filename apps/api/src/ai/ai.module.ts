@@ -72,6 +72,7 @@ import { AgentOutcomesController } from './agent-outcomes.controller.js';
   // AgentFindingsService for the drift check's publisher (docs/features/35),
   // which proposes through the very path the Propose button takes.
   // AgentRunsService for the workspace home's running agents (#1243).
-  exports: [AiCoreModule, AgentCoreModule, AiPluginsService, AgentTiebreakService, AgentFindingsService, AgentRunsService],
+  // The agent and trigger writers are exported for the configurator's apply (#1250), which goes through them.
+  exports: [AiCoreModule, AgentCoreModule, AiPluginsService, AgentTiebreakService, AgentFindingsService, AgentRunsService, AiAgentsService, AgentTriggersService],
 })
 export class AiModule {}

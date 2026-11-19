@@ -68,6 +68,7 @@ const GROUP_PREFIXES: Record<string, EnvGroup> = {
   ARCADE_: 'storage',
 
   AUTH_: 'auth',
+  AUDIT_: 'auth',
   ACL_: 'auth',
   ACCESS_REQUEST_: 'auth',
 

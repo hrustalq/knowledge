@@ -155,7 +155,7 @@ describe('ActivityService.record project of a page-less row (#1140)', () => {
       document: { findUnique: vi.fn(), updateMany: vi.fn() },
       connector: { findUnique: vi.fn(async () => (connectorProject ? { projectId: connectorProject } : null)) },
     };
-    return { service: new ActivityService(prisma as never, { publish } as never), create, publish };
+    return { service: new ActivityService(prisma as never, { publish } as never, { record: async () => {} } as never), create, publish };
   };
 
   it('files a connector row under the connector’s project and says so on the frame', async () => {
@@ -182,7 +182,7 @@ describe('ActivityService.list visibility', () => {
   it('filters rows about hidden pages in SQL and pages by (created_at, id)', async () => {
     const queryRaw = vi.fn(async () => []);
     const prisma = { $queryRaw: queryRaw, activityLog: { findMany: vi.fn(async () => []) }, document: { findMany: vi.fn() } };
-    const service = new ActivityService(prisma as never, {} as never);
+    const service = new ActivityService(prisma as never, {} as never, {} as never);
     await service.list(WS, { limit: 10, cursor: OPEN }, scope(BOB, [SECRET]));
     const sql = queryRaw.mock.calls[0] as unknown as [TemplateStringsArray, ...unknown[]];
     const text = JSON.stringify(sql);
@@ -195,7 +195,7 @@ describe('ActivityService.list visibility', () => {
   it('runs no visibility predicate for a caller who sees everything', async () => {
     const queryRaw = vi.fn(async () => []);
     const prisma = { $queryRaw: queryRaw, activityLog: { findMany: vi.fn(async () => []) }, document: { findMany: vi.fn() } };
-    await new ActivityService(prisma as never, {} as never).list(WS, {}, { ...scope(ALICE, []), bypass: true });
+    await new ActivityService(prisma as never, {} as never, {} as never).list(WS, {}, { ...scope(ALICE, []), bypass: true });
     expect(JSON.stringify(queryRaw.mock.calls[0])).not.toContain('EXISTS');
   });
 
@@ -203,7 +203,7 @@ describe('ActivityService.list visibility', () => {
     // A deleted restricted project leaves `denied` empty; its rows must not surface.
     const queryRaw = vi.fn(async () => []);
     const prisma = { $queryRaw: queryRaw, activityLog: { findMany: vi.fn(async () => []) }, document: { findMany: vi.fn() } };
-    await new ActivityService(prisma as never, {} as never).list(WS, {}, scope(ALICE, []));
+    await new ActivityService(prisma as never, {} as never, {} as never).list(WS, {}, scope(ALICE, []));
     const text = JSON.stringify(queryRaw.mock.calls[0]);
     expect(text).toContain('FROM \\"documents\\" d');
     expect(text).toContain('FROM \\"projects\\" p');
@@ -214,7 +214,7 @@ describe('ActivityService.list visibility', () => {
     const queryRaw = vi.fn(async () => []);
     const prisma = { $queryRaw: queryRaw, activityLog: { findMany: vi.fn(async () => []) }, document: { findMany: vi.fn() } };
     const guest = { ...scope(BOB, []), role: 'guest' as const, guest: true, granted: new Set([OPEN]) };
-    await new ActivityService(prisma as never, {} as never).list(WS, {}, guest);
+    await new ActivityService(prisma as never, {} as never, {} as never).list(WS, {}, guest);
     const text = JSON.stringify(queryRaw.mock.calls[0]);
     expect(text).toContain('EXISTS');
     expect(text).not.toContain('NOT EXISTS');

@@ -30,6 +30,15 @@ in the pull request that introduces them — see
 
 ### Added
 
+- **The audit log now covers administration, filters properly and exports (#1251).** Adding, removing or
+  changing a member (with old and new role), creating a workspace, switching sections or saving its purpose,
+  changing publishing switches, creating or revoking an API key, and changes to AI providers, agents, triggers,
+  plugins, skills, styleguides, connectors, workflows, templates and the glossary each leave an audit row with
+  who did it, to what, and what moved. Secrets are stripped before a row is stored. Under Security → Audit log,
+  an admin filters by category, action, actor, subject, date range and outcome, opens a row to read its
+  parameters, and downloads the filtered set as CSV or JSON (up to 10,000 entries). The download is recorded
+  too. Page edits stay in the activity feed, as before.
+
 - **Search performance attribution.** `search.executed` and `make backtest ARGS="--report"` now attribute post-join
   time to fusion, community scoring, methodology levels and re-ranking, page grouping and snippets, placement and
   validity, and analytics enqueueing. Timings are collected through reusable method decorators, isolated between
@@ -75,6 +84,9 @@ in the pull request that introduces them — see
 
 ### Operations
 
+- `AUDIT_RETENTION_DAYS` (default `0`) sets how many days audit rows are kept. Left unset, nothing is ever
+  deleted and existing installs behave as before. When set, the API deletes older rows once an hour, and that
+  cannot be undone, so export first if you need the history. No migration.
 - Migration `20270209100000_configuration_proposals` adds the `configuration_proposals` table. It is additive and
   safe under a rollback: the previous image ignores the table. Proposals on a server with
   `AGENT_SCHEDULE_ENABLED` or `AGENT_TRIGGERS_ENABLED` off mark schedule or trigger changes as unavailable, so

@@ -13,6 +13,17 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Changed
+
+- **Recent pages show each page's state (#1293).** On the workspace home and the project page, a recently updated
+  page used to show only a generic page icon and a time, which repeated what the Activity widget beside it already
+  said. Each row now has the same marks as a row in the page tree: the lifecycle dot (green when indexed, a pulsing
+  amber dot while indexing, red when indexing failed) and, when a page needs a look (outdated, flagged, expired,
+  edited since it was verified, or asked to be checked), the verification diamond. `HomeRecentPage` and `ProjectOverviewResponse.recentPages`
+  gain `headRevisionStatus` and `verification`.
+
 ## [0.61.0] — 2026-11-19
 
 ### Changed

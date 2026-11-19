@@ -1,4 +1,4 @@
-import type { IngestionJobStatus, Locale, RevisionStatus, ScopedSetting } from '@knowledge/contracts/core';
+import type { IngestionJobStatus, Locale, RevisionStatus, ScopedSetting, SourceVerificationState } from '@knowledge/contracts/core';
 import type { FactExtractor } from '@knowledge/contracts/graph';
 import type { ActivityEntry } from '@knowledge/contracts/documents';
 
@@ -1394,7 +1394,7 @@ export interface ProjectOverviewResponse {
     openMergeRequests: number;
   };
   /** Most recently updated pages, capped — the rail links out for the rest. */
-  recentPages: { documentId: string; title: string; updatedAt: string }[];
+  recentPages: HomeRecentPage[];
 }
 
 // GET /v1/projects/:id/git (#636). 404 while the workspace has git switched off.
@@ -1910,10 +1910,14 @@ export interface HomeNeedsYou {
   unreadCount: number;
 }
 
+/** A recently revised page, on the workspace home and the project page (#1293: the marks a tree row draws). */
 export interface HomeRecentPage {
   documentId: string;
   title: string;
   updatedAt: string;
+  /** The default branch head's lifecycle; null for a page with no revision yet. */
+  headRevisionStatus: RevisionStatus | null;
+  verification: SourceVerificationState;
 }
 
 /** A running agent, without its input, findings or subject: the home names what runs, not what it reads. */

@@ -21,7 +21,6 @@ import {
   Activity as ActivityIcon,
   BookMarked,
   Download,
-  FileText,
   Gauge,
   GitBranch,
   GitMerge,
@@ -39,7 +38,7 @@ import { Button } from '@knowledge/ui/button'
 import { Skeleton } from '@knowledge/ui/skeleton'
 import { RailSection } from '@knowledge/ui/layout'
 import { ActivityFeed } from '@/entities/document'
-import { MarkdownView } from '@/entities/document'
+import { MarkdownView, RecentPageRow } from '@/entities/document'
 import { UserChip } from '@/entities/person'
 import ProjectAvatar from '@/modules/projects/components/ProjectAvatar.vue'
 import CloneButton from '@/modules/projects/components/CloneButton.vue'
@@ -250,22 +249,7 @@ const isActive = computed(() => projectId.value === projects.activeId)
             {{ t('project.noPages') }}
           </p>
           <ul v-else class="divide-y rounded-xl border bg-card">
-            <li
-              v-for="page in data?.recentPages ?? []"
-              :key="page.documentId"
-              class="flex items-center gap-2 px-4 py-2.5 text-sm"
-            >
-              <FileText class="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-              <RouterLink
-                :to="`/documents/${page.documentId}`"
-                class="min-w-0 flex-1 truncate font-medium hover:underline"
-              >
-                {{ page.title }}
-              </RouterLink>
-              <span class="shrink-0 text-xs text-muted-foreground">
-                {{ relativeTime(page.updatedAt) }}
-              </span>
-            </li>
+            <RecentPageRow v-for="page in data?.recentPages ?? []" :key="page.documentId" :page="page" />
           </ul>
         </section>
 

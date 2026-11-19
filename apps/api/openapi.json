@@ -47019,7 +47019,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.60.0",
+    "version": "0.61.0",
     "contact": {}
   },
   "tags": [],
@@ -70780,12 +70780,25 @@
           },
           "updatedAt": {
             "type": "string"
+          },
+          "headRevisionStatus": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RevisionStatus"
+              }
+            ],
+            "nullable": true
+          },
+          "verification": {
+            "$ref": "#/components/schemas/SourceVerificationState"
           }
         },
         "required": [
           "documentId",
           "title",
-          "updatedAt"
+          "updatedAt",
+          "headRevisionStatus",
+          "verification"
         ]
       },
       "HomeResponse": {
@@ -77204,23 +77217,7 @@
           "recentPages": {
             "type": "array",
             "items": {
-              "type": "object",
-              "properties": {
-                "documentId": {
-                  "type": "string"
-                },
-                "title": {
-                  "type": "string"
-                },
-                "updatedAt": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "documentId",
-                "title",
-                "updatedAt"
-              ]
+              "$ref": "#/components/schemas/HomeRecentPage"
             }
           }
         },

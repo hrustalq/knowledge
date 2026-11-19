@@ -17,6 +17,14 @@ in the pull request that introduces them — see
 
 ### Changed
 
+- **Search answers faster in large workspaces (#1288).** The semantic half of a search no longer makes ArcadeDB
+  collect every chunk of the workspace before it looks for the nearest ones, a cost that grew with the workspace. It
+  now reads eight times as many nearest neighbours from the whole index and keeps the ones the reader may see; only
+  when too few of them qualify (a small workspace sharing the store, a narrow page allow-list, an old as-of date) does
+  it fall back to the filtered walk, which is cheap in exactly those cases. On the dev store's 6,689-chunk workspace,
+  over 120 title queries, the vector leg's database time fell from 142 to 11 ms at the median (969 → 24 ms p95), and a
+  whole search from 261 to 60 ms (1,301 → 113 ms p95). Results are unchanged: recall@1 43.3% and recall@10 77.5%
+  before and after, and the workspace, live/as-of and page-permission predicates apply exactly as before.
 - **Opening the assistant downloads about 185 KiB less script (#1285).** The graph, search and activity views a
   reply can embed now load only when a reply actually contains one, and a C4 diagram's renderer loads only when a
   reply or page has a C4 block. In the lab's 390 px profile a cold `/assistant` load falls from 1,597 to 1,412 KiB of

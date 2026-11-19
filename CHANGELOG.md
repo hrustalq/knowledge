@@ -98,6 +98,14 @@ in the pull request that introduces them — see
   one in the builder. An import that is not a graph is refused. One that is a graph but has problems loads as an
   unsaved edit with the problems listed, and Save stays blocked until they are fixed.
 
+### Fixed
+
+- **Pages opens straight into your remembered view (#1282).** A reader who left Pages on Tree or List used to see the
+  graph's frame first, then a jump to their view once the page loaded (layout shift 0.21 on desktop). The choice is
+  now also kept in a `kn_docs_view` cookie, so the server renders that view. Cold loads in the lab show no shift on
+  desktop or at 390 px. With no saved choice, or on an `?asOf=` link, Pages still opens on the graph. A choice saved
+  before this release carries over and moves into the cookie on the first visit.
+
 ### Operations
 
 - `AUDIT_RETENTION_DAYS` (default `0`) sets how many days audit rows are kept. Left unset, nothing is ever

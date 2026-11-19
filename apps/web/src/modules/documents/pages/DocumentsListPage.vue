@@ -31,7 +31,7 @@ import { labelFor } from '@/shared/i18n/labels'
 import { usePermission } from '@/stores/permissions'
 import { EMPTY_FILTERS, useDocumentsStore } from '@/stores/documents'
 import { useProjectsStore } from '@/stores/projects'
-import { getProjectId, getWorkspaceId, statusDot, statusVariant } from '@/shared/api/api'
+import { getDocsView, getProjectId, getWorkspaceId, setDocsView, statusDot, statusVariant } from '@/shared/api/api'
 import { fetchApi } from '@/shared/api/queries'
 import { Button } from '@knowledge/ui/button'
 import { Badge } from '@knowledge/ui/badge'
@@ -80,18 +80,18 @@ const VIEWS = [
   { id: 'list' as const, icon: List, label: 'documents.viewList' },
 ]
 
+const isView = (v: unknown): v is View => VIEWS.some((x) => x.id === v)
 /**
- * Starts on the graph for SSR *and* the first client render, then adopts the
- * stored preference after hydration. Reading storage during setup would make
- * the server and client markup disagree, and the graph is a canvas the server
- * cannot draw anyway — so the one frame this costs is a frame that was always
- * going to be a placeholder.
+ * The remembered view comes from the `kn_docs_view` cookie, which the server
+ * reads too, so SSR and the first client render agree and a tree reader never
+ * sees a graph frame swap out (#1282, CLS 0.21 before). No preference, or an
+ * `?asOf=` link (which is about the graph, #81), opens the graph.
  */
-const view = ref<View>('graph')
+const remembered = getDocsView()
+const view = ref<View>(typeof route.query.asOf === 'string' || !isView(remembered) ? 'graph' : remembered)
 /**
- * The canvas is a lazy chunk (#1279), so that placeholder frame is a plain
- * skeleton: hydrating the real one would download the graph before the stored
- * view is read. Called before the storage hook, so both land in one render.
+ * The canvas is a lazy chunk (#1279) the server cannot draw, so the graph's
+ * first frame is a plain skeleton and the chunk loads only after mount.
  */
 const mounted = useMounted()
 
@@ -155,14 +155,16 @@ onServerPrefetch(() =>
   Promise.all([store.treeLoaded ? undefined : store.fetchTree(), store.fetchList({ reset: true })]),
 )
 onMounted(() => {
-  try {
-    const stored = localStorage.getItem(VIEW_KEY) as View | null
-    if (stored && VIEWS.some((v) => v.id === stored)) view.value = stored
-  } catch {
-    /* private mode */
+  // A choice stored before the cookie mirror existed: adopt it once, and write
+  // the cookie so the next load renders it on the server.
+  if (remembered === null && !graphTime.param.value) {
+    try {
+      const stored = localStorage.getItem(VIEW_KEY)
+      if (isView(stored)) setView(stored)
+    } catch {
+      /* private mode */
+    }
   }
-  // An `?asOf=` link is about the graph, so it opens there (#81).
-  if (graphTime.param.value) view.value = 'graph'
   if (view.value === 'graph' && scopeReady.value) void graphTime.loadTimeline()
   if (!store.treeLoaded) void store.fetchTree()
   if (!store.loaded) void store.fetchList({ reset: true })
@@ -171,7 +173,7 @@ onMounted(() => {
 
 function setView(next: View) {
   view.value = next
-  try { localStorage.setItem(VIEW_KEY, next) } catch { /* private mode */ }
+  setDocsView(next)
 }
 
 // The graph is fetched the first time it is actually shown: it is the heaviest

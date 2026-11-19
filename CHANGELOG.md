@@ -31,6 +31,13 @@ in the pull request that introduces them — see
   1.6 Mbps) for both a chat with messages and an empty one, and 156–356 ms on desktop (was 336 ms). Before scripts
   load, the transcript shows its last six messages scrolled to the newest; the rail, composer, streaming, switching
   chats and the mobile chat list behave as before.
+- **A member page asks for its own code as soon as the HTML arrives (#1332).** The browser used to learn about a
+  route's scripts and the language catalogue only after the app's entry script had downloaded and run, so they
+  came in a second, serial wave (from ~3.0 s on a slow phone in the lab profile). The server now lists exactly the
+  files its render used as preloads in the page, and they start with the entry (0.2 s). Nothing new is downloaded:
+  every preloaded file is one the page fetched anyway. In the lab, desktop hydration is 10–35 ms sooner; on the
+  throttled mobile profile, bandwidth is the limit and load times are unchanged. Share links and published sites
+  are left as they were: there, the preloads delayed the first paint on a slow phone.
 
 ## [0.61.0] — 2026-11-19
 

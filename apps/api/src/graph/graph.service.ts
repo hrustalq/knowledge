@@ -63,6 +63,12 @@ type VectorType = 'Chunk' | 'ChatChunk' | 'MemoryUnit';
  * at the same ~30 ms p95. Raise it if a larger corpus loses recall.
  */
 const VECTOR_EF_SEARCH = 400;
+/**
+ * How many unfiltered neighbours `nearestChunks` reads per wanted chunk before
+ * it filters them (#1288), ArcadeDB's own hybrid-leg factor. On the dev store
+ * (6,689 live chunks of 7,421) this kept the filtered top-k (overlap ≥ 0.998).
+ */
+const VECTOR_OVERFETCH = 8;
 /** How long a reader trusts what it learned about the vector index before asking ArcadeDB again. */
 const VECTOR_INDEX_RECHECK_MS = 30_000;
 /**
@@ -450,17 +456,26 @@ export class GraphService {
   }
 
   /**
-   * Nearest neighbours through the index, the candidates restricted by
-   * `where` **inside** the HNSW walk (`filter`), so nothing outside it can
-   * take a top-k slot. Null when the index cannot answer — none yet, another
-   * dimension, or a rejected query — and the caller scans instead.
+   * The `k` nearest chunks matching `where`, through the index, so nothing
+   * outside `where` can take a top-k slot. Null when the index cannot answer
+   * — none yet, another dimension, or a rejected query — and the caller scans.
+   *
+   * Two rounds (#1288). First the `k × VECTOR_OVERFETCH` nearest of the whole
+   * index, with `where` on the outer query: when at least `k` of them match,
+   * they are the top-k of the matching set. Otherwise — a small workspace in a
+   * shared index, a narrow allow-list, an old as-of point — `where` goes
+   * **inside** the HNSW walk (`filter`). That form makes ArcadeDB collect every
+   * matching RID first, a cost that grows with the workspace's chunk count
+   * (~100–700 ms at 6.7k chunks against ~10 ms for the first round), which is
+   * why it runs only when the matching set is rare among the nearest.
    *
    * `where` is a predicate over Chunk built only from code constants and bound
-   * parameters, and always begins with the workspace predicate; the outer
-   * WHERE repeats it, so a store that ignored the filter still could not hand
-   * back another tenant's chunk. ArcadeDB's COSINE `distance` is `1 - cosine`
-   * for any vectors, normalized or not, so `score` is the cosine the scan
-   * computed and every threshold calibrated on it holds.
+   * parameters, and always begins with the workspace predicate; both rounds
+   * apply it to the rows they return, and the workspace is checked again here,
+   * so a store that ignored the filter still could not hand back another
+   * tenant's chunk. ArcadeDB's COSINE `distance` is `1 - cosine` for any
+   * vectors, normalized or not, so `score` is the cosine the scan computed and
+   * every threshold calibrated on it holds.
    */
   private async nearestChunks(
     queryEmbedding: number[],
@@ -470,12 +485,22 @@ export class GraphService {
   ): Promise<ChunkHit[] | null> {
     if (k <= 0) return [];
     if (!(await this.vectorIndexFits(queryEmbedding.length))) return null;
+    const columns = 'chunkId, documentId, revisionId, workspaceId, text, headingPath, distance';
+    const wanted = Math.floor(k);
     try {
-      const rows = await this.arcade.query<NeighbourRow & { workspaceId: string }>(
+      const overfetch = wanted * VECTOR_OVERFETCH;
+      let rows = await this.arcade.query<NeighbourRow & { workspaceId: string }>(
         'sql',
-        `SELECT chunkId, documentId, revisionId, workspaceId, text, headingPath, distance FROM (SELECT expand(vector.neighbors('${VECTOR_INDEX}', :queryVector, :k, { efSearch: ${Math.max(VECTOR_EF_SEARCH, Math.floor(k))}, filter: (SELECT @rid FROM Chunk WHERE ${where}) }))) WHERE workspaceId = :workspaceId`,
-        { ...params, queryVector: queryEmbedding, k: Math.floor(k) },
+        `SELECT ${columns} FROM (SELECT expand(vector.neighbors('${VECTOR_INDEX}', :queryVector, :k, { efSearch: ${Math.max(VECTOR_EF_SEARCH, overfetch)} }))) WHERE ${where}`,
+        { ...params, queryVector: queryEmbedding, k: overfetch },
       );
+      if (rows.length < wanted) {
+        rows = await this.arcade.query<NeighbourRow & { workspaceId: string }>(
+          'sql',
+          `SELECT ${columns} FROM (SELECT expand(vector.neighbors('${VECTOR_INDEX}', :queryVector, :k, { efSearch: ${Math.max(VECTOR_EF_SEARCH, wanted)}, filter: (SELECT @rid FROM Chunk WHERE ${where}) }))) WHERE workspaceId = :workspaceId`,
+          { ...params, queryVector: queryEmbedding, k: wanted },
+        );
+      }
       return rows
         .filter((r) => r.workspaceId === params.workspaceId)
         .map((r) => ({
@@ -1618,10 +1643,11 @@ export class GraphService {
    * then): the `k` chunks nearest `queryEmbedding` that the reader may see.
    *
    * #304: answered by the HNSW index, with the workspace, the live (or as-of)
-   * predicate and the ACL pushed **into** the nearest-neighbour search, so a
-   * chunk of another workspace, a non-live revision or a denied page never
-   * takes a slot. ArcadeDB returns `k` rows, not the corpus. `aclAdmits` still
-   * runs last — the stores only prefilter, PG and this check decide.
+   * predicate and the ACL applied by ArcadeDB before ranking ends
+   * (`nearestChunks`), so a chunk of another workspace, a non-live revision or
+   * a denied page never takes a slot. ArcadeDB returns at most `k ×
+   * VECTOR_OVERFETCH` rows, not the corpus. `aclAdmits` still runs last — the
+   * stores only prefilter, PG and this check decide.
    *
    * Until an index of the query's dimension exists (first boot on this
    * version, a dimension change mid-rebuild) it falls back to the scan.

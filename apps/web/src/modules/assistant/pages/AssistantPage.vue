@@ -13,7 +13,7 @@
 // assistant panel — the same wording from the rail's row menu, the chat header
 // or the panel.
 import { useI18n } from 'vue-i18n'
-import { onMounted, ref } from 'vue'
+import { onMounted, onServerPrefetch, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAssistantStore } from '@/entities/assistant'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@knowledge/ui/sheet'
@@ -22,6 +22,7 @@ import { ChatRail } from '@/entities/assistant'
 import { ChatPane } from '@/entities/assistant'
 import ThreadDocuments from '@/modules/assistant/components/ThreadDocuments.vue'
 import { ThreadDialogs } from '@/entities/assistant'
+import { hydration } from '@/shared/utils/hydration'
 
 const { t } = useI18n()
 
@@ -41,17 +42,27 @@ function onSheetAutoFocus(event: Event) {
 // `?thread=` is an opening instruction (a chat bot's "open the full answer"
 // link, issue #71), not two-way state: the rail drives selection afterwards.
 const linked = typeof route.query.thread === 'string' ? route.query.thread : null
-// Set during setup, so the server render and the first paint already show a
-// chat loading instead of an empty "New chat" that is about to be replaced (#931).
-if (!assistant.activeThread) assistant.resuming = true
-onMounted(() => {
+
+/** The opening move: the linked chat, else the latest one. */
+function open() {
   // A linked chat opens by id, which loads no roster: ask for it too, or the
   // rail waits on skeletons for good.
   if (linked) {
-    void assistant.openThread(linked)
-    if (!assistant.threadsLoaded) void assistant.fetchThreads()
+    return Promise.all([assistant.openThread(linked), assistant.threadsLoaded ? null : assistant.fetchThreads()])
   }
-  else if (!assistant.activeThread) void assistant.openLatest()
+  return assistant.activeThread ? null : assistant.openLatest()
+}
+
+// The server makes the opening move (#1331), so the conversation is in the
+// HTML rather than behind the JS, the hydration and two requests in a row.
+onServerPrefetch(() => open()?.catch(() => undefined))
+// What it settled on — a chat, or none to open — came with the hydrated state.
+const openedOnServer = hydration.active && assistant.threadsLoaded && !assistant.error
+// Set during setup, so the server render and the first paint already show a
+// chat loading instead of an empty "New chat" that is about to be replaced (#931).
+if (!openedOnServer && !assistant.activeThread) assistant.resuming = true
+onMounted(() => {
+  if (!openedOnServer) void open()
 })
 </script>
 

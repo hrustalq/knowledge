@@ -9,13 +9,17 @@
  * is natively interactive, and the only JS upgrades are the three things that
  * genuinely cannot be static — mermaid, whiteboard scenes, and PDF frames.
  *
- * SSR renders nothing (DOMPurify needs a DOM); the client fills in on mount.
+ * The server draws the body too when it has an inert document to sanitize in
+ * (#1331, `inertDocument`): parsed and sanitized as below, decorated by the
+ * host, with the DOM passes left for mount. The hydrating render draws the same
+ * string, or Vue would clear the server's markup before the client's arrived.
  */
 import { nextTick, onMounted, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import DOMPurify from 'dompurify'
 import { markdownToHtml, SANITIZE_CONFIG, slugifyHeading } from '@/core/markdown/render'
-import { sanitizeUntrusted, sanitizeUntrustedSvg } from '@/shared/utils/untrusted-markdown'
+import { purifierFor, sanitizeUntrusted, sanitizeUntrustedSvg } from '@/shared/utils/untrusted-markdown'
+import { hydration, inertDocument } from '@/shared/utils/hydration'
 import { proxyImages } from '@/shared/utils/proxy-images'
 import { parseScene, renderSceneToSvg } from '@/core/markdown/drawing'
 import { KN, attachmentKind, carryDiagramLayout, embedItemsOf, escapeHtml } from '@/core/markdown/nodes'
@@ -55,6 +59,12 @@ const props = withDefaults(
      * remote url()s (shared/utils/untrusted-markdown).
      */
     untrusted?: boolean
+    /**
+     * Marks the host puts on the markup (citation chips): applied to the first,
+     * server-drawn body, which no `rendered` reaches until mount. Hosts run it
+     * from `rendered` too.
+     */
+    decorate?: (root: HTMLElement) => void
   }>(),
   { streaming: false, untrusted: false },
 )
@@ -68,7 +78,7 @@ const pageRefsStore = usePageRefsStore()
 const { t } = useI18n()
 
 const host = ref<HTMLElement | null>(null)
-const html = ref('')
+const html = ref(firstHtml())
 const theme = useTheme()
 
 /**
@@ -93,15 +103,36 @@ const reveal = createRevealTracker()
 /** C4 models (#1244): their hosts in the rendered markup, each with a C4Diagram teleported in. */
 const c4 = shallowRef<C4Block[]>([])
 
+/** Parsed, stripped and its images pointed home (attachments, the image proxy), worked on in `doc`. */
+function cleanHtml(raw: string, doc?: Document): string {
+  // Before it reaches the DOM: an image starts loading the moment it is inserted.
+  const clean = props.untrusted ? sanitizeUntrusted(raw, doc) : purifierFor(doc).sanitize(raw, { ...SANITIZE_CONFIG })
+  return proxyImages(clean, doc)
+}
+
+/**
+ * The body for the server render and the hydrating one (#1331), else ''. No
+ * page-title references: their roster is a request, so they resolve on mount.
+ */
+function firstHtml(): string {
+  if (!(import.meta.env.SSR || hydration.active) || props.streaming) return ''
+  const doc = inertDocument()
+  if (!doc) return ''
+  const out = cleanHtml(markdownToHtml(props.markdown ?? ''), doc)
+  if (!props.decorate) return out
+  const box = doc.createElement('div')
+  box.innerHTML = out
+  props.decorate(box)
+  return box.innerHTML
+}
+
 async function render() {
   const markdown = props.markdown ?? ''
   const resolvePage = await pageRefResolver(markdown)
   const raw = markdownToHtml(markdown, { resolvePage })
   // Unmounted in the same patch that replaces the markup holding their hosts.
   c4.value = []
-  // Stripped and its images pointed home (attachments, the image proxy) before
-  // it reaches the DOM: an image starts loading the moment it is inserted.
-  html.value = proxyImages(props.untrusted ? sanitizeUntrusted(raw) : DOMPurify.sanitize(raw, { ...SANITIZE_CONFIG }))
+  html.value = cleanHtml(raw)
   await nextTick()
   if (props.streaming) {
     const root = host.value

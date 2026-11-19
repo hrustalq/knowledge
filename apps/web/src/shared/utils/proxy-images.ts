@@ -7,9 +7,9 @@ import { imageSrc } from '@/shared/api/api'
  * `src` beside it stays. Rewritten on a `<template>`, whose content belongs to
  * an inert document, so nothing loads from the original URL first.
  */
-export function proxyImages(html: string): string {
+export function proxyImages(html: string, doc: Document = document): string {
   if (!/<img|srcset/i.test(html)) return html
-  const tpl = document.createElement('template')
+  const tpl = doc.createElement('template')
   tpl.innerHTML = html
   for (const el of tpl.content.querySelectorAll('[srcset]')) el.removeAttribute('srcset')
   for (const img of tpl.content.querySelectorAll('img[src]')) img.setAttribute('src', imageSrc(img.getAttribute('src')!))

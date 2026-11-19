@@ -31,6 +31,7 @@ import { MarkdownView } from '@/entities/document'
 import { LazyGenerativeUiBlock as GenerativeUiBlock } from './lazy'
 import ChatMessage from './ChatMessage.vue'
 import { decorateCitations } from '@/entities/assistant/model/citations'
+import { hydration } from '@/shared/utils/hydration'
 import { answerTurns, flowSteps } from '@/entities/assistant/model/flow-steps'
 import AssistantPrompt from './AssistantPrompt.vue'
 import ThinkingTrail from './ThinkingTrail.vue'
@@ -147,6 +148,16 @@ watch(
   { flush: 'sync', immediate: true },
 )
 
+// Keyed so measurements survive a list that grows at the end, and so the
+// tail keeps its measured height across the live → persisted handoff.
+function rowKey(index: number): string | number {
+  const row = rows.value[index]
+  if (!row) return index
+  if (row.kind === 'live') return liveKey.value ?? 'live'
+  const owner = tailOwner.value
+  return owner?.id === row.message.id ? owner.key : row.message.id
+}
+
 const virtualizer = useVirtualizer(
   computed(() => ({
     count: rows.value.length,
@@ -155,19 +166,30 @@ const virtualizer = useVirtualizer(
     // inward as rows measure, undershooting makes it jump outward.
     estimateSize: () => 132,
     overscan: 6,
-    // Keyed so measurements survive a list that grows at the end, and so the
-    // tail keeps its measured height across the live → persisted handoff.
-    getItemKey: (index: number) => {
-      const row = rows.value[index]
-      if (!row) return index
-      if (row.kind === 'live') return liveKey.value ?? 'live'
-      const owner = tailOwner.value
-      return owner?.id === row.message.id ? owner.key : row.message.id
-    },
+    getItemKey: rowKey,
   })),
 )
 
-const items = computed(() => virtualizer.value.getVirtualItems())
+/**
+ * The server render and the hydrating one draw the newest rows in normal flow
+ * (#1331): the virtualizer has no scrollport to measure there, and its
+ * estimated offsets would stack unmeasured rows on top of each other. Enough
+ * of them to fill a screen, so the tail that mount scrolls to is rows already
+ * drawn, patched in place as the virtualizer takes over. Until then the
+ * scrollport is reversed, which opens it at the tail with no script — what
+ * mount would scroll to anyway; the content box grows to fill it, so a short
+ * chat still starts at the top.
+ */
+const FLOW_ROWS = 6
+const virtual = ref(!(import.meta.env.SSR || hydration.active))
+
+const items = computed(() =>
+  virtual.value
+    ? virtualizer.value.getVirtualItems()
+    : rows.value
+        .map((_, index) => ({ index, key: rowKey(index), start: 0 }))
+        .slice(-FLOW_ROWS),
+)
 const totalSize = computed(() => virtualizer.value.getTotalSize())
 
 /** Narrowed row accessor — the template cannot discriminate a union inline. */
@@ -313,11 +335,14 @@ function scrollToEnd(behavior: ScrollBehavior = 'auto') {
 let resizeObserver: ResizeObserver | null = null
 
 onMounted(() => {
+  virtual.value = true
   pinned.value = true
   resizeObserver = new ResizeObserver(() => stickToBottom())
   if (scrollEl.value) resizeObserver.observe(scrollEl.value)
   if (contentEl.value) resizeObserver.observe(contentEl.value)
   stickToBottom()
+  // Again once the flow rows have become virtual ones and the scrollport runs top-down.
+  void nextTick(stickToBottom)
 })
 
 onBeforeUnmount(() => {
@@ -343,12 +368,13 @@ defineExpose({ scrollToEnd })
     <div
       ref="scrollEl"
       class="quiet-scroll h-full overflow-y-auto overscroll-contain"
+      :class="{ 'flex flex-col-reverse': !virtual && rows.length > 0 }"
       @scroll.passive="onScroll"
       @wheel.passive="onWheel"
       @touchstart.passive="onTouchStart"
       @touchmove.passive="onTouchMove"
     >
-      <div ref="contentEl" class="mx-auto w-full max-w-4xl px-4 py-6 @3xl:px-8">
+      <div ref="contentEl" class="mx-auto w-full max-w-4xl shrink-0 grow px-4 py-6 @3xl:px-8">
         <!-- Loading a thread: shaped placeholders, not a spinner over nothing. -->
         <div v-if="loading" class="space-y-6" aria-hidden="true">
           <div class="flex justify-end"><Skeleton class="h-10 w-64 rounded-2xl" /></div>
@@ -394,15 +420,16 @@ defineExpose({ scrollToEnd })
           </ul>
         </div>
 
-        <!-- The transcript. Absolute rows inside a spacer sized to the total. -->
-        <div v-else class="relative w-full" :style="{ height: `${totalSize}px` }">
+        <!-- The transcript. Absolute rows inside a spacer sized to the total, once mounted. -->
+        <div v-else class="relative w-full" :style="virtual ? { height: `${totalSize}px` } : undefined">
           <div
             v-for="item in items"
             :key="String(item.key)"
             :ref="measure"
             :data-index="item.index"
-            class="absolute top-0 left-0 w-full pb-6"
-            :style="{ transform: `translateY(${item.start}px)` }"
+            class="w-full pb-6"
+            :class="{ 'absolute top-0 left-0': virtual }"
+            :style="virtual ? { transform: `translateY(${item.start}px)` } : undefined"
           >
             <template v-if="messageAt(item.index)">
               <ChatMessage

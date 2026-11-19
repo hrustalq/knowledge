@@ -91,10 +91,15 @@ const unsupported = computed(() =>
 const unsupportedSentences = computed(() => (props.message.citations ?? []).filter((c) => c.support === 'unsupported').length)
 watch(unsupported, (markers) => markUnsupported(answerRoot, markers, t('assistant.unsupportedCite')))
 
-function onRendered(root: HTMLElement) {
-  answerRoot = root
+/** Chips for the answer's markers, on every render and on the server-drawn body (#1331). */
+function decorate(root: HTMLElement) {
   decorateCitations(root, knownCites.value)
   markUnsupported(root, unsupported.value, t('assistant.unsupportedCite'))
+}
+
+function onRendered(root: HTMLElement) {
+  answerRoot = root
+  decorate(root)
   if (root.dataset.knCitesBound) return
   root.dataset.knCitesBound = '1'
   const enter = (e: Event) => {
@@ -305,6 +310,7 @@ function saveEdit() {
         untrusted
         class="max-w-[72ch]"
         :streaming="streamingText !== undefined"
+        :decorate="decorate"
         @rendered="onRendered"
       />
 

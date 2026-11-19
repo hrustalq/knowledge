@@ -23,6 +23,14 @@ in the pull request that introduces them — see
   amber dot while indexing, red when indexing failed) and, when a page needs a look (outdated, flagged, expired,
   edited since it was verified, or asked to be checked), the verification diamond. `HomeRecentPage` and `ProjectOverviewResponse.recentPages`
   gain `headRevisionStatus` and `verification`.
+- **The assistant opens with its conversation already on screen (#1331).** Opening `/assistant` used to paint a
+  loading skeleton and show the chat only after the app's scripts had downloaded and hydrated and two requests had
+  run in a row: 5.9 s on a slow phone in the lab profile. The server now opens the latest chat (or the `?thread=`
+  one) itself and sends its newest messages, markdown, citation chips included, in the page, or the intro when that
+  chat is empty. The browser reuses that state instead of asking again. Lab LCP: 1.6 s on mobile (390 px, 4× CPU,
+  1.6 Mbps) for both a chat with messages and an empty one, and 156–356 ms on desktop (was 336 ms). Before scripts
+  load, the transcript shows its last six messages scrolled to the newest; the rail, composer, streaming, switching
+  chats and the mobile chat list behave as before.
 
 ## [0.61.0] — 2026-11-19
 

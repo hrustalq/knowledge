@@ -116,6 +116,8 @@ async function prefetchPage(router: Router, queryClient: QueryClient) {
   const route = router.currentRoute.value
   // The home (#1243): one read, so it renders with JS off.
   if (route.path === '/') return prefetchForRender(queryClient, homeQuery())
+  // The assistant draws its opening conversation's markdown on the server (#1331).
+  if (route.path === '/assistant') return installSsrDocument()
   if (route.matched.at(-1)?.path !== '/documents/:id') return
   const id = route.params.id as string
   // The page's own `contentAt`: an explicit revision wins over `?asOf=`.

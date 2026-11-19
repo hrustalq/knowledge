@@ -147,6 +147,18 @@ export interface SearchExecutedEvent extends BacktestEventBase {
   embedMs?: number;
   /** The PG join that applies page permissions and reads trust, after the legs (#1242). */
   joinMs?: number;
+  /** Relevance floors and reciprocal-rank fusion, including a refill round. */
+  fuseMs?: number;
+  /** Readable community scoring; overlaps the PG join. */
+  communityMs?: number;
+  /** Methodology levels, community/trust weights and the final score sort. */
+  rerankMs?: number;
+  /** Page grouping, snippets and result shaping. */
+  resultsMs?: number;
+  /** Community paths and layers, plus validity stamps for an as-of search. */
+  placementMs?: number;
+  /** Synchronous analytics enqueue; the database write stays fire-and-forget. */
+  analyticsMs?: number;
   vectorHits: number;
   fulltextHits: number;
   fusedHits: number;

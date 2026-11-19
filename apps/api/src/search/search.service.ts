@@ -28,12 +28,13 @@ import { AnalyticsRecorder, type AnalyticsCaller } from '../analytics/analytics.
 import { CommunitiesService } from '../communities/communities.service.js';
 import { layerParents } from '../graph/layers.js';
 import type { SearchDto } from './search.dto.js';
-import { communityPrior, firstPerPage, floorTextHits, floorVectorHits, fuseHits, levelBoost, rerankScorer, type PriorCommunity, type SearchPool } from './ranking.js';
+import { communityPrior, firstPerPage, floorTextHits, floorVectorHits, fuseHits, levelBoost, rerankScorer, type PriorCommunity, type SearchKnobs, type SearchPool } from './ranking.js';
 import { pageLevel, projectLevels } from '../projects/methodology-scope.js';
 import { flatFollow, layeredFollow, walkRelated } from './expansion.js';
 import { snippetPartsOf } from './snippet.js';
 import { sourceSyncOf } from '../documents/source-backed.js';
 import { currentLocale } from '../i18n/t.js';
+import { currentTimings, Timed, TimingScope } from '../common/timing.decorator.js';
 
 @Injectable()
 export class SearchService {
@@ -68,6 +69,7 @@ export class SearchService {
    * state of every page they named, so it can re-rank the same retrieval under
    * other knobs without searching again. Absent everywhere else.
    */
+  @TimingScope()
   async search(
     dto: SearchDto,
     scope: AccessScope,
@@ -174,9 +176,7 @@ export class SearchService {
     // #475: the communities the reader may see whole, read beside the PG join
     // below — for the prior and every result's `communityPath`. Scored only
     // when something reads the score, with the embedding the vector leg made.
-    const communitiesRead: Promise<Array<PriorCommunity & { title: string }>> = at
-      ? Promise.resolve([])
-      : (async () => this.communities.scored(scope, (priorOn || observe) && embedding ? await embedding : undefined))();
+    const communitiesRead = at ? Promise.resolve([]) : this.readCommunities(scope, priorOn || !!observe, embedding);
     // Join PG for authoritative titles (three-store separation: PG owns
     // metadata), for everything the trust re-rank reads — the stamp, the flag,
     // the owner, the freshness clock and the archive mark — and for the
@@ -193,23 +193,9 @@ export class SearchService {
     let docById = new Map<string, Awaited<ReturnType<SearchService['loadDocs']>>[number]>();
     let trustOf = new Map<string, DocumentTrust>();
     let aclFiltered = 0;
-    // The PG join + trust read, summed over the refill round (#1242).
-    let joinMs = 0;
     const join = async () => {
-      const pool = [...vectorHits, ...textHits];
-      if (pool.length === 0) return;
-      const joinStart = process.hrtime.bigint();
-      const docs = await this.loadDocs([...new Set(pool.map((h) => h.documentId))], scope);
-      // #716: a scaffold stub has no chunks to match, so this only keeps one
-      // out should a stub ever be indexed — search and Ask never show a skeleton.
-      const pages = docs.filter((d) => {
-        const head = d.branches.find((b) => b.name === d.defaultBranch)?.headRevisionId;
-        return !isScaffoldStub(d.revisions.find((r) => r.id === head));
-      });
-      docById = new Map(pages.map((d) => [d.id, d]));
-      trustOf = await this.trustOf(pages, await this.policy.thresholds(dto.workspaceId));
-      aclFiltered = new Set(pool.filter((h) => !docById.has(h.documentId)).map((h) => h.chunkId)).size;
-      joinMs += since(joinStart);
+      const joined = await this.join(vectorHits, textHits, scope, dto.workspaceId);
+      if (joined) ({ docById, trustOf, aclFiltered } = joined);
     };
     // Archived pages drop first, whatever the switch says: they are put away,
     // not demoted.
@@ -227,10 +213,9 @@ export class SearchService {
     // The relevance floors (#401, #416) drop weak evidence from each leg before fusion.
     let vectorFloored = 0;
     const fuse = () => {
-      const vector = vectorHits.filter(admits);
-      const floored = floorVectorHits(vector, settings);
-      vectorFloored = vector.length - floored.length;
-      return fuseHits(floored, floorTextHits(textHits.filter(admits)), fetchK, settings.rrfK);
+      const fused = this.fuse(vectorHits, textHits, fetchK, settings, admits);
+      vectorFloored = fused.vectorFloored;
+      return fused.hits;
     };
     await join();
     let hits = fuse();
@@ -243,6 +228,7 @@ export class SearchService {
      * harness that only sees successful searches overstates recall.
      */
     const record = (out: SearchResult[]): { searchId?: string } => {
+      const searchId = this.recordAnalytics(caller, dto, mode, out, since(startedAt));
       const trace = currentTrace();
       emitBacktest({
         ...(trace ?? { traceId: 'unscoped', source: 'cli' as const }),
@@ -256,7 +242,7 @@ export class SearchService {
         fetchK,
         vectorMs: useVector ? vectorMs : undefined,
         embedMs,
-        joinMs,
+        ...currentTimings(),
         fulltextMs: useText || degraded.length ? fulltextMs : undefined,
         tagsMs: tagKeys ? tagsMs : undefined,
         vectorHits: vectorHits.length,
@@ -269,16 +255,6 @@ export class SearchService {
         ...(at ? { asOf: dto.asOf ?? 'now' } : {}),
         results: out.map((r) => ({ documentId: r.documentId, chunkId: r.chunkId, score: r.score })),
       });
-      const searchId =
-        caller &&
-        this.analytics.search(caller, {
-          workspaceId: dto.workspaceId,
-          query: dto.query,
-          mode,
-          projectIds: dto.filters?.projectIds ?? [],
-          resultDocIds: [...new Set(out.map((r) => r.documentId))],
-          durationMs: since(startedAt),
-        });
       return searchId ? { searchId } : {};
     };
 
@@ -306,44 +282,10 @@ export class SearchService {
     }
 
     const readable = await communitiesRead;
-    const prior = priorOn ? communityPrior(readable, settings) : new Map<string, number>();
-    // Each page's methodology level (#1126): on every result, and the level prior when the search names one.
-    const levelsByProject = await projectLevels(this.prisma, [...docById.values()].map((d) => d.projectId));
-    const locale = currentLocale();
-    const levelOfPage = new Map(
-      [...docById.values()].flatMap((d) => {
-        const level = pageLevel(d.templateRef, levelsByProject.get(d.projectId), locale);
-        return level ? [[d.id, level] as const] : [];
-      }),
-    );
+    const { weighted, levelOfPage } = await this.rerank(dto, hits, docById, trustOf, readable, settings, trustOn, priorOn);
 
-    // The multiplicative weight, a re-sort, and only then the cut to k — the
-    // weight is the point of the over-fetch above.
-    const scoreOf = rerankScorer(hits, dto.query);
-    const weighted = hits.map((h) => {
-      const trust = trustOf.get(h.documentId);
-      const weight = trustOn && trust ? trustWeight(trust.status, trust.inactive, settings.trustWeights) : 1;
-      const boost = (prior.get(h.documentId) ?? 1) * levelBoost(levelOfPage.get(h.documentId)?.key, dto.level);
-      return { hit: h, documentId: h.documentId, score: scoreOf(h, weight, boost), trust };
-    });
-    weighted.sort((a, b) => b.score - a.score);
-
-    // By page, each page's best chunk after the re-sort, then the cut.
-    const ranked = byPage ? firstPerPage(weighted) : weighted;
-    const results: SearchResult[] = ranked.slice(0, k).map(({ hit: h, score, trust }) => ({
-      documentId: h.documentId,
-      revisionId: h.revisionId,
-      chunkId: h.chunkId,
-      title: docById.get(h.documentId)?.title ?? '(unknown)',
-      snippet: h.text.slice(0, 300),
-      ...(byPage ? { snippetParts: snippetPartsOf(h.text, dto.query) } : {}),
-      score: Number(score.toFixed(4)),
-      ...(h.vectorScore !== undefined ? { vectorScore: Number(h.vectorScore.toFixed(4)) } : {}),
-      headingPath: h.headingPath ?? [],
-      ...(trust ? { trust } : {}),
-      ...(levelOfPage.has(h.documentId) ? { level: levelOfPage.get(h.documentId)! } : {}),
-    }));
-    await Promise.all([at ? this.attachValidity(results) : undefined, this.attachPlacement(dto.workspaceId, results, readable, acl, at)]);
+    const results = this.buildResults(weighted, docById, levelOfPage, dto, byPage, k);
+    await this.attachResultMetadata(dto.workspaceId, results, readable, acl, at);
 
     const recorded = record(results);
     if (observe) {
@@ -378,6 +320,125 @@ export class SearchService {
       return { results, related, ...health(), ...recorded };
     }
     return { results, ...health(), ...recorded };
+  }
+
+  @Timed('communityMs')
+  private async readCommunities(scope: AccessScope, withScores: boolean, embedding: Promise<number[]> | null) {
+    return this.communities.scored(scope, withScores && embedding ? await embedding : undefined);
+  }
+
+  @Timed('joinMs')
+  private async join(vectorHits: ChunkHit[], textHits: FulltextHit[], scope: AccessScope, workspaceId: string) {
+    const pool = [...vectorHits, ...textHits];
+    if (pool.length === 0) return;
+    const docs = await this.loadDocs([...new Set(pool.map((h) => h.documentId))], scope);
+    // #716: a scaffold stub has no chunks to match, so this only keeps one
+    // out should a stub ever be indexed — search and Ask never show a skeleton.
+    const pages = docs.filter((d) => {
+      const head = d.branches.find((b) => b.name === d.defaultBranch)?.headRevisionId;
+      return !isScaffoldStub(d.revisions.find((r) => r.id === head));
+    });
+    const docById = new Map(pages.map((d) => [d.id, d]));
+    const trustOf = await this.trustOf(pages, await this.policy.thresholds(workspaceId));
+    const aclFiltered = new Set(pool.filter((h) => !docById.has(h.documentId)).map((h) => h.chunkId)).size;
+    return { docById, trustOf, aclFiltered };
+  }
+
+  @Timed('fuseMs')
+  private fuse(vectorHits: ChunkHit[], textHits: FulltextHit[], fetchK: number, settings: SearchKnobs, admits: (h: { documentId: string }) => boolean) {
+    const vector = vectorHits.filter(admits);
+    const floored = floorVectorHits(vector, settings);
+    return {
+      hits: fuseHits(floored, floorTextHits(textHits.filter(admits)), fetchK, settings.rrfK),
+      vectorFloored: vector.length - floored.length,
+    };
+  }
+
+  @Timed('rerankMs')
+  private async rerank(
+    dto: SearchDto,
+    hits: ReturnType<SearchService['fuse']>['hits'],
+    docById: Map<string, Awaited<ReturnType<SearchService['loadDocs']>>[number]>,
+    trustOf: Map<string, DocumentTrust>,
+    readable: ReadonlyArray<PriorCommunity & { title: string }>,
+    settings: SearchKnobs,
+    trustOn: boolean,
+    priorOn: boolean,
+  ) {
+    const prior = priorOn ? communityPrior(readable, settings) : new Map<string, number>();
+    // Each page's methodology level (#1126): on every result, and the level prior when the search names one.
+    const levelsByProject = await projectLevels(this.prisma, [...docById.values()].map((d) => d.projectId));
+    const locale = currentLocale();
+    const levelOfPage = new Map(
+      [...docById.values()].flatMap((d) => {
+        const level = pageLevel(d.templateRef, levelsByProject.get(d.projectId), locale);
+        return level ? [[d.id, level] as const] : [];
+      }),
+    );
+
+    // The multiplicative weight, a re-sort, and only then the cut to k — the
+    // weight is the point of the over-fetch above.
+    const scoreOf = rerankScorer(hits, dto.query);
+    const weighted = hits.map((h) => {
+      const trust = trustOf.get(h.documentId);
+      const weight = trustOn && trust ? trustWeight(trust.status, trust.inactive, settings.trustWeights) : 1;
+      const boost = (prior.get(h.documentId) ?? 1) * levelBoost(levelOfPage.get(h.documentId)?.key, dto.level);
+      return { hit: h, documentId: h.documentId, score: scoreOf(h, weight, boost), trust };
+    });
+    weighted.sort((a, b) => b.score - a.score);
+    return { weighted, levelOfPage };
+  }
+
+  @Timed('resultsMs')
+  private buildResults(
+    weighted: Awaited<ReturnType<SearchService['rerank']>>['weighted'],
+    docById: Map<string, Awaited<ReturnType<SearchService['loadDocs']>>[number]>,
+    levelOfPage: Awaited<ReturnType<SearchService['rerank']>>['levelOfPage'],
+    dto: SearchDto,
+    byPage: boolean,
+    k: number,
+  ): SearchResult[] {
+    // By page, each page's best chunk after the re-sort, then the cut.
+    const ranked = byPage ? firstPerPage(weighted) : weighted;
+    return ranked.slice(0, k).map(({ hit: h, score, trust }) => ({
+      documentId: h.documentId,
+      revisionId: h.revisionId,
+      chunkId: h.chunkId,
+      title: docById.get(h.documentId)?.title ?? '(unknown)',
+      snippet: h.text.slice(0, 300),
+      ...(byPage ? { snippetParts: snippetPartsOf(h.text, dto.query) } : {}),
+      score: Number(score.toFixed(4)),
+      ...(h.vectorScore !== undefined ? { vectorScore: Number(h.vectorScore.toFixed(4)) } : {}),
+      headingPath: h.headingPath ?? [],
+      ...(trust ? { trust } : {}),
+      ...(levelOfPage.has(h.documentId) ? { level: levelOfPage.get(h.documentId)! } : {}),
+    }));
+  }
+
+  @Timed('placementMs')
+  private async attachResultMetadata(
+    workspaceId: string,
+    results: SearchResult[],
+    readable: ReadonlyArray<PriorCommunity & { title: string }>,
+    acl: DocumentAclFilter,
+    at?: TemporalPoint,
+  ): Promise<void> {
+    await Promise.all([at ? this.attachValidity(results) : undefined, this.attachPlacement(workspaceId, results, readable, acl, at)]);
+  }
+
+  @Timed('analyticsMs')
+  private recordAnalytics(caller: AnalyticsCaller | undefined, dto: SearchDto, mode: string, out: SearchResult[], durationMs: number) {
+    return (
+      caller &&
+      this.analytics.search(caller, {
+        workspaceId: dto.workspaceId,
+        query: dto.query,
+        mode,
+        projectIds: dto.filters?.projectIds ?? [],
+        resultDocIds: [...new Set(out.map((r) => r.documentId))],
+        durationMs,
+      })
+    );
   }
 
   /**

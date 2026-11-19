@@ -233,6 +233,56 @@ drops it in a later release.
 also the base of the MCP URL every snippet contains (`$API_PUBLIC_URL/v1/mcp`).
 Behind the production Caddyfile that is `https://<host>/api`.
 
+## Client checks
+
+Each client is driven against production with the config the wizard hands out, pasted as is (#1209). A row
+records the version checked and five cases:
+
+- **Connect:** the pasted config lists the knowledge tools and `knowledge_whoami` answers.
+- **Skill:** the client loads the generated SKILL.md.
+- **Ticket first:** given a ticket, the first content call is `knowledge_context`, with `repo` set from
+  `git remote get-url origin`.
+- **Hook nudge** (only `CAPTURE_KIT_CLIENTS`): one nudge per ticket, none for a second read of the same ticket, a new
+  one for a new ticket.
+- **Capture:** a session that settled something proposes a `knowledge_capture_*` that becomes a merge request.
+
+Last run: prod **v0.61.0**, 2026-11-20. The owner could run only Claude Code and Kimi Code CLI, so every other row says
+so instead of claiming a result.
+
+| Client                     | Version | Connect     | Skill       | Ticket first | Hook nudge          | Capture     |
+| -------------------------- | ------- | ----------- | ----------- | ------------ | ------------------- | ----------- |
+| Claude Code                | 2.1.328 | pass        | pass        | pass ¹       | pass, one gap #1340 | pass ²      |
+| Kimi Code                  | 2.6.3   | pass ³      | pass        | fail #1341   | n/a (no hook)       | fail #1341  |
+| Codex                      | —       | not checked | not checked | not checked  | n/a (no hook)       | not checked |
+| Cursor                     | —       | not checked | not checked | not checked  | not checked         | not checked |
+| Every other client (below) | —       | not checked | not checked | not checked  | n/a (no hook)       | not checked |
+
+"Not checked" means no access: Codex and Cursor are not installed on the machine that ran the checks (Cursor also needs
+a GUI session), and the rest — Gemini CLI, Qwen Code, DeepSeek Harness, pi, Oh My Pi, Hermes Agent, VS Code, Claude
+Desktop, Windsurf, opencode, Zed and the generic MCP client — were out of reach for the same reason.
+
+¹ Claude Code (Haiku, headless, only the repo's skills via `--setting-sources project,local`) called
+`knowledge_whoami` once before `knowledge_context`, to get the workspace id, then `knowledge_context` with the ticket
+title, the scp remote and, on the second ticket, `exclude` set to what it had been shown. It opened only the verified
+page. When the prompt itself scripted every step ("implement issue 128 …"), it read the nudge and skipped the call,
+as on v0.56.0.
+
+² The capture kit's Stop reminder reached the model after it edited `deploy.sh`. It called `knowledge_find_similar`,
+then `knowledge_capture_decision`, answered the three `needs_input` questions (project, related page, reviewer) through
+the person, and the capture became an open merge request amending the verified page (`provenance: captured`). The
+title prefix followed the key owner's account locale (ru), not the session's language.
+
+³ The pasted `.kimi-code/mcp.json` connects and Kimi discovers all 94 tools, but only once the folder is trusted
+("Trust this folder" or `KIMI_CODE_TRUST_WORKSPACE=1`); an untrusted folder skips a project-level server with a
+warning. The model's tool list then held no MCP tools at all, headless (`kimi -p`) or over ACP, so it reported the
+server as not connected. #1341 tracks the cause.
+
+The hook gap (#1340): `gh issue view 128; gh issue view 131` in one command nudges only for the first ticket. Separate
+commands nudge correctly, and a ticket pasted as the prompt (`ORION-140 — …`) got its one `UserPromptSubmit` nudge.
+
+The wizard's "Context when a ticket starts" block was checked on the Skill step in en and ru (Claude Code, "I build
+software").
+
 ## Not done
 
 - **OAuth.** Clients that only speak OAuth for remote servers (Claude Desktop's

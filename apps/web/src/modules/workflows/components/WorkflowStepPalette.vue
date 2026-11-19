@@ -1,29 +1,21 @@
 <script setup lang="ts">
 /**
- * The four things a workflow can do, as a rail you drag from.
+ * The things a workflow can do, as buttons on the canvas's toolbar (#1246).
  *
  * The catalogue is closed — every kind maps to an executor in the worker — so
- * this is a complete list rather than a menu that scrolls. Showing all four at
+ * this is the whole list rather than a menu that scrolls. Showing every kind at
  * once is what makes the model learnable: an operator who has never built a
- * chain can read the rail top to bottom and know the whole vocabulary before
- * placing anything.
+ * chain can read the row and know the vocabulary before placing anything.
  *
  * Drag *or* click. Dragging is the canvas gesture and where a step lands is
- * where you dropped it; clicking adds one and lets the layout decide, which is
- * the path that works with a keyboard and on a touch screen.
+ * where you dropped it; clicking adds one after the selected step (or lets the
+ * layout place it), which is the path that works with a keyboard and on touch.
  */
 import { useI18n } from 'vue-i18n'
 import type { WorkflowStepKind } from '@knowledge/contracts'
 import { STEP_KINDS } from '@/entities/workflow'
 
-withDefaults(
-  defineProps<{
-    canManage: boolean
-    /** `strip` is the narrow-screen form: one scrolling row, no hints. */
-    orientation?: 'rail' | 'strip'
-  }>(),
-  { orientation: 'rail' },
-)
+defineProps<{ canManage: boolean }>()
 const emit = defineEmits<{ add: [WorkflowStepKind] }>()
 
 const { t } = useI18n()
@@ -36,11 +28,7 @@ function onDragStart(event: DragEvent, kind: WorkflowStepKind) {
 </script>
 
 <template>
-  <div v-if="orientation === 'strip'" class="kn-scroll-strip flex items-center gap-1 overflow-x-auto">
-    <span class="text-muted-foreground shrink-0 px-1 text-caption font-medium">
-      {{ t('workflow.palette.title') }}
-    </span>
-    <span class="bg-border mx-0.5 h-4 w-px shrink-0" aria-hidden="true" />
+  <div class="flex items-center gap-0.5" role="group" :aria-label="t('workflow.palette.title')">
     <button
       v-for="kind in STEP_KINDS"
       :key="kind.value"
@@ -53,77 +41,25 @@ function onDragStart(event: DragEvent, kind: WorkflowStepKind) {
       @click="emit('add', kind.value)"
     >
       <component :is="kind.icon" class="size-3.5 shrink-0" />
-      {{ t(kind.label) }}
+      <!-- Icons alone on a phone, where five names do not fit beside the
+           history controls; named from `sm` up, because five glyphs nobody has
+           learned yet are not a vocabulary. -->
+      <span class="sr-only sm:not-sr-only">{{ t(kind.short) }}</span>
     </button>
-  </div>
-
-  <div v-else class="flex min-h-0 flex-col">
-    <p class="text-muted-foreground px-3 pt-3 pb-2 text-xs font-medium">{{ t('workflow.palette.title') }}</p>
-    <ul class="min-h-0 flex-1 space-y-1 overflow-y-auto px-2 pb-3">
-      <li v-for="kind in STEP_KINDS" :key="kind.value">
-        <button
-          type="button"
-          :disabled="!canManage"
-          :draggable="canManage"
-          class="kn-wf-palette-item"
-          @dragstart="onDragStart($event, kind.value)"
-          @click="emit('add', kind.value)"
-        >
-          <span class="bg-muted text-muted-foreground grid size-7 shrink-0 place-items-center rounded-md">
-            <component :is="kind.icon" class="size-4" />
-          </span>
-          <span class="min-w-0 flex-1">
-            <span class="block text-ui font-medium">{{ t(kind.label) }}</span>
-            <span class="text-muted-foreground mt-0.5 block text-caption leading-snug">{{ t(kind.hint) }}</span>
-          </span>
-        </button>
-      </li>
-    </ul>
-    <p v-if="canManage" class="text-muted-foreground border-t px-3 py-2 text-caption leading-snug">
-      {{ t('workflow.palette.hint') }}
-    </p>
   </div>
 </template>
 
 <style scoped>
-.kn-wf-palette-item {
-  display: flex;
-  width: 100%;
-  align-items: flex-start;
-  gap: 0.5rem;
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.5rem;
-  text-align: left;
-  cursor: grab;
-  transition:
-    background-color 140ms ease-out,
-    border-color 140ms ease-out;
-}
-.kn-wf-palette-item:hover:not(:disabled) {
-  background: color-mix(in oklab, var(--primary) 5%, transparent);
-  border-color: color-mix(in oklab, var(--primary) 25%, transparent);
-}
-.kn-wf-palette-item:active:not(:disabled) {
-  cursor: grabbing;
-}
-.kn-wf-palette-item:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent);
-  border-color: var(--primary);
-}
-.kn-wf-palette-item:disabled {
-  cursor: default;
-  opacity: 0.5;
-}
 .kn-wf-palette-chip {
   display: inline-flex;
   align-items: center;
   gap: 0.375rem;
   flex-shrink: 0;
   height: 1.75rem;
+  min-width: 1.75rem;
+  justify-content: center;
   padding: 0 0.5rem;
-  border-radius: 8px;
+  border-radius: 6px;
   border: 1px solid transparent;
   font-size: var(--kn-text-xs);
   white-space: nowrap;
@@ -136,9 +72,12 @@ function onDragStart(event: DragEvent, kind: WorkflowStepKind) {
   background: color-mix(in oklab, var(--primary) 6%, transparent);
   border-color: color-mix(in oklab, var(--primary) 25%, transparent);
 }
+.kn-wf-palette-chip:active:not(:disabled) {
+  cursor: grabbing;
+}
 .kn-wf-palette-chip:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent);
+  box-shadow: 0 0 0 3px var(--ring);
 }
 .kn-wf-palette-chip:disabled {
   cursor: default;
@@ -146,7 +85,6 @@ function onDragStart(event: DragEvent, kind: WorkflowStepKind) {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .kn-wf-palette-item,
   .kn-wf-palette-chip {
     transition-duration: 0.01ms;
   }

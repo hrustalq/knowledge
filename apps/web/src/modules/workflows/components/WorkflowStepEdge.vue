@@ -2,15 +2,19 @@
 /**
  * A connection, with a way to remove it that is not "click and hope".
  *
- * The previous canvas deleted an edge on plain click, which meant a mis-aimed
- * pan through a connection silently rewired the workflow. Here the line carries
- * a disconnect control that appears on hover — the affordance is visible before
- * it is used, and clicking the line itself does nothing.
+ * Clicking the line does nothing: a disconnect control appears on hover, so a
+ * mis-aimed pan through a connection cannot silently rewire the workflow.
+ *
+ * In a run the line also carries progress (#1246): the edge into a step that is
+ * working flows, one waiting for a person holds still in the warning hue, and a
+ * finished hand-off is drawn solid. Direction is the arrowhead, always.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { BaseEdge, EdgeLabelRenderer, getBezierPath, type Position } from '@vue-flow/core'
 import { X } from 'lucide-vue-next'
+
+export type EdgeState = 'active' | 'waiting' | 'done' | 'failed'
 
 const props = defineProps<{
   id: string
@@ -21,7 +25,7 @@ const props = defineProps<{
   sourcePosition: Position
   targetPosition: Position
   markerEnd?: string
-  data?: { canManage: boolean }
+  data?: { editable: boolean; state?: EdgeState }
 }>()
 
 const emit = defineEmits<{ disconnect: [string] }>()
@@ -41,8 +45,14 @@ const path = computed(() =>
 </script>
 
 <template>
-  <BaseEdge :id="id" :path="path[0]" :marker-end="markerEnd" class="kn-wf-edge" />
-  <EdgeLabelRenderer v-if="data?.canManage">
+  <BaseEdge
+    :id="id"
+    :path="path[0]"
+    :marker-end="markerEnd"
+    class="kn-wf-edge"
+    :class="data?.state ? `kn-wf-edge--${data.state}` : ''"
+  />
+  <EdgeLabelRenderer v-if="data?.editable">
     <button
       type="button"
       class="kn-wf-cut nodrag nopan"

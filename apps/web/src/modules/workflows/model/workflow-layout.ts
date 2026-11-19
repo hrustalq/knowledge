@@ -11,12 +11,9 @@ import type { WorkflowGraph, WorkflowStep } from '@knowledge/contracts'
  * happens *first*, and a node whose position is a settling artefact cannot tell
  * them.
  *
- * One module, two renderers. `WorkflowGraphEditor` hands these coordinates to
- * Vue Flow when you press Tidy up, and `WorkflowMap` draws them on canvas
- * wherever the chain is being read rather than edited. Positions can therefore
- * never disagree between the two views of the same definition, and auto-layout
- * came free with the preview — which is the argument that let the editable
- * canvas stay in Vue Flow while everything read-only moved to a drawn one.
+ * `WorkflowCanvas` places any step without a stored position here, and Tidy up
+ * writes these coordinates into `graph.layout` — so an imported or
+ * model-designed graph and a freshly tidied one are arranged alike.
  *
  * Left to right, because that is the direction a pipeline is read in and the
  * direction a fan-out opens: one step on the left, its items stacked on the
@@ -255,27 +252,4 @@ export function layoutPositions(
   const out: Record<string, { x: number; y: number }> = {}
   for (const box of layoutWorkflow(graph, options).boxes) out[box.id] = { x: box.x, y: box.y }
   return out
-}
-
-/**
- * The curve an edge takes between two boxes, as canvas control points.
- *
- * The handle offset grows with the horizontal distance, so an edge that skips
- * a layer bows further out and reads as passing *over* the steps between rather
- * than stopping at them. A fixed offset makes long edges cut a straight line
- * through intermediate nodes, which is the single thing that makes a layered
- * graph look wrong.
- */
-export function edgeCurve(
-  from: { x: number; y: number },
-  to: { x: number; y: number },
-  nodeWidth: number,
-  nodeHeight: number,
-): { x1: number; y1: number; cx1: number; cy1: number; cx2: number; cy2: number; x2: number; y2: number } {
-  const x1 = from.x + nodeWidth
-  const y1 = from.y + nodeHeight / 2
-  const x2 = to.x
-  const y2 = to.y + nodeHeight / 2
-  const reach = Math.max(Math.abs(x2 - x1) * 0.45, 28)
-  return { x1, y1, cx1: x1 + reach, cy1: y1, cx2: x2 - reach, cy2: y2, x2, y2 }
 }

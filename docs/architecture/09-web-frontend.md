@@ -393,7 +393,7 @@ Anything that touches `window` or produces markup the client would discard has
 to be kept out of the SSR pass, and the pattern is always the same: a `mounted`
 ref, flipped in `onMounted`, guarding the element.
 
-`@vue-flow/core` in `modules/workflows/components/WorkflowGraphEditor.vue` is the
+`@vue-flow/core` in `modules/workflows/components/WorkflowCanvas.vue` is the
 canonical case — Vue Flow is client-only, so the canvas renders nothing on the
 server; `Autocomplete.vue` guards its `<Teleport>` for the same reason. Vue Flow
 also ships unstyled and its node positioning _is_ CSS, so both

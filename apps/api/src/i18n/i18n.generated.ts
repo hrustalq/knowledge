@@ -393,16 +393,6 @@ export type I18nTranslations = {
     "chat": {
         "help": string;
         "helpTime": string;
-        "commands": {
-            "new": string;
-            "unlink": string;
-            "capture": string;
-            "forget": string;
-            "bind": string;
-            "unbind": string;
-            "ask": string;
-            "help": string;
-        };
         "link": {
             "required": string;
             "button": string;
@@ -835,6 +825,9 @@ export type I18nTranslations = {
             "notFoundOnDocument": string;
             "notComparable": string;
         };
+        "listQuery": {
+            "oneOf": string;
+        };
         "compare": {
             "badMode": string;
         };
@@ -1067,9 +1060,11 @@ export type I18nTranslations = {
             "agentDisabled": string;
             "agentNotBackground": string;
             "agentRunNotFound": string;
+            "agentRunNotCancellable": string;
             "agentNoExecutor": string;
             "findingNotFound": string;
             "findingAlreadyProposed": string;
+            "agentMergeRequestOpen": string;
             "findingInFlight": string;
             "findingNoDocument": string;
             "findingOrphan": string;

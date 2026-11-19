@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, NotFoundException, Param, Patch, Post, Req } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, NotFoundException, Param, Patch, Post, Query, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -6,13 +6,14 @@ import type {
   CreateApiKeyResponse,
   ListApiKeysResponse,
   ListSessionsResponse,
+  MePermissionsResponse,
   MeResponse,
   RotateApiKeyResponse,
 } from '@knowledge/contracts';
 import { ConfigService } from '@nestjs/config';
 import type { Env } from '../config/env.js';
 import { toMeResponse } from './me-response.js';
-import { CurrentPrincipal, SessionOnly, UnverifiedOk } from './access.decorator.js';
+import { Access, CurrentPrincipal, SessionOnly, UnverifiedOk } from './access.decorator.js';
 import { AccessService } from './access.service.js';
 import type { Principal } from './principal.js';
 import { UpdateMeDto } from './me.dto.js';
@@ -25,6 +26,8 @@ import { requestMeta } from '../common/client-ip.js';
 import { t } from '../i18n/t.js';
 import { Returns } from '../common/returns.decorator.js';
 import { CachePolicy } from '../common/http-cache.js';
+import { PermissionsResolver } from '../permissions/permissions.resolver.js';
+import { WorkspaceQueryDto } from '../templates/templates.dto.js';
 
 /**
  * The caller's own account.
@@ -47,7 +50,17 @@ export class MeController {
     private readonly config: ConfigService<Env, true>,
     private readonly sessions: SessionsService,
     private readonly audit: AuditService,
+    private readonly permissions: PermissionsResolver,
   ) {}
+
+  @Get('permissions')
+  @Returns('MePermissionsResponse')
+  // Guests too: they get an answer, mostly `false`, rather than a 403.
+  @Access('viewer', 'query', { guests: true })
+  @ApiOperation({ summary: 'What the caller may do in a workspace: every workspace action of the permission catalogue (#1296)' })
+  grants(@CurrentPrincipal() principal: Principal, @Query() query: WorkspaceQueryDto): Promise<MePermissionsResponse> {
+    return this.permissions.workspaceGrants(principal, query.workspaceId);
+  }
 
   @Patch()
   @Returns('MeResponse')

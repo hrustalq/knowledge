@@ -244,6 +244,15 @@ export function useCrumbs(): ComputedRef<Crumb[]> {
     // the person, and a crumb reading "Your profile" over a colleague's page
     // would be a lie the header then contradicts.
     if (path === '/u' || path.startsWith('/u/')) return [{ label: t('nav.profile') }]
+    // A run (#1247) sits under the runs list it is opened from.
+    if (path.startsWith('/agents/runs/')) {
+      return [
+        { label: t('nav.settings'), to: '/settings' },
+        { label: t('nav.ai'), to: '/settings/ai' },
+        { label: t('ai.tabRuns'), to: '/settings/ai/runs' },
+        { label: t('nav.run') },
+      ]
+    }
     if (path.startsWith('/workflows/')) {
       return [{ label: t('nav.workflows'), to: '/workflows' }, { label: t('nav.run') }]
     }

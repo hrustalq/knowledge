@@ -19,7 +19,7 @@ import { blueprintText, isMethodology, SUPPORTED_LOCALES, type BlueprintEntry, t
 import { api } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
 import { errorMessage } from '@/shared/api/errors'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { useTemplatesStore } from '@/entities/template'
 import { Badge } from '@knowledge/ui/badge'
 import { Button } from '@knowledge/ui/button'
@@ -33,7 +33,8 @@ import { revealStackedPane } from '@/shared/utils/reveal-pane'
 const { t, locale: uiLocale } = useI18n()
 const route = useRoute()
 const router = useRouter()
-const auth = useAuthStore()
+const canContribute = usePermission('workspace:contribute')
+const isWorkspaceAdmin = usePermission('workspace:admin')
 
 const lang = computed<Locale>(() => (SUPPORTED_LOCALES.includes(uiLocale.value as Locale) ? (uiLocale.value as Locale) : 'en'))
 
@@ -184,7 +185,7 @@ watch(
         </p>
       </div>
 
-      <div v-if="auth.canEdit" class="mt-auto shrink-0 border-t p-2">
+      <div v-if="canContribute" class="mt-auto shrink-0 border-t p-2">
         <Button variant="outline" size="sm" class="w-full justify-start gap-2" as-child>
           <RouterLink to="/projects/new"><WandSparkles class="size-4" /> {{ t('blueprints.settings.new') }}</RouterLink>
         </Button>
@@ -212,10 +213,10 @@ watch(
             <h2 class="min-w-0 flex-1 basis-48 truncate text-lg font-semibold">{{ nameOf(selected) }}</h2>
 
             <div class="flex flex-wrap gap-1.5">
-              <Button v-if="selected.enabled && auth.canEdit" variant="outline" size="sm" as-child>
+              <Button v-if="selected.enabled && canContribute" variant="outline" size="sm" as-child>
                 <RouterLink :to="wizardLink(selected)"><WandSparkles class="size-3.5" /> {{ t('blueprints.settings.open') }}</RouterLink>
               </Button>
-              <template v-if="auth.canAdminWorkspace">
+              <template v-if="isWorkspaceAdmin">
                 <template v-if="selected.builtIn">
                   <Button v-if="selected.enabled" variant="ghost" size="sm" :disabled="busy" @click="setEnabled(selected, false)">
                     <EyeOff class="size-3.5" /> {{ t('blueprints.settings.hide') }}
@@ -255,7 +256,7 @@ watch(
             {{ blueprintText(selected.blueprint.description, lang) }}
           </p>
           <p class="text-muted-foreground text-xs">
-            {{ auth.canAdminWorkspace ? t('blueprints.settings.editHint') : t('blueprints.settings.adminOnly') }}
+            {{ isWorkspaceAdmin ? t('blueprints.settings.editHint') : t('blueprints.settings.adminOnly') }}
           </p>
         </header>
 

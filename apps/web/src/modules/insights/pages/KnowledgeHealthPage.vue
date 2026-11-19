@@ -35,13 +35,13 @@ import { api } from '@/shared/api/client'
 import { apiMutationOptions, apiQueryOptions } from '@/shared/api/queries'
 import { errorMessage } from '@/shared/api/errors'
 import { getProjectId, getWorkspaceId } from '@/shared/api/api'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { useProjectsStore } from '@/stores/projects'
+import { DocumentPreviewSheet } from '@/entities/document'
 import { Button } from '@knowledge/ui/button'
 import { PageLayout, PageTabs, panelId, tabId, usePageTabs, type PageTab } from '@knowledge/ui/layout'
 import HealthBulkBar from '@/modules/insights/components/HealthBulkBar.vue'
 import HealthFilters from '@/modules/insights/components/HealthFilters.vue'
-import HealthPreviewSheet from '@/modules/insights/components/HealthPreviewSheet.vue'
 import HealthSettings from '@/modules/insights/components/HealthSettings.vue'
 import WorkItemRulesSettings from '@/modules/insights/components/WorkItemRulesSettings.vue'
 import HealthTable from '@/modules/insights/components/HealthTable.vue'
@@ -68,7 +68,7 @@ import {
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
-const auth = useAuthStore()
+const isWorkspaceAdmin = usePermission('workspace:admin')
 const projects = useProjectsStore()
 const queryClient = useQueryClient()
 
@@ -82,7 +82,7 @@ const tabs = computed<PageTab<TabKey>[]>(() => [
   { key: 'pages', label: t('health.tab.pages') },
   { key: 'quality', label: t('health.tab.quality') },
   // The ledger route is admin-only; a member's ?tab=agents falls back to Pages.
-  ...(auth.canAdminWorkspace ? [{ key: 'agents' as const, label: t('health.tab.agents') }] : []),
+  ...(isWorkspaceAdmin.value ? [{ key: 'agents' as const, label: t('health.tab.agents') }] : []),
   { key: 'settings', label: t('health.tab.settings') },
 ])
 const tab = usePageTabs(tabs, 'pages')
@@ -170,7 +170,7 @@ const subtitle = computed(() => {
 
 /* ------------------------------------------------------------- selection */
 
-const canSelect = computed(() => auth.canEdit)
+const canSelect = usePermission('workspace:contribute')
 const selection = ref<HealthSelection>(EMPTY_SELECTION)
 const order = computed(() => rows.value.map((r) => r.documentId))
 
@@ -272,6 +272,12 @@ async function runHandoff(connectorId: string) {
 /* --------------------------------------------------------------- preview */
 
 const previewRow = ref<KnowledgeHealthRow | null>(null)
+
+/** The sheet's widget wrote: the row it was opened from may have left its preset. */
+function onPreviewChanged() {
+  void queryClient.invalidateQueries({ queryKey: ['/v1/knowledge-health'] })
+  void queryClient.invalidateQueries({ queryKey: ['/v1/knowledge-health/summary'] })
+}
 </script>
 
 <template>
@@ -307,7 +313,7 @@ const previewRow = ref<KnowledgeHealthRow | null>(null)
         v-if="selection.ids.size > 0"
         :count="selection.ids.size"
         :busy="bulk.isPending.value || handingOff"
-        :can-archive="auth.canAdminWorkspace"
+        :can-archive="isWorkspaceAdmin"
         @run="runBulk"
         @handoff="runHandoff"
         @clear="onClear"
@@ -337,7 +343,7 @@ const previewRow = ref<KnowledgeHealthRow | null>(null)
         :workspace-id="workspaceId"
         :project-id="projectId"
         :scope-label="scopeLabel"
-        :can-run-agents="auth.canAdminWorkspace"
+        :can-run-agents="isWorkspaceAdmin"
       />
     </div>
 
@@ -346,11 +352,16 @@ const previewRow = ref<KnowledgeHealthRow | null>(null)
     </div>
 
     <div v-else :id="panelId('settings')" role="tabpanel" :aria-labelledby="tabId('settings')">
-      <HealthSettings :can-manage="auth.canAdminWorkspace" />
+      <HealthSettings :can-manage="isWorkspaceAdmin" />
       <!-- #424: an admin's, as its route is. -->
-      <WorkItemRulesSettings v-if="auth.canAdminWorkspace" class="mt-10" />
+      <WorkItemRulesSettings v-if="isWorkspaceAdmin" class="mt-10" />
     </div>
 
-    <HealthPreviewSheet :row="previewRow" @close="previewRow = null" />
+    <DocumentPreviewSheet
+      :document-id="previewRow?.documentId ?? null"
+      :title="previewRow?.title"
+      @close="previewRow = null"
+      @changed="onPreviewChanged"
+    />
   </PageLayout>
 </template>

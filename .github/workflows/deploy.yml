@@ -172,7 +172,9 @@ jobs:
           install -m 644 knowledge/Caddyfile            "$APP_DIR/files/Caddyfile"
           install -m 644 knowledge/searxng/settings.yml "$APP_DIR/files/searxng-settings.yml"
           install -m 644 knowledge/deploy/postgres-roles.sh "$APP_DIR/files/postgres-roles.sh"
-          for img in knowledge-api knowledge-api-git knowledge-web; do
+          # knowledge-admin (#1236) takes effect once the homelab kustomization
+          # lists it; until then yq selects nothing and the tag is not written.
+          for img in knowledge-api knowledge-api-git knowledge-web knowledge-admin; do
             yq -i "(.images[] | select(.name == \"$img\") | .newTag) = \"$TAG\"" "$APP_DIR/kustomization.yaml"
           done
           git -C homelab diff --stat

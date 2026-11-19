@@ -17,9 +17,21 @@ export const AGENT_MAX_ATTEMPTS = 3;
  */
 export const MAX_RUN_WARNINGS = 20;
 
+/** Steps logged per run (#1247): past it the worker stops logging, never stops the run. */
+export const MAX_RUN_STEPS = 2_000;
+
 /**
  * The `withSubjectLock` key behind "one run per agent at a time" (#815): a
  * manual start and the schedule sweeper take the same one, so neither can
  * queue a second run between the other's count and insert.
  */
 export const agentRunLockKey = (workspaceId: string, agentKey: string): string => `agent-run:${workspaceId}:${agentKey}`;
+
+/**
+ * The `withSubjectLock` key behind "one run per page at a time" (#1248): the
+ * processor's claim takes it, so two workers cannot both find no other run
+ * `running` on the subject and both start. Distinct from `agentRunLockKey`,
+ * which guards starting a run, not running one.
+ */
+export const agentSubjectLockKey = (workspaceId: string, subjectKey: string): string =>
+  `agent-subject:${workspaceId}:${subjectKey}`;

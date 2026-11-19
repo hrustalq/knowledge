@@ -7,7 +7,7 @@ import { SessionsService } from '../src/auth/sessions.service.js';
 import { TokenAuthService } from '../src/auth/token-auth.service.js';
 import type { Principal } from '../src/auth/principal.js';
 import { UsersController } from '../src/users/users.controller.js';
-import { UsersService } from '../src/users/users.service.js';
+import { UsersService, accountChanges } from '../src/users/users.service.js';
 
 /**
  * A platform admin's view of someone else's sessions (#292). What is pinned:
@@ -40,7 +40,7 @@ function harness(opts: { userExists?: boolean; revokedCount?: number } = {}) {
   };
   const audit = { record: vi.fn(async () => undefined) };
   const sessions = new SessionsService(prisma as never, config as never);
-  const users = new UsersService(prisma as never, sessions, {} as never, config as never, audit as never);
+  const users = new UsersService(prisma as never, sessions, {} as never, config as never, audit as never, { permissionsChanged: () => {} } as never);
   return { prisma, audit, users };
 }
 
@@ -101,6 +101,60 @@ describe('UsersService — a person\'s sessions (platform admin)', () => {
     const h = harness({ userExists: false });
     await expect(h.users.revokeSessions(ADMIN, USER, null)).rejects.toBeInstanceOf(NotFoundException);
     expect(h.prisma.session.updateMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('UsersService — account writes and what the console reads (#1239)', () => {
+  const before = { id: USER, displayName: 'Ann', isAdmin: false, disabledAt: null, passwordHash: 'h', emailVerifiedAt: null, avatarKey: null, avatarUpdatedAt: null, email: 'ann@x.test', createdAt: new Date('2026-01-01T00:00:00Z') };
+  const row = (patch: object = {}) => ({ ...before, memberships: [], apiKeys: [], ...patch });
+
+  function writes(found: object) {
+    const prisma = {
+      user: { findUnique: vi.fn(async () => found), update: vi.fn(async () => row({ disabledAt: new Date() })) },
+      session: { updateMany: vi.fn(async () => ({ count: 2 })), findFirst: vi.fn(async () => ({ createdAt: new Date('2026-11-01T00:00:00Z') })) },
+      withTransaction: <T>(fn: () => Promise<T>) => fn(),
+      onCommit: (fn: () => void) => fn(),
+    };
+    const audit = { record: vi.fn(async () => undefined) };
+    const users = new UsersService(prisma as never, new SessionsService(prisma as never, config as never), {} as never, config as never, audit as never, { permissionsChanged: () => {} } as never);
+    return { users, audit };
+  }
+
+  it('disabling a user writes a user.disabled row naming them, and returns the last sign-in', async () => {
+    const h = writes(before);
+    const res = await h.users.update(ADMIN, USER, { disabled: true }, '198.51.100.1');
+    expect(h.audit.record).toHaveBeenCalledTimes(1);
+    expect(h.audit.record).toHaveBeenCalledWith({
+      workspaceId: null, actor: 'admin-1', action: 'user.disabled', params: {}, ok: true, ip: '198.51.100.1', target: USER,
+    });
+    expect(res.lastSignInAt).toBe('2026-11-01T00:00:00.000Z');
+  });
+
+  it('writes one row per field that changed, and never the password', () => {
+    expect(accountChanges(before as never, { displayName: ' Ann ', isAdmin: false, disabled: false })).toEqual([]);
+    const rows = accountChanges(before as never, { displayName: 'Anna', isAdmin: true, password: 'secret password' });
+    expect(rows.map((r) => r.action)).toEqual(['user.renamed', 'user.admin_granted', 'user.password_set']);
+    expect(rows[0].params).toEqual({ from: 'Ann', to: 'Anna' });
+    expect(JSON.stringify(rows)).not.toContain('secret password');
+    const admin = { ...before, isAdmin: true, disabledAt: new Date() };
+    expect(accountChanges(admin as never, { isAdmin: false, disabled: false }).map((r) => r.action)).toEqual(['user.admin_revoked', 'user.enabled']);
+  });
+
+  it('lists each user with the newest session as last sign-in and live workspaces by name', async () => {
+    const prisma = {
+      user: {
+        findMany: vi.fn(async () => [
+          row({ memberships: [{ workspaceId: 'w1', role: 'editor', trustedOperator: false, source: 'manual', capabilities: [], workspace: { name: 'Docs' } }] }),
+          row({ id: 'u-new' }),
+        ]),
+      },
+      session: { groupBy: vi.fn(async () => [{ userId: USER, _max: { createdAt: new Date('2026-11-02T00:00:00Z') } }]) },
+    };
+    const users = new UsersService(prisma as never, {} as never, {} as never, config as never, {} as never, { permissionsChanged: () => {} } as never);
+    const { users: list } = await users.list();
+    expect(prisma.user.findMany.mock.calls[0][0]).toMatchObject({ include: { memberships: { where: { workspace: { deletedAt: null } } } } });
+    expect(list.map((u) => u.lastSignInAt)).toEqual(['2026-11-02T00:00:00.000Z', null]);
+    expect(list[0].memberships[0]).toMatchObject({ workspaceId: 'w1', workspaceName: 'Docs', role: 'editor' });
   });
 });
 

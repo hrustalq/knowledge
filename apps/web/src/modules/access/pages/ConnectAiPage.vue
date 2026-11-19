@@ -27,7 +27,7 @@ import { CopyBlock, KEY_ENV } from '@/entities/access'
 import { useWorkspacesStore } from '@/stores/workspaces'
 import { useProjectsStore } from '@/stores/projects'
 import { useFeaturesStore } from '@/stores/features'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { Button } from '@knowledge/ui/button'
 import { Badge } from '@knowledge/ui/badge'
 import { Skeleton } from '@knowledge/ui/skeleton'
@@ -48,7 +48,6 @@ const router = useRouter()
 const workspaces = useWorkspacesStore()
 const projects = useProjectsStore()
 const features = useFeaturesStore()
-const auth = useAuthStore()
 const queryClient = useQueryClient()
 
 const connection = ref<McpConnectionInfo | null>(null)
@@ -182,7 +181,7 @@ const toolGroups = computed(() => {
   }).filter((group) => group.tools.length || group.reason)
 })
 const openToolset = ref<McpToolset | null>(null)
-const canManageFeatures = computed(() => auth.role === 'admin')
+const canManageFeatures = usePermission('workspace:admin')
 </script>
 
 <template>

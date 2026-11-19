@@ -22,6 +22,7 @@ import type {
   AssistantThreadSummary,
   AssistantToolCall,
   AssistantUiBlock,
+  CaptureResult,
   ListAssistantThreadsResponse,
 } from '@knowledge/contracts'
 import { assistantSourceKey } from '@knowledge/contracts'
@@ -134,6 +135,8 @@ export const useAssistantStore = defineStore('assistant', {
     /** Fallback re-read after a Stop, for when the live event bus is not connected. */
     settleTimer: null as number | null,
     error: null as string | null,
+    /** Replies saved to the knowledge base this session, by message id: the reply's button and `/capture` read one record (#1249). */
+    capturedReplies: {} as Record<string, CaptureResult>,
   }),
   getters: {
     /** Documents referenced or written to in this thread, most recent first, deduped. */
@@ -312,6 +315,13 @@ export const useAssistantStore = defineStore('assistant', {
       const res = await api.patch('/v1/assistant/threads/{id}', { path: { id: threadId }, body: { modelId } })
       this.syncSummary(res.thread)
       if (this.activeThread?.id === threadId) this.activeThread = res.thread
+    },
+
+    /** "Save to knowledge base" (issue #73): the reply goes back as an answer capture. */
+    async captureReply(messageId: string): Promise<CaptureResult> {
+      const result = await api.post('/v1/assistant/messages/{id}/capture', { path: { id: messageId }, body: {} })
+      this.capturedReplies[messageId] = result
+      return result
     },
 
     /** Deletes the thread; if it was open, falls back to the next one in the roster. */

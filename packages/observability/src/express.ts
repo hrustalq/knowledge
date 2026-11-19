@@ -1,5 +1,5 @@
 import type { HttpRequestEvent } from '@knowledge/contracts/observability';
-import { acceptTraceId, redactUrl, startTrace, withTrace } from '@knowledge/observability/trace';
+import { acceptTraceId, queriesOf, redactUrl, startTrace, withTrace } from '@knowledge/observability/trace';
 import { emitBacktest } from '@knowledge/observability/backtest';
 
 /**
@@ -69,6 +69,7 @@ export function traceMiddleware(req: TracedRequest, res: TracedResponse, next: (
         status: res.statusCode,
         requestBytes: Number(req.headers['content-length'] ?? 0) || undefined,
         responseBytes: Number(res.getHeader('content-length') ?? 0) || undefined,
+        ...queriesOf(ctx),
       };
       emitBacktest(event);
     });

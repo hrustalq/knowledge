@@ -33,7 +33,7 @@ import type {
 import { apiQueryOptions, useApiMutation } from '@/shared/api/queries'
 import { errorMessage } from '@/shared/api/errors'
 import { relativeTime } from '@/shared/api/api'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { Badge } from '@knowledge/ui/badge'
 import { Button } from '@knowledge/ui/button'
 import { Skeleton } from '@knowledge/ui/skeleton'
@@ -71,7 +71,6 @@ const TAB_LABELS: Record<Tab, string> = {
 const route = useRoute()
 const router = useRouter()
 const queryClient = useQueryClient()
-const auth = useAuthStore()
 const id = computed(() => String(route.params.id))
 
 // --- queries -----------------------------------------------------------------
@@ -208,7 +207,7 @@ const allOutdatedIds = computed(
 )
 
 const isOpen = computed(() => mr.value?.status === 'open')
-const canEdit = computed(() => auth.canEdit)
+const canEdit = usePermission('workspace:contribute')
 const canComment = computed(() => isOpen.value && canEdit.value)
 
 /**

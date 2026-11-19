@@ -11,14 +11,19 @@ import {
   type AgentFinding,
   type AgentRunInput,
   type AgentRunStatus,
+  type AgentRunStep,
+  type AgentRunStepKind,
   type AgentRunSummary,
   type AgentRunTrigger,
+  type CostCurrency,
   type AiAgentChoice,
   type AiAgentSummary,
+  type ListAgentRunStepsResponse,
   type ListAgentRunsResponse,
   RUNNABLE_AGENTS,
 } from '@knowledge/contracts';
-import { mayReadRun, privateRunWhere } from './run-privacy.js';
+import { mayReadRun, privateRunWhere, runFrameAddress } from './run-privacy.js';
+import { EventsPublisher } from '../events/events.publisher.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AgentRegistryService, type ResolvedAgent } from '../agents/agent-registry.service.js';
@@ -356,6 +361,8 @@ function toSummary(agent: ResolvedAgent, row: AiAgent | null): AiAgentSummary {
 
 /** Page size for the run list — the merge-request list's cursor convention. */
 const RUNS_PAGE = 25;
+/** Steps per page of a run's log (#1247). */
+const STEPS_PAGE = 200;
 
 /**
  * Starting and reading background runs (docs/features/20).
@@ -372,6 +379,7 @@ export class AgentRunsService {
     private readonly registry: AgentRegistryService,
     private readonly usage: AiUsageService,
     private readonly producer: AgentProducer,
+    private readonly events: EventsPublisher,
   ) {}
 
   async start(
@@ -403,12 +411,20 @@ export class AgentRunsService {
     // enough for the month's quota to be spent by something else.
     await this.usage.assertWithinBudget(workspaceId, principal.userId);
 
+    // A run about one page carries that page as its subject (#1248), the key
+    // the trigger guard already reads, so the processor runs it after any other
+    // agent's run on the same page instead of beside it.
+    // ponytail: a multi-page run stays unscoped (per-agent lock only); give it one subject row per page if overlapping page sets collide in practice.
+    const subjectKey = documentIds?.length === 1 ? `doc:${documentIds[0]}` : null;
+
     // Back-pressure, the ConnectorScheduleSweeper rule: one run per agent at a
     // time, so an impatient second click queues nothing. Count and insert under
-    // one lock (#815), or two clicks both count zero.
+    // one lock (#815), or two clicks both count zero. A page run counts only
+    // this agent's runs on that page, and an unscoped run only unscoped ones:
+    // a workspace-wide pass never blocks a page run, nor the reverse (#1248).
     const run = await withSubjectLock(this.prisma, agentRunLockKey(workspaceId, agentKey), async () => {
       const inFlight = await this.prisma.agentRun.count({
-        where: { workspaceId, agentKey, status: { in: ['pending', 'running'] } },
+        where: { workspaceId, agentKey, subjectKey, status: { in: ['pending', 'running'] } },
       });
       if (inFlight > 0) {
         throw new ConflictException({
@@ -425,6 +441,7 @@ export class AgentRunsService {
           agentKey,
           agentId: row?.id ?? null,
           trigger: 'manual',
+          subjectKey,
           createdBy: principal.userId,
           locale: principal.locale,
           input:
@@ -439,7 +456,8 @@ export class AgentRunsService {
       });
     });
     await this.producer.enqueue(run.id);
-    return toRunSummary(run, agent.name);
+    const behind = await this.blockers(workspaceId, [run], principal);
+    return toRunSummary(run, agent.name, behind);
   }
 
   /**
@@ -524,24 +542,145 @@ export class AgentRunsService {
     }
 
     const names = new Map((await this.registry.list(workspaceId)).map((a) => [a.key, a.name]));
+    const behind = await this.blockers(workspaceId, page, principal, names);
     return {
-      runs: page.map((run) => toRunSummary(run, names.get(run.agentKey) ?? run.agentKey)),
+      runs: page.map((run) => toRunSummary(run, names.get(run.agentKey) ?? run.agentKey, behind)),
       nextCursor: rows.length > RUNS_PAGE ? page[page.length - 1].id : null,
       counts,
     };
   }
 
   async get(workspaceId: string, id: string, principal: Principal): Promise<AgentRunSummary> {
+    const run = await this.readable(workspaceId, id, principal);
+    const agent = await this.registry.resolve(workspaceId, run.agentKey).catch(() => null);
+    return toRunSummary(run, agent?.name ?? run.agentKey, await this.blockers(workspaceId, [run], principal));
+  }
+
+  /**
+   * A run's step log (#1247), oldest first from `cursor` (the last step id
+   * read), with what its model calls cost so far. Read under the run's own
+   * rule: a private run's steps are as missing as the run.
+   */
+  async steps(workspaceId: string, id: string, principal: Principal, cursor?: string): Promise<ListAgentRunStepsResponse> {
+    await this.readable(workspaceId, id, principal);
+    const after = cursor && /^\d{1,18}$/.test(cursor) ? BigInt(cursor) : null;
+    const [rows, billed] = await Promise.all([
+      this.prisma.agentRunStep.findMany({
+        where: { runId: id, ...(after === null ? {} : { id: { gt: after } }) },
+        orderBy: { id: 'asc' },
+        take: STEPS_PAGE + 1,
+      }),
+      this.prisma.aiUsage.groupBy({
+        by: ['costCurrency', 'estimated'],
+        where: { workspaceId, agentRunId: id },
+        _count: { _all: true },
+        _sum: { totalTokens: true, costMicros: true },
+      }),
+    ]);
+    const page = rows.slice(0, STEPS_PAGE);
+    const costs = new Map<CostCurrency, number>();
+    for (const g of billed) {
+      const currency = g.costCurrency as CostCurrency;
+      if (g._sum.costMicros !== null) costs.set(currency, (costs.get(currency) ?? 0) + g._sum.costMicros);
+    }
+    return {
+      steps: page.map(toStep),
+      nextCursor: rows.length > STEPS_PAGE ? page[page.length - 1].id.toString() : null,
+      usage: {
+        calls: billed.reduce((n, g) => n + g._count._all, 0),
+        totalTokens: billed.reduce((n, g) => n + (g._sum.totalTokens ?? 0), 0),
+        estimated: billed.some((g) => g.estimated),
+        costs: [...costs].map(([currency, micros]) => ({ currency, micros })),
+      },
+    };
+  }
+
+  /**
+   * Cancel a pending or running run (#1247): one guarded write to `cancelled`.
+   * A pending run never starts — the claim takes only `pending` — and a
+   * running one stops before its next step, when the worker's next guarded
+   * write lands nothing. 409 for a run that has already settled.
+   */
+  async cancel(workspaceId: string, id: string, principal: Principal): Promise<AgentRunSummary> {
+    const run = await this.readable(workspaceId, id, principal);
+    const cancelled = await this.prisma.agentRun.updateMany({
+      where: { id, status: { in: ['pending', 'running'] } },
+      data: { status: 'cancelled', stage: null, finishedAt: new Date() },
+    });
+    if (cancelled.count === 0) {
+      throw new ConflictException({
+        statusCode: 409,
+        message: t('error.ai.agentRunNotCancellable', { id }),
+        reason: 'settled',
+      });
+    }
+    await this.events.publish({ type: 'agent.run.cancelled', workspaceId, subjectId: id, ...runFrameAddress(run) });
+    return this.get(workspaceId, id, principal);
+  }
+
+  /** The run, when this person may read it; a run of another workspace or a private one is a 404. */
+  private async readable(workspaceId: string, id: string, principal: Principal): Promise<AgentRun> {
     const run = await this.prisma.agentRun.findUnique({ where: { id } });
     if (!run || run.workspaceId !== workspaceId || !mayReadRun(run, principal)) {
       throw new NotFoundException(t('error.ai.agentRunNotFound', { id }));
     }
-    const agent = await this.registry.resolve(workspaceId, run.agentKey).catch(() => null);
-    return toRunSummary(run, agent?.name ?? run.agentKey);
+    return run;
+  }
+
+  /**
+   * Why a pending run is waiting (#1248): the run `running` on its subject,
+   * keyed by subject. Derived on read, never stored — the processor's claim
+   * reads the same rows. A blocker the reader may not see (a memo's analysis,
+   * a restricted project's check) is left out, so the run reads as plainly queued.
+   */
+  private async blockers(
+    workspaceId: string,
+    runs: AgentRun[],
+    principal: Principal,
+    names?: Map<string, string>,
+  ): Promise<Map<string, AgentRunSummary['queuedBehind']>> {
+    const subjects = [...new Set(runs.flatMap((r) => (r.status === 'pending' && r.subjectKey ? [r.subjectKey] : [])))];
+    if (subjects.length === 0) return new Map();
+    const running = await this.prisma.agentRun.findMany({
+      where: { workspaceId, status: 'running', subjectKey: { in: subjects }, ...privateRunWhere(principal) },
+      select: { id: true, agentKey: true, subjectKey: true },
+    });
+    const named = names ?? new Map((await this.registry.list(workspaceId)).map((a) => [a.key, a.name]));
+    return new Map(running.map((r) => [r.subjectKey!, { runId: r.id, agentName: named.get(r.agentKey) ?? r.agentKey }]));
   }
 }
 
-function toRunSummary(run: AgentRun, agentName: string): AgentRunSummary {
+function toStep(row: {
+  id: bigint;
+  kind: string;
+  name: string | null;
+  args: string | null;
+  output: string | null;
+  sources: Prisma.JsonValue;
+  ok: boolean;
+  tokens: number | null;
+  durationMs: number | null;
+  createdAt: Date;
+}): AgentRunStep {
+  return {
+    id: row.id.toString(),
+    kind: row.kind as AgentRunStepKind,
+    name: row.name,
+    args: row.args,
+    output: row.output,
+    sources: Array.isArray(row.sources) ? (row.sources as AgentRunStep['sources']) : [],
+    ok: row.ok,
+    tokens: row.tokens,
+    durationMs: row.durationMs,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+function toRunSummary(
+  run: AgentRun,
+  agentName: string,
+  behind: Map<string, AgentRunSummary['queuedBehind']> = new Map(),
+): AgentRunSummary {
   const findings = Array.isArray(run.findings) ? (run.findings as unknown as AgentFinding[]) : [];
   return {
     id: run.id,
@@ -557,6 +696,7 @@ function toRunSummary(run: AgentRun, agentName: string): AgentRunSummary {
     summary: run.summary,
     findings,
     findingCount: findings.length,
+    queuedBehind: (run.status === 'pending' && run.subjectKey && behind.get(run.subjectKey)) || null,
     error: run.error,
     // Progress as the run wrote it (docs/features/29). `stage` is free text from
     // the executor rather than a closed enum, so the web renders it through
@@ -566,6 +706,7 @@ function toRunSummary(run: AgentRun, agentName: string): AgentRunSummary {
     warnings: Array.isArray(run.warnings)
       ? (run.warnings as unknown[]).filter((w): w is string => typeof w === 'string')
       : [],
+    model: run.model,
     startedAt: run.startedAt?.toISOString() ?? null,
     finishedAt: run.finishedAt?.toISOString() ?? null,
     createdAt: run.createdAt.toISOString(),

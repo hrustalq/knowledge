@@ -13,7 +13,7 @@ const { t } = useI18n()
 const route = useRoute()
 
 const current = computed(() =>
-  props.item.to === '/documents' ? route.path === '/documents' : route.path.startsWith(props.item.to),
+  props.item.to === '/' ? route.path === '/' : route.path.startsWith(props.item.to),
 )
 const pending = computed(() => isSlowTarget(props.item.to))
 </script>

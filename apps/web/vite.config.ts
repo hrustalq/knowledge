@@ -3,6 +3,7 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
+import { visualizer } from 'rollup-plugin-visualizer'
 
 // https://vite.dev/config/
 export default defineConfig(({ isSsrBuild }) => ({
@@ -36,6 +37,9 @@ export default defineConfig(({ isSsrBuild }) => ({
         globPatterns: ['assets/**/*.{js,css,woff2,svg,png}', 'offline.html', 'favicon.svg'],
       },
     }),
+    ...(!isSsrBuild && process.env.BUNDLE_ANALYZE === '1'
+      ? [visualizer({ filename: 'dist/bundle-report.html', gzipSize: true, brotliSize: true })]
+      : []),
   ],
   resolve: {
     alias: {
@@ -43,6 +47,7 @@ export default defineConfig(({ isSsrBuild }) => ({
     },
   },
   build: {
+    manifest: !isSsrBuild,
     rolldownOptions: {
       // Two apps from one build (docs/features/43): the member app and the
       // public reader, each with its own HTML shell and SSR entry, so nothing
@@ -76,6 +81,10 @@ export default defineConfig(({ isSsrBuild }) => ({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
       },
+      // The admin console's dev server (#1236, apps/admin on :5174), so dev has
+      // production's shape: one host, one session cookie, /login in this app.
+      // Caddy does the same in production.
+      '/admin': { target: 'http://localhost:5174', ws: true },
     },
   },
 }))

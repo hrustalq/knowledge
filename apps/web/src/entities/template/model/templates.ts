@@ -18,7 +18,7 @@ import {
   type TemplateSourceFields,
   type TemplateSummary,
   type TemplateValues,
-  type WorkspaceRole,
+  type WorkspaceAction,
 } from '@knowledge/contracts'
 
 /** Narrowest first: the gallery lists what is most specific to where you are writing at the top. */
@@ -81,15 +81,13 @@ export function previewTemplate(
 }
 
 /**
- * Whether a role may change a template of this scope — the API's rule, so a
+ * The permission that writes a template of this scope — the API's rule, so a
  * control is hidden where the request would 403. A project template is an
  * editor's; a workspace-wide one or a built-in changes what every project is
  * offered, which is an admin's, as with a workflow definition.
  */
-export function canWriteTemplate(scope: TemplateScope, role: WorkspaceRole | null | undefined): boolean {
-  if (role === 'admin') return true
-  return scope === 'project' && role === 'editor'
-}
+export const templateWriteAction = (scope: TemplateScope): WorkspaceAction =>
+  scope === 'project' ? 'workspace:contribute' : 'workspace:admin'
 
 /**
  * Undo the rich editor's markdown escaping inside `{{…}}`.

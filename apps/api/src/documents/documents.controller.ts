@@ -14,6 +14,7 @@ import {
   Res,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
+import { DOCUMENT_AUTHOR_FILTERS, DOCUMENT_SORTS, SORT_ORDERS } from '@knowledge/contracts';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { ApiHeader, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type {
@@ -49,12 +50,14 @@ import type {
   PushDocumentResponse,
   RevisionInfo,
   WorkspaceGraphResponse,
+  DocumentPermissionsResponse,
 } from '@knowledge/contracts';
 import { ConnectorLinksService } from '../connectors/connector-links.service.js';
 import { ConnectorProducer } from '../connectors/connector.producer.js';
 import { ConnectorsService, toRunInfo } from '../connectors/connectors.service.js';
 import { Access, CurrentPrincipal, History } from '../auth/access.decorator.js';
 import { PermissionService } from '../permissions/permission.service.js';
+import { PermissionsResolver } from '../permissions/permissions.resolver.js';
 import type { Principal } from '../auth/principal.js';
 import { DocumentsService } from './documents.service.js';
 import { DocumentRelationsService } from './document-relations.service.js';
@@ -85,7 +88,7 @@ import { TemporalResolverService } from '../temporal/temporal-resolver.service.j
 import { CommunitiesService } from '../communities/communities.service.js';
 import { AnalyticsRecorder, noTrackOf } from '../analytics/analytics.recorder.js';
 import { Returns } from '../common/returns.decorator.js';
-import { notModified, setCachePolicy } from '../common/http-cache.js';
+import { CachePolicy, notModified, setCachePolicy } from '../common/http-cache.js';
 import { ConfigService } from '@nestjs/config';
 import type { Env } from '../config/env.js';
 import { contentLines, parseLinesParam } from './content-lines.js';
@@ -100,6 +103,13 @@ function csv(value?: string, single?: string): string[] {
   const parts = (value ?? '').split(',').map((v) => v.trim()).filter(Boolean);
   if (single?.trim()) parts.push(single.trim());
   return [...new Set(parts)];
+}
+
+/** A closed-vocabulary query param: absent is undefined, anything off the list a 400. */
+function oneOf<T extends string>(param: string, allowed: readonly T[], value?: string): T | undefined {
+  if (value === undefined || value === '') return undefined;
+  if ((allowed as readonly string[]).includes(value)) return value as T;
+  throw new BadRequestException(t('error.listQuery.oneOf', { param, allowed: allowed.join('|'), value }));
 }
 
 /** Query ceilings (#1109): one page of a list, and how many tree levels one call loads. */
@@ -125,6 +135,7 @@ export class DocumentsController {
     private readonly communities: CommunitiesService,
     private readonly analytics: AnalyticsRecorder,
     private readonly config: ConfigService<Env, true>,
+    private readonly grants: PermissionsResolver,
   ) {}
 
   @Post()
@@ -159,6 +170,14 @@ export class DocumentsController {
     description: 'Comma-separated frontmatter tags; bare name or `tag:` entity key',
   })
   @ApiQuery({ name: 'includeArchived', required: false, description: '1 to include archived pages (docs/features/39)' })
+  @ApiQuery({ name: 'sort', required: false, enum: DOCUMENT_SORTS, description: 'Sort column; createdAt when omitted (#1256)' })
+  @ApiQuery({ name: 'order', required: false, enum: SORT_ORDERS, description: 'desc when omitted; asc for title' })
+  @ApiQuery({
+    name: 'author',
+    required: false,
+    enum: DOCUMENT_AUTHOR_FILTERS,
+    description: "Pages whose first revision the caller wrote (`me`) or didn't (`others`); everyone when omitted",
+  })
   async list(
     @CurrentPrincipal() principal: Principal,
     @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
@@ -170,6 +189,9 @@ export class DocumentsController {
     @Query('projectIds') projectIds?: string,
     @Query('tags') tags?: string,
     @Query('includeArchived') includeArchived?: string,
+    @Query('sort') sort?: string,
+    @Query('order') order?: string,
+    @Query('author') author?: string,
   ): Promise<ListDocumentsResponse> {
     // The singular params predate the facets and still work; each is folded
     // into its plural so callers never have to know which one won.
@@ -179,6 +201,9 @@ export class DocumentsController {
       projectIds: csv(projectIds, projectId),
       tags: csv(tags),
       includeArchived: flag(includeArchived),
+      sort: oneOf('sort', DOCUMENT_SORTS, sort),
+      order: oneOf('order', SORT_ORDERS, order),
+      author: oneOf('author', DOCUMENT_AUTHOR_FILTERS, author),
     });
   }
 
@@ -248,6 +273,26 @@ export class DocumentsController {
     const head = await this.documents.getDocumentHead(id, revision);
     if (notModified(req, res, head)) return undefined;
     return this.documents.withChunks(head);
+  }
+
+  /**
+   * What the caller may do with the page (#1298). A sibling of `GET :id`, whose
+   * validator is shared by every reader (docs/architecture/10-caching.md): an
+   * answer that differs per caller cannot ride in that body. Never kept, so no
+   * two callers can ever share a 304 for it.
+   */
+  @Get(':id/permissions')
+  @Returns('DocumentPermissionsResponse')
+  @Access('viewer', 'document')
+  @CachePolicy('no-store')
+  @ApiOperation({ summary: "What the caller may do with the page, one flag per document action of the permission catalogue (#1298)" })
+  @ApiQuery({ name: 'branch', required: false, description: 'The branch the page is read on; branch:edit answers for it' })
+  permissionsOf(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentPrincipal() principal: Principal,
+    @Query('branch') branch?: string,
+  ): Promise<DocumentPermissionsResponse> {
+    return this.grants.forDocument(principal, id, branch || undefined);
   }
 
   @Patch(':id')

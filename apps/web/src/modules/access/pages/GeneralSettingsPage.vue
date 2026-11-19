@@ -8,15 +8,14 @@ import { Button } from '@knowledge/ui/button'
 import { Input } from '@knowledge/ui/input'
 import { api } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { useWorkspacesStore } from '@/stores/workspaces'
 import DeleteWorkspaceDialog from '@/modules/access/components/DeleteWorkspaceDialog.vue'
 
 const { t } = useI18n()
-const auth = useAuthStore()
 const workspaces = useWorkspacesStore()
 const workspace = computed(() => workspaces.items.find((w) => w.workspaceId === getWorkspaceId()) ?? workspaces.items[0])
-const canManage = computed(() => auth.isDev || auth.isAdmin || workspace.value?.myRole === 'admin')
+const canManage = usePermission('workspace:admin')
 
 onMounted(() => workspaces.ensureLoaded())
 

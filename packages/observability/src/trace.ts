@@ -38,6 +38,30 @@ export function bindTrace(fields: Partial<TraceContext>): void {
   Object.assign(scope, fields);
 }
 
+/**
+ * Database operations run inside a scope, keyed by the scope object (#1242).
+ *
+ * A WeakMap rather than fields on the context: the logger's mixin spreads the
+ * whole context into every record, and a running count on every log line is
+ * noise. The request trace reads it once, at finish.
+ */
+const queryStats = new WeakMap<TraceContext, { queries: number; queryMs: number }>();
+
+/** Count one database operation against the active scope. A no-op outside one. */
+export function countQuery(ms: number): void {
+  const scope = store.getStore();
+  if (!scope) return;
+  const stats = queryStats.get(scope) ?? { queries: 0, queryMs: 0 };
+  stats.queries += 1;
+  stats.queryMs += ms;
+  queryStats.set(scope, stats);
+}
+
+/** What `countQuery` recorded for a scope; undefined when nothing was counted. */
+export function queriesOf(ctx: TraceContext): { queries: number; queryMs: number } | undefined {
+  return queryStats.get(ctx);
+}
+
 export function newTraceId(): string {
   return randomUUID();
 }

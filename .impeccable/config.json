@@ -29,6 +29,12 @@
         ],
         "createdAt": "2026-10-21T11:21:56.631Z",
         "reason": ".kn-ai-slot (L2218): transition-duration 0s with a delay — a snap that holds the slot open until the panel's transform slide ends; replaced an animated width (the layout-thrash finding), nothing animates width"
+      },
+      {
+        "rule": "design-system-font",
+        "value": "inherit\">",
+        "createdAt": "2026-11-18T14:12:44.666Z",
+        "reason": "agent: 'font-family: inherit' in the C4 SVG takes the page's own DESIGN.md type, not a new font"
       }
     ]
   }

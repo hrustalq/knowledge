@@ -35,3 +35,5 @@ export * from '@knowledge/contracts/embeds';
 export * from '@knowledge/contracts/memos';
 export * from '@knowledge/contracts/memory';
 export * from '@knowledge/contracts/blueprints';
+export * from '@knowledge/contracts/admin';
+export * from '@knowledge/contracts/permissions';

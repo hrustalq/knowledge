@@ -34,7 +34,10 @@
     "./embeds": "./src/embeds/index.ts",
     "./memos": "./src/memos/index.ts",
     "./memory": "./src/memory/index.ts",
-    "./blueprints": "./src/blueprints/index.ts"
+    "./blueprints": "./src/blueprints/index.ts",
+    "./admin": "./src/admin/index.ts",
+    "./format": "./src/format/index.ts",
+    "./permissions": "./src/permissions/index.ts"
   },
   "scripts": {
     "lint": "echo contracts: no lint",

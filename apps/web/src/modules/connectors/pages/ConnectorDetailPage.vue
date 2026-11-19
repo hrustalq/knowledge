@@ -49,7 +49,7 @@ import GithubAccessCard from '@/modules/connectors/components/GithubAccessCard.v
 import FigmaAccessCard from '@/modules/connectors/components/FigmaAccessCard.vue'
 import ConnectorGuidanceCard from '@/modules/connectors/components/ConnectorGuidanceCard.vue'
 import { RUN_STATUS_CLASS, RUN_STATUS_LABEL } from '@/modules/connectors/model/connector-ui'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { relativeTime } from '@/shared/api/api'
 import { formatDateTime } from '@/shared/utils/format'
 
@@ -57,10 +57,10 @@ type TabKey = 'work-items' | 'tracker' | 'wiki' | 'releases' | 'links' | 'runs' 
 
 const route = useRoute()
 const { t } = useI18n()
-const auth = useAuthStore()
+const canContribute = usePermission('workspace:contribute')
 
 const connectorId = computed(() => route.params.id as string)
-const canManage = computed(() => auth.canAdminWorkspace)
+const canManage = usePermission('workspace:admin')
 
 const detail = useQuery(
   computed(() => apiQueryOptions('/v1/connectors/{id}', { path: { id: connectorId.value } })),
@@ -272,7 +272,7 @@ watch(connectorId, () => {
 
     <div :id="panelId(tab)" role="tabpanel" :aria-labelledby="tabId(tab)" class="min-w-0">
       <ConnectorWorkItems v-if="tab === 'work-items'" :connector-id="connectorId" :can-manage="canManage" />
-      <ConnectorWiki v-else-if="tab === 'wiki'" :connector-id="connectorId" :can-edit="auth.canEdit" />
+      <ConnectorWiki v-else-if="tab === 'wiki'" :connector-id="connectorId" :can-edit="canContribute" />
       <ConnectorReleases v-else-if="tab === 'releases'" :connector-id="connectorId" />
       <ConnectorAccessMirroring v-else-if="tab === 'access'" :connector-id="connectorId" />
       <ConnectorTrackerSettings v-else-if="tab === 'tracker' && connector" :connector="connector" />

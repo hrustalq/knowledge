@@ -1,5 +1,6 @@
 import type { DocumentCategory, RelatedDocumentResult, SearchResult } from '@knowledge/contracts/documents';
 import type { FactExtractor } from '@knowledge/contracts/graph';
+import type { EffectiveAccessLevel } from '@knowledge/contracts/identity';
 
 // Shared API contract types for the Dynamic Knowledge Platform.
 // Plain types + dependency-free error-contract helpers — no runtime deps, no server imports.
@@ -78,6 +79,15 @@ export interface PageLevel {
   name: string;
 }
 
+/** What the document list sorts by (#1256); every sort pages by that column, then id. */
+export const DOCUMENT_SORTS = ['createdAt', 'lastActivityAt', 'title'] as const;
+export type DocumentSort = (typeof DOCUMENT_SORTS)[number];
+export const SORT_ORDERS = ['asc', 'desc'] as const;
+export type SortOrder = (typeof SORT_ORDERS)[number];
+/** "Created by" relative to the caller (#1256); absent = everyone. */
+export const DOCUMENT_AUTHOR_FILTERS = ['me', 'others'] as const;
+export type DocumentAuthorFilter = (typeof DOCUMENT_AUTHOR_FILTERS)[number];
+
 export interface DocumentSummary {
   documentId: string;
   workspaceId: string;
@@ -92,6 +102,11 @@ export interface DocumentSummary {
   headRevisionId: string | null;
   headRevisionStatus: RevisionStatus | null;
   createdAt: string;
+  /**
+   * Who created the page (#1256): its first revision's author. Null only for a
+   * page that never had a revision. Absent where a summary is not a page row.
+   */
+  createdBy?: string | null;
   /**
    * What the body is (#78): `page`, or an API spec. Filled in by the detail
    * route, which decides between the page canvas and the API reference;
@@ -159,6 +174,13 @@ export interface DocumentSummary {
    * ancestor is restricted (#76). Drawn as a lock.
    */
   restricted?: boolean;
+  /**
+   * What the caller may do with the page (#1298): `levelOn`, stamped per row
+   * by the tree and the list so a row's "+", drag and menu follow the page's
+   * own permissions. Absent elsewhere; the page itself asks
+   * `GET /v1/documents/:id/permissions`. Not `level`, which is the methodology's.
+   */
+  accessLevel?: EffectiveAccessLevel;
   /**
    * A private draft (#474): the person who created it and may publish it.
    * Drawn as "Draft · private" instead of a lock. Null once published.
@@ -444,6 +466,11 @@ export const KNOWN_EVENT_TYPES = [
   'agent.run.started',
   'agent.run.succeeded',
   'agent.run.failed',
+  // A person cancelled the run (#1247). Not notifiable: they did it themselves.
+  'agent.run.cancelled',
+  // The worker appended one step to a running run's log (#1247): `subjectId`
+  // is the run. Live only — the run page refetches its steps on it.
+  'agent.run.step',
   // A trigger started a run (#70): `subjectId` is the run, `documentId` the
   // page it is about, when it is about one.
   'agent.trigger.fired',
@@ -554,6 +581,11 @@ export const KNOWN_EVENT_TYPES = [
   // page and no names: it tells live clients to drop what they cached about
   // who sees what and refetch the tree and search.
   'acl.changed',
+  // A person's own role, capabilities, operator or platform-admin flag moved
+  // (#1297). Always addressed: it carries that person's `userId` and nothing
+  // else about the change, and tells their open tabs to re-read /v1/me and
+  // their grants.
+  'permissions.changed',
   'attachment.created',
   'attachment.deleted',
   // A turn in progress, for a client rendering the assistant's own work
@@ -958,6 +990,8 @@ export interface KnowledgeHealthListResponse {
 export interface KnowledgeHealthSummaryResponse {
   workspaceId: string;
   total: number;
+  /** Pages in `total` whose verification holds (#1243): the share the home shows. */
+  verified: number;
   counts: Record<HealthFilter, number>;
 }
 
@@ -1043,15 +1077,6 @@ export type ProjectSettingKey = (typeof PROJECT_SETTING_KEYS)[number];
 export interface ProjectSettingOverridesResponse {
   /** Only projects the caller may open, and only those that override something. */
   overrides: { projectId: string; name: string; settings: ProjectSettingKey[] }[];
-}
-
-// GET /v1/projects/:id/settings/access — what the caller may change on the project's settings page.
-export interface ProjectSettingsAccess {
-  projectId: string;
-  /** Workspace admin, or a workspace editor holding `manage` on the project: the non-gate settings. */
-  canWrite: boolean;
-  /** Workspace admin: the two merge gates, `breakingChanges` and `lintPolicy`. */
-  canWriteGates: boolean;
 }
 
 /**

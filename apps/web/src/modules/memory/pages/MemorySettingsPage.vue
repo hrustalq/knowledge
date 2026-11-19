@@ -28,7 +28,7 @@ import { errorMessage } from '@/shared/api/errors'
 import { getWorkspaceId } from '@/shared/api/api'
 import { useCopy } from '@/shared/composables/use-copy'
 import { formatDateTime, formatRelative } from '@/shared/utils/format'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { useFeaturesStore } from '@/stores/features'
 import { useProjectsStore } from '@/stores/projects'
 import { Button } from '@knowledge/ui/button'
@@ -38,7 +38,8 @@ import DeleteBankDialog from '../components/DeleteBankDialog.vue'
 import { BRIDGE_COMMAND, HANDLER_LANGS, MEMORY_TOOL_TYPE, memoryEndpoints, memoryToolHandler, stdioBridgeConfig, type HandlerLang } from '../model/connection'
 
 const { t } = useI18n()
-const auth = useAuthStore()
+const canContribute = usePermission('workspace:contribute')
+const isWorkspaceAdmin = usePermission('workspace:admin')
 const features = useFeaturesStore()
 const projects = useProjectsStore()
 const queryClient = useQueryClient()
@@ -118,7 +119,7 @@ async function deleted(bank: MemoryBankSummary) {
     <template v-else>
       <section aria-labelledby="memory-switch" class="space-y-1.5">
         <h2 id="memory-switch" class="sr-only">{{ t('memory.switch') }}</h2>
-        <label v-if="auth.canAdminWorkspace" class="flex items-start gap-3">
+        <label v-if="isWorkspaceAdmin" class="flex items-start gap-3">
           <Checkbox :model-value="on" :disabled="switching" class="mt-0.5" @update:model-value="(v) => toggle(v === true)" />
           <span>
             <span class="block text-sm font-medium">{{ t('memory.switch') }}</span>
@@ -210,7 +211,7 @@ async function deleted(bank: MemoryBankSummary) {
                   </td>
                   <td class="px-3 py-1.5 text-right">
                     <Button
-                      v-if="auth.canEdit"
+                      v-if="canContribute"
                       size="icon"
                       variant="ghost"
                       class="size-8 text-muted-foreground hover:text-destructive"

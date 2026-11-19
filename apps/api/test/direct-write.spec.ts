@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ConflictException } from '@nestjs/common';
 import { DocumentsService } from '../src/documents/documents.service.js';
+import { PermissionService } from '../src/permissions/permission.service.js';
 import { internalWrite, type WriteAuthority } from '../src/documents/write-authority.js';
 
 /**
@@ -16,8 +17,10 @@ type Branch = { name?: string; headRevisionId?: string | null };
 
 function rig(mode: 'review' | 'direct', admin = false) {
   const editing = { policy: vi.fn(async () => ({ publishMode: { effective: mode } })) };
-  const permissions = { scopeFor: vi.fn(async () => ({ bypass: admin })) };
-  const svc = Object.assign(Object.create(DocumentsService.prototype) as DocumentsService, { editing, permissions });
+  // The real predicate (`mayPublishDirect`, also asked by GET /v1/me/permissions), over a stubbed scope.
+  const permissions = new PermissionService({} as never, {} as never, {} as never, {} as never, editing as never);
+  vi.spyOn(permissions, 'scopeFor').mockResolvedValue({ bypass: admin } as never);
+  const svc = Object.assign(Object.create(DocumentsService.prototype) as DocumentsService, { permissions });
   const check = (by: WriteAuthority, page: Page = {}, branch: Branch = {}) =>
     (svc as unknown as { assertMayWrite: (d: unknown, b: unknown, by: WriteAuthority) => Promise<void> }).assertMayWrite(
       { workspaceId: WS, defaultBranch: 'main', draftOwnerId: null, pendingMergeRequestId: null, ...page },

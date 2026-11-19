@@ -1,0 +1,33 @@
+{
+  "name": "@knowledge/api-client",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./vue-query": "./src/vue-query.ts",
+    "./schema": "./src/schema.d.ts"
+  },
+  "scripts": {
+    "lint": "echo api-client: no lint",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "generate": "openapi-typescript ../../apps/api/openapi.json -o src/schema.d.ts"
+  },
+  "dependencies": {
+    "@knowledge/contracts": "workspace:*"
+  },
+  "peerDependencies": {
+    "@tanstack/vue-query": "^5.102.8",
+    "axios": "^1.21.1",
+    "vue": "^3.5.32"
+  },
+  "devDependencies": {
+    "@knowledge/tsconfig": "workspace:*",
+    "@tanstack/vue-query": "^5.102.8",
+    "axios": "^1.21.1",
+    "openapi-typescript": "^7.13.0",
+    "openapi-typescript-helpers": "^0.1.0",
+    "typescript": "~6.0.2",
+    "vue": "^3.5.32"
+  }
+}

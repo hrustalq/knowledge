@@ -120,6 +120,9 @@
     "notFoundOnDocument": "Ревизия {revisionId} не найдена в документе {documentId}",
     "notComparable": "Ревизия {id} — {status}; сравнивать можно только финализированные ревизии"
   },
+  "listQuery": {
+    "oneOf": "{param} должен быть одним из {allowed}, получено «{value}»"
+  },
   "compare": {
     "badMode": "mode должен быть «direct» или «merge-base», получено «{mode}»"
   },
@@ -352,9 +355,11 @@
     "agentDisabled": "Агент «{key}» отключён.",
     "agentNotBackground": "Агент «{key}» нельзя запустить в фоне.",
     "agentRunNotFound": "Неизвестный запуск {id}",
+    "agentRunNotCancellable": "Запуск {id} уже завершён, отменить его нельзя",
     "agentNoExecutor": "У агента «{key}» нет фонового исполнителя.",
     "findingNotFound": "В запуске {runId} нет замечания с индексом {index}",
     "findingAlreadyProposed": "Это замечание уже оформлено запросом на слияние.",
+    "agentMergeRequestOpen": "На этой странице уже открыт запрос на слияние от агента. Сначала слейте или закройте его, затем предложите это замечание.",
     "findingInFlight": "Это замечание уже оформляется.",
     "findingNoDocument": "Это замечание не указывает страницу, которую нужно изменить.",
     "findingOrphan": "Замечание об изолированной странице касается недостающих связей, а не текста. Используйте «Применить связи» или добавьте связь во frontmatter страницы.",

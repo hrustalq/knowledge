@@ -18,7 +18,7 @@ import { computed, onMounted, provide, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { Braces, ChevronDown, ChevronLeft, FilePlus2, FileUp, FlaskConical, Globe, LayoutTemplate, Plus } from 'lucide-vue-next'
 import type { DocumentTreeNode } from '@knowledge/contracts'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { useDocumentsStore } from '@/stores/documents'
 import { useProjectsStore } from '@/stores/projects'
 import { useTemplatesStore } from '@/entities/template'
@@ -40,7 +40,7 @@ const { t } = useI18n()
 
 defineEmits<{ back: [] }>()
 
-const auth = useAuthStore()
+const canContribute = usePermission('workspace:contribute')
 const projects = useProjectsStore()
 const store = useDocumentsStore()
 const sidebar = useSidebarStore()
@@ -155,7 +155,7 @@ const shift = computed(() => treeShift(focusDepth.value, sidebar.treeDepthBudget
         </h2>
       </button>
 
-      <div v-if="auth.canEdit" class="ml-auto flex shrink-0 gap-0.5">
+      <div v-if="canContribute" class="ml-auto flex shrink-0 gap-0.5">
         <RouterLink
           to="/upload"
           :title="t('nav.importDocument')"
@@ -230,7 +230,7 @@ const shift = computed(() => treeShift(focusDepth.value, sidebar.treeDepthBudget
         <Skeleton v-for="i in 6" :key="i" class="h-7 w-full" />
       </div>
       <p v-else-if="store.tree.length === 0" class="text-muted-foreground px-2.5 pt-1 text-xs">
-        {{ t('nav.noPages') }}<template v-if="auth.canEdit">
+        {{ t('nav.noPages') }}<template v-if="canContribute">
           —
           <RouterLink to="/create" class="text-primary hover:underline">{{ t('nav.createFirstPage') }}</RouterLink>
           {{ t('nav.or') }}

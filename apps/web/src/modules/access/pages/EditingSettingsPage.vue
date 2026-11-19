@@ -13,11 +13,11 @@ import { Button } from '@knowledge/ui/button'
 import { Input } from '@knowledge/ui/input'
 import { RadioGroup, RadioGroupItem } from '@knowledge/ui/radio-group'
 import { HISTORY_AUDIENCES, PUBLISH_MODES, type HistoryAudience, type PublishMode } from '@knowledge/contracts'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { useFeaturesStore } from '@/stores/features'
 
 const { t } = useI18n()
-const auth = useAuthStore()
+const isWorkspaceAdmin = usePermission('workspace:admin')
 const features = useFeaturesStore()
 
 const policy = computed(() => features.editing)
@@ -75,7 +75,7 @@ async function save() {
       <h1 class="font-display text-2xl font-bold tracking-tight">{{ t('editing.title') }}</h1>
       <p class="kn-measure mt-0.5 text-sm text-muted-foreground">{{ t('editing.subtitle') }}</p>
     </div>
-    <p v-if="!auth.canAdminWorkspace" class="text-sm text-muted-foreground">{{ t('editing.adminOnly') }}</p>
+    <p v-if="!isWorkspaceAdmin" class="text-sm text-muted-foreground">{{ t('editing.adminOnly') }}</p>
     <p v-else-if="!policy" class="text-sm text-muted-foreground" role="status">{{ t('editing.unavailable') }}</p>
 
     <form v-else class="space-y-8" @submit.prevent="save">

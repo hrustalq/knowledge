@@ -13,6 +13,186 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.60.0] — 2026-11-19
+
+### Added
+
+- **What may I do here: `GET /v1/me/permissions?workspaceId=`.** One boolean per action of the new permission
+  catalogue (`@knowledge/contracts/permissions`): `platform:admin`, `workspace:create`, `workspace:view`,
+  `workspace:contribute`, `workspace:admin`, `workspace:history`, `workspace:publish-direct`,
+  `api-test-suites:generate` and `api-test-suites:run`. Each answer comes from the check that enforces the action,
+  so API-key narrowing, enforced SSO and the publish mode count exactly as they do on a write. A guest gets an
+  answer (mostly `false`) rather than a 403, and a read-only key gets `false` for every write. The web now reads its
+  workspace-level edit, comment, admin and capability checks from this answer; nothing it shows changes. (#1296)
+- **C4 architecture diagrams.** Write a C4 model in Structurizr DSL inside a ```` ```structurizr ```` fence, or
+  insert one with **C4 diagram** from the slash menu or the toolbar. It holds people, software systems,
+  containers and components, their relationships, and system context, container and component views. Each block has
+  **Diagram** and **Source** tabs. The drawing shows the first view; an element with a view of its own is outlined,
+  and clicking it (or Enter) zooms into its containers or components, while the trail above leads back out. Pan and
+  zoom work in place with Ctrl and the wheel, a pinch, or the − / + buttons.
+
+  The full-screen button opens the model for exploring on a page and as a **builder** in the editor:
+  - drag people, systems, containers and components in from a palette, move them, and drag the dot on an element's
+    edge onto another to connect them;
+  - edit names, descriptions and technology in an inspector, and open or create the level below;
+  - the keyboard does the same (arrow keys, Delete, Enter, ⌘Z).
+
+  Every change is written into the Structurizr text, never regenerated, so comments and styles survive. Positions are
+  kept as a `// @layout` comment, which Structurizr's own tools ignore. The full-screen view lives in the URL
+  (`?c4=…`), so Back closes it. The public reader explores models the same way. PDF and HTML exports print every
+  view under its title, and DOCX keeps the source. Element names and descriptions are searchable like the rest of
+  the page. (#1244)
+- A workspace **home** at `/`, which used to redirect to the page browser (`/documents` is unchanged). It shows the
+  key numbers: pages, verified share, pages needing attention, open merge requests, and, for admins while
+  analytics is on, unanswered searches. Each number links to the list behind it. Below them are quick actions (new
+  page, import, ask, start a workflow), **Needs you** (merge requests you review and your unread notifications),
+  recent pages, the activity feed and running agents. Every number and list covers only pages the reader may open.
+  Guests see pages, activity and their own inbox, but not merge requests, agents, health or analytics. A section
+  switched off in **Features** drops what it backs. A workspace admin presses **Customize** to hide widgets and
+  reorder them for everyone, or to reset to the default layout. The page renders server-side and works without
+  JavaScript. Home, the brand mark, sign-in, a workspace switch and a refused section now land on `/`. New routes:
+  `GET /v1/workspaces/:id/home` and the admin-only `PUT /v1/workspaces/:id/home/layout`.
+  `GET /v1/knowledge-health/summary` adds a `verified` count. (#1243)
+- The admin console's **Errors** section lists the errors the platform logged, grouped so a repeat shows once with
+  how many times it happened, when it was first and last seen, and which processes and how many workspaces it hit.
+  Two errors are the same when they come from the same place and differ only in ids, numbers or quoted values; a
+  catch-all like "Unhandled exception" is split by the underlying error's own message, which the row also shows.
+  Filter by period (last hour to last 30 days), process, workspace, and message text or a trace id. Opening an error
+  shows its trace id (with a copy button), process, route, workspace, user, stack and every field that was logged,
+  plus the group's 20 most recent occurrences. Platform admins only, through `GET /v1/admin/errors` and
+  `GET /v1/admin/errors/:id`. Errors written before this release show no process. (#1240)
+- The admin console's **Users** section lists every account with its status, platform-admin flag, last sign-in and
+  the workspaces it belongs to (with roles), filterable by status, role, workspace and name or email. Each account
+  has its own page where a platform admin renames it, sets its password, makes or revokes platform admin, disables
+  or enables it, and sees and signs out its sessions; its workspace memberships are listed read-only. Every one of
+  those writes now leaves an audit row: `user.created`, `user.renamed`, `user.admin_granted`, `user.admin_revoked`,
+  `user.disabled`, `user.enabled` and `user.password_set` (never the password itself). `GET /v1/users` adds
+  `lastSignInAt` to each user and `workspaceName` to each membership, and leaves out memberships of deleted
+  workspaces. The **Accounts** tab is gone from **Settings → Access**; platform admins get an **Accounts** link to
+  the console there instead, and `/settings/users` opens the members list. (#1239)
+- The admin console's **Monitoring** section shows whether the platform is healthy, refreshing every 10 s while
+  open. **Stores** lists PostgreSQL, Redis, MinIO and ArcadeDB, plus OpenSearch and SearXNG when configured, each
+  probed with a 2 s timeout, with its latency and why it is down. **Processes** shows how many API, worker,
+  learner and git-remote processes are live and which version each runs. The learner and git remote count as
+  missing only while their env flag is on. **Queues** shows waiting, active, delayed and failed counts for every
+  BullMQ queue; waiting includes a paused queue's jobs. **Background tasks** shows each sweeper's last pass, how
+  long it took, and whether it failed or is late (no pass in three intervals). The counts come from
+  `GET /v1/admin/health`, platform admins only. A new `GET /healthz` answers `{"status":"ok"}` without touching any
+  store, for liveness probes. (#1238)
+- The admin console's **Configuration** section lists every environment setting the running API resolved, grouped
+  (core, storage, sign-in, AI, …), with its effective value and whether it came from the environment or the
+  default. Search covers keys and values, and a filter shows only what the environment sets. Secrets (credentials,
+  tokens, private keys, DSNs) show only "set" or "not set": `GET /v1/admin/config` never returns their value, and
+  strips the user and password from every other URL. It covers the API process; workers, the learner and the git
+  remote resolve their own. Platform admins only. (#1237)
+- A platform admin console at `/admin`, a separate app with its own bundle and image (`knowledge-admin`). It uses
+  the member app's session, so there is no second sign-in, and anyone signed out is sent to `/login` and brought
+  back. Its sections are configuration, monitoring, users and errors, and each one says it is not built yet until
+  its own release fills it. Anyone who is not a platform admin, workspace admins included, gets a "Platform admins
+  only" page, and the console calls no API but `GET /v1/me` before it decides. Locally, `make dev` serves it on :5174;
+  open it at `localhost:5173/admin`, where `/login` works. The old `/admin/users` bookmark now opens the console
+  rather than the Accounts tab. (#1236)
+- The Pages list sorts by created date, last activity or title, either way round. The sort menu sits beside
+  **Filters**, and the order is labelled by column ("Newest first", "A → Z"). The choice is remembered per browser,
+  and the page loads already in that order. The date on each row is the one the list is sorted by. The filters
+  rail gains **Created by: Anyone / Me / Others**, where the creator is the author of the page's first revision.
+  `GET /v1/documents` takes `sort` (`createdAt|lastActivityAt|title`), `order` (`asc|desc`) and `author`
+  (`me|others`). Paging stays stable within any sort, and list rows carry `createdBy`. (#1256)
+- Every agent run has its own page at `/agents/runs/:id`: the agent, its status, trigger and subject, the model,
+  timing, and the tokens and cost billed to it. The run's findings appear there with the same actions as the runs
+  list, followed by a step log of each model call, each tool call (its arguments, the pages it returned and the start
+  of what it handed the model) and each warning. While a run is going, steps appear as they happen and nothing is
+  polled. Steps are kept after the run ends. An editor can **Cancel run** from the page: a pending run never starts,
+  and a running one stops before its next step. Agent-run notifications and the runs list now link to the page.
+  `GET /v1/ai/agents/runs/:id/steps` (cursor) and `POST /v1/ai/agents/runs/:id/cancel` are new, `agent.run.step`
+  and `agent.run.cancelled` join the live events, and run summaries carry `model`. A run that is private to its
+  owner (a memo's analysis, a restricted project's check) stays a 404 for everyone else, steps included. (#1247)
+- `make backtest ARGS="--report"` lists every API route with its request count, p50 and p95, and, when the API ran
+  with `OPS_QUERY_COUNT_ENABLED=true`, how many database operations each request made and the routes making the
+  most. Each `http.request` event then carries `queries` and `queryMs`. Search events also record the query-embedding
+  time (`embedMs`) and the PostgreSQL permission and trust join (`joinMs`), and the report prints both. The report
+  now reads `LOG_DIR` when it is set, as the writers do, rather than always `<repo>/logs`.
+  `apps/api/scripts/measure-api.mjs` is a repeatable API session to run before reading the report. The first
+  baseline is `docs/performance/2026-11-18-api.md`. (#1242)
+- **`/` commands in the chat composer.** Typing `/` at the start of the assistant's message box opens a menu:
+  `/new`, `/ask`, `/agent` (editors), `/model`, `/agent-key`, `/skill` and `/page` (each opens its list after a
+  space), `/capture` (save the latest reply to the knowledge base, editors) and `/help`. Arrow keys choose, Enter or
+  Tab apply, Esc closes. A command sets what the toolbar pickers set and is never sent to the model; a message that
+  matches no command is sent as typed. Command descriptions now come from one catalogue shared with Telegram's `/`
+  menu, so the wording of `/ask` and `/capture` there changed slightly. (#1249)
+
+### Operations
+
+- Migration `20270208100000_home_widgets` adds a nullable `home_widgets` JSONB column to `workspace_settings`;
+  null is the built-in home layout. It is additive and survives a rollback by retag. (#1243)
+
+- New env var `OPS_QUERY_COUNT_ENABLED` (default `false`). Leave it off in production: it wraps every database
+  operation to count it. Turn it on for a profiling session together with `OPS_JSONL_ENABLED`. (#1242)
+
+- Migration `20270207100000_ops_events_process` adds a nullable `process` column and a `created_at` index to
+  `ops_events`. It is additive and survives a rollback by retag: the previous image neither reads nor writes the
+  column. New env var `OPS_EVENTS_RETENTION_DAYS` (default 30): the worker now deletes `ops_events` rows older than
+  that once an hour, in batches. Nothing deleted them before, so the first passes after deploy clear the backlog
+  over a few hours. Set it in the GitHub production environment only to keep a different window. (#1240)
+- Every long-running process (API, worker, learner, git remote) now writes a heartbeat to Redis every 15 s, and
+  every sweeper pass, into two hashes: `ops:processes` and `ops:ticks`. The learner did not use Redis before. Where
+  a NetworkPolicy limits its egress, allow learner → redis:6379, or the console reports it as not live. The k3s
+  liveness and readiness probes can point at `GET /healthz` (homelab repo, tracked on #1274). No migration and no
+  new env var; rolling back by retag leaves the two hashes behind, harmless and pruned by nothing. (#1238)
+- New image `ghcr.io/hrustalq/knowledge-admin` (static files served by Caddy on :8080, `/healthz` for probes) and a
+  `/admin` route in `Caddyfile` to `admin:8080`. Until the homelab manifests gain an `admin` Deployment, Service,
+  NetworkPolicy and `knowledge-admin` image entry, `/admin` answers 404 in production and nothing else changes.
+  Rolling back by retag drops the console with no state to undo. (#1236)
+- Migration `20270206100000_agent_run_steps` creates `agent_run_steps` (cascading from `agent_runs`) and indexes
+  `ai_usage(agent_run_id)`. It only adds; the previous image never reads the table, so rolling back by retag is safe
+  (runs on the old image simply log no steps). (#1247)
+- Migration `20270205100000_document_created_by` adds the nullable `documents.created_by` column, fills it from
+  each page's earliest revision, and indexes `(workspace_id, created_by)` and `(workspace_id, title)`. It only
+  adds, and the previous image never reads the column, so rolling back by retag is safe. (#1256)
+
+### Changed
+
+- **Page, project and review controls follow the page's own permissions.** An editor on a page restricted to view
+  no longer sees Edit, Share, the drift check, verification actions or the branch edit link, and the page-tree row
+  shows no menu and cannot be dragged or dropped into; a guest granted edit on a page sees its Edit button, and a
+  guest granted view gets the comment box, as the API already allowed. With `history_audience: editors` the history
+  widget follows the caller's level on the page. Project name, description, delete and settings, and a merge
+  request's approve, merge, update-branch and check-override controls, are decided the same way. The answers come
+  from the server: `GET /v1/documents/:id/permissions` (a sibling of the page detail, never cached), a
+  `permissions` map on `GET /v1/projects/:id` and `GET /v1/merge-requests/:id`, and an `accessLevel` on every row of
+  `GET /v1/documents/tree` and `GET /v1/documents`. Nobody may do anything they could not do before. (#1298)
+- **Admin-only settings pages refuse at the door.** Opening Settings → Chat bots, Security, Features or Editing, or
+  Analytics, without the workspace admin role now lands on the "no access" page. Before, the page opened with every
+  control disabled. Every other control in the web app now reads what the API answered rather than the workspace
+  role, so what it shows matches what the API allows everywhere. That includes Settings → Access for a workspace
+  other than the active one, which is now judged against that workspace. `GET /v1/projects/:id/settings/access` is
+  removed: the project page reads the `permissions` map on `GET /v1/projects/:id` instead, and nothing else called
+  it. (#1299)
+
+- **Open tabs follow a role change without a reload.** When an admin changes someone's role, operator flag or
+  capabilities, adds or removes them, or flips their platform-admin flag, and when an SSO sign-in or SCIM sync moves
+  their membership, that person's open tabs re-read what they may do within a second or two. Controls they lost
+  disappear and new ones appear. A tab whose workspace they were removed from starts over at home. The API already
+  enforced the new role on the next request; only the UI lagged. The new live event `permissions.changed` reaches
+  only the person it names and carries nothing else. (#1297)
+- Clicking a page in a graph (the Pages graph, a page's graph widget and its full-screen view) opens the page in a
+  side sheet beside the graph instead of navigating away: title, breadcrumbs, verification and the rendered page,
+  with **Open page** and **Center graph here**. Clicking another page swaps the sheet; Esc or a click on empty canvas
+  closes it. Ctrl/⌘-click and middle-click open the page in a new tab. On a phone the sheet rises from the bottom.
+  The knowledge-health preview is the same sheet and now shows the page's breadcrumbs from its ancestors. (#1254)
+- Two agent runs no longer work the same page at once. When a sentinel and a cartographer are both started on one
+  page, by a trigger or by hand, the second waits as **pending** and starts as soon as the first finishes. It is not
+  refused. The runs list shows what it is waiting for ("Waiting for Sentinel to finish working on the same item"), and
+  `AgentRunSummary` carries `queuedBehind`. Runs on different pages, and workspace-wide runs such as the curator,
+  atlas and digest, still run side by side. A manual run on a single page no longer waits behind a workspace-wide run
+  of the same agent, and a scheduled run no longer skips its slot because a trigger is running that agent on some page.
+  (#1248)
+- A page holds at most one open merge request opened from an agent finding. Proposing a second finding on that page
+  answers 409 `agent-merge-request-open` with the open merge request's id, and the finding keeps its draft until that
+  one is merged or closed. Before, every finding opened its own merge request, and they collided only at merge. The
+  drift, scribe, memo, report and source-change sweepers skip a held finding and log it. It stays proposable by hand.
+  (#1248)
+
 ## [0.59.0] — 2026-11-17
 
 ### Added
@@ -7727,7 +7907,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.59.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.60.0...HEAD
+[0.60.0]: https://github.com/hrustalq/knowledge/compare/v0.59.0...v0.60.0
 [0.59.0]: https://github.com/hrustalq/knowledge/compare/v0.58.0...v0.59.0
 [0.58.0]: https://github.com/hrustalq/knowledge/compare/v0.57.0...v0.58.0
 [0.57.0]: https://github.com/hrustalq/knowledge/compare/v0.56.0...v0.57.0

@@ -52,6 +52,13 @@ function patchDocumentQueries(event: KnowledgeEvent, queryClient: QueryClient): 
   )
 }
 
+/**
+ * The reads that carry what the caller may do with one resource (#1298):
+ * re-asked when a grant or restriction moves (`acl.changed`) and when the
+ * person's own standing does (`permissions.changed`).
+ */
+export const PERMISSION_READS = ['/v1/documents/{id}/permissions', '/v1/projects/{id}', '/v1/merge-requests/{id}'] as const
+
 /** Default tracking rules for the knowledge platform's event vocabulary. */
 export const defaultLiveCacheRules: LiveCacheRule[] = [
   {
@@ -151,10 +158,17 @@ export const defaultLiveCacheRules: LiveCacheRule[] = [
   {
     // Background agent runs (docs/features/20). `subjectId` is the run id on
     // every agent event, so one rule refreshes the list and that run's detail.
+    // A step (#1247) refreshes the run page — its log, and the run row whose
+    // stage moved with it — but not the list, which a step does not change.
     on: 'agent.run.*',
     invalidate: (e) => [
-      ['/v1/ai/agents/runs'],
-      ...(e.subjectId ? [['/v1/ai/agents/runs/{id}', { id: e.subjectId }]] : []),
+      ...(e.type === 'agent.run.step' ? [] : [['/v1/ai/agents/runs']]),
+      ...(e.subjectId
+        ? [
+            ['/v1/ai/agents/runs/{id}', { id: e.subjectId }],
+            ['/v1/ai/agents/runs/{id}/steps', { id: e.subjectId }],
+          ]
+        : []),
     ],
   },
   {
@@ -220,6 +234,7 @@ export const defaultLiveCacheRules: LiveCacheRule[] = [
       ['/v1/projects'],
       ['/v1/search'],
       ['/v1/access-requests'],
+      ...PERMISSION_READS.map((key) => [key]),
     ],
   },
   { on: '*', invalidate: () => [['/v1/activity']] },

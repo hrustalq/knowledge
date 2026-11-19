@@ -20,13 +20,13 @@ import type { CodeUsagesResponse, DraftComponentResponse } from '@knowledge/cont
 import { apiQueryOptions, useApiMutation } from '@/shared/api/queries'
 import { errorDetails, errorMessage, errorReason } from '@/shared/api/errors'
 import { getWorkspaceId } from '@/shared/api/api'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { Button } from '@knowledge/ui/button'
 import ComponentDraftStatus from './ComponentDraftStatus.vue'
 
 const props = defineProps<{ documentId: string; projectId?: string | null; parentId?: string | null }>()
 const { t } = useI18n()
-const auth = useAuthStore()
+const canContribute = usePermission('workspace:contribute')
 
 const query = useQuery(
   computed(() => apiQueryOptions('/v1/documents/{id}/component/usages', { path: { id: props.documentId } })),
@@ -120,7 +120,7 @@ function namesOf(imports: CodeUsagesResponse['usages'][number]['imports']): stri
             {{ t('component.usedBy.undocumented') }}
           </span>
         </p>
-        <div v-if="!site.pages.length && !site.hiddenPages && auth.canEdit && usages.connector" class="pl-5">
+        <div v-if="!site.pages.length && !site.hiddenPages && canContribute && usages.connector" class="pl-5">
           <ComponentDraftStatus v-if="drafts.get(site.path)?.runId" :run-id="drafts.get(site.path)!.runId!" />
           <p v-else-if="drafts.get(site.path)?.mergeRequestId" class="text-xs">
             <RouterLink

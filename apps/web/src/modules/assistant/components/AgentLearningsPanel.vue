@@ -30,7 +30,7 @@ import {
 } from '@knowledge/contracts'
 import { apiQueryOptions, useApiMutation } from '@/shared/api/queries'
 import { getWorkspaceId, relativeTime } from '@/shared/api/api'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { useProjectsStore } from '@/stores/projects'
 import { useAgentNames } from '@/entities/person'
 import { Badge } from '@knowledge/ui/badge'
@@ -44,7 +44,7 @@ defineProps<{ canManage: boolean }>()
 const { t } = useI18n()
 
 const workspaceId = getWorkspaceId()
-const auth = useAuthStore()
+const canContribute = usePermission('workspace:contribute')
 const projects = useProjectsStore()
 const { agentNames } = useAgentNames()
 
@@ -125,7 +125,7 @@ function sourceLink(l: AgentLearningSummary): string | null {
       <p class="text-muted-foreground max-w-2xl text-sm">
         {{ t('ai.learnings.subtitle', { limit: data?.promptLimit ?? 0 }) }}
       </p>
-      <Button v-if="auth.canEdit && all.length > 0" size="sm" @click="openNew">
+      <Button v-if="canContribute && all.length > 0" size="sm" @click="openNew">
         <Plus class="size-3.5" /> {{ canManage ? t('ai.learnings.add') : t('ai.learnings.propose') }}
       </Button>
     </div>
@@ -142,7 +142,7 @@ function sourceLink(l: AgentLearningSummary): string | null {
       :example="{ label: t('ai.forExample'), lines: [t('ai.learnings.example1'), t('ai.learnings.example2')] }"
     >
       <template #action>
-        <Button v-if="auth.canEdit" size="sm" @click="openNew">
+        <Button v-if="canContribute" size="sm" @click="openNew">
           <Plus class="size-3.5" /> {{ canManage ? t('ai.learnings.add') : t('ai.learnings.propose') }}
         </Button>
       </template>

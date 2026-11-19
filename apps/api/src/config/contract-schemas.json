@@ -375,6 +375,603 @@
       "projectId"
     ]
   },
+  "AdminConfigEntry": {
+    "type": "object",
+    "properties": {
+      "key": {
+        "type": "string"
+      },
+      "group": {
+        "$ref": "#/components/schemas/EnvGroup"
+      },
+      "source": {
+        "$ref": "#/components/schemas/EnvSource"
+      },
+      "secret": {
+        "type": "boolean"
+      },
+      "set": {
+        "type": "boolean"
+      },
+      "value": {
+        "nullable": true,
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "boolean"
+          }
+        ]
+      }
+    },
+    "required": [
+      "key",
+      "group",
+      "source",
+      "secret",
+      "set",
+      "value"
+    ]
+  },
+  "AdminConfigResponse": {
+    "type": "object",
+    "properties": {
+      "process": {
+        "type": "string",
+        "enum": [
+          "api"
+        ]
+      },
+      "version": {
+        "type": "string"
+      },
+      "entries": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/AdminConfigEntry"
+        }
+      }
+    },
+    "required": [
+      "process",
+      "version",
+      "entries"
+    ]
+  },
+  "AdminDependency": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "$ref": "#/components/schemas/AdminDependencyName"
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "up",
+          "down",
+          "off"
+        ]
+      },
+      "latencyMs": {
+        "type": "number",
+        "nullable": true
+      },
+      "error": {
+        "type": "string",
+        "nullable": true
+      }
+    },
+    "required": [
+      "name",
+      "status",
+      "latencyMs",
+      "error"
+    ]
+  },
+  "AdminDependencyName": {
+    "type": "string",
+    "enum": [
+      "postgres",
+      "redis",
+      "minio",
+      "arcadedb",
+      "opensearch",
+      "searxng"
+    ]
+  },
+  "AdminErrorEvent": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "createdAt": {
+        "type": "string"
+      },
+      "traceId": {
+        "type": "string"
+      },
+      "process": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/OpsProcessKind"
+          }
+        ],
+        "nullable": true
+      },
+      "source": {
+        "type": "string"
+      },
+      "level": {
+        "type": "string"
+      },
+      "code": {
+        "type": "string",
+        "nullable": true
+      },
+      "message": {
+        "type": "string"
+      },
+      "context": {
+        "type": "string",
+        "nullable": true
+      },
+      "route": {
+        "type": "string",
+        "nullable": true
+      },
+      "durationMs": {
+        "type": "number",
+        "nullable": true
+      },
+      "workspaceId": {
+        "type": "string",
+        "nullable": true
+      },
+      "workspaceName": {
+        "type": "string",
+        "nullable": true
+      },
+      "userId": {
+        "type": "string",
+        "nullable": true
+      },
+      "userEmail": {
+        "type": "string",
+        "nullable": true
+      },
+      "stack": {
+        "type": "string",
+        "nullable": true
+      },
+      "fields": {
+        "type": "object",
+        "additionalProperties": {}
+      }
+    },
+    "required": [
+      "id",
+      "createdAt",
+      "traceId",
+      "process",
+      "source",
+      "level",
+      "code",
+      "message",
+      "context",
+      "route",
+      "durationMs",
+      "workspaceId",
+      "workspaceName",
+      "userId",
+      "userEmail",
+      "stack",
+      "fields"
+    ]
+  },
+  "AdminErrorGroup": {
+    "type": "object",
+    "properties": {
+      "fingerprint": {
+        "type": "string"
+      },
+      "latestId": {
+        "type": "string"
+      },
+      "message": {
+        "type": "string"
+      },
+      "detail": {
+        "type": "string",
+        "nullable": true
+      },
+      "level": {
+        "type": "string"
+      },
+      "code": {
+        "type": "string",
+        "nullable": true
+      },
+      "source": {
+        "type": "string"
+      },
+      "context": {
+        "type": "string",
+        "nullable": true
+      },
+      "route": {
+        "type": "string",
+        "nullable": true
+      },
+      "processes": {
+        "type": "array",
+        "items": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/OpsProcessKind"
+            }
+          ],
+          "nullable": true
+        }
+      },
+      "count": {
+        "type": "number"
+      },
+      "workspaceCount": {
+        "type": "number"
+      },
+      "firstSeenAt": {
+        "type": "string"
+      },
+      "lastSeenAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "fingerprint",
+      "latestId",
+      "message",
+      "detail",
+      "level",
+      "code",
+      "source",
+      "context",
+      "route",
+      "processes",
+      "count",
+      "workspaceCount",
+      "firstSeenAt",
+      "lastSeenAt"
+    ]
+  },
+  "AdminErrorOccurrence": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "createdAt": {
+        "type": "string"
+      },
+      "traceId": {
+        "type": "string"
+      },
+      "process": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/OpsProcessKind"
+          }
+        ],
+        "nullable": true
+      },
+      "workspaceId": {
+        "type": "string",
+        "nullable": true
+      },
+      "workspaceName": {
+        "type": "string",
+        "nullable": true
+      },
+      "route": {
+        "type": "string",
+        "nullable": true
+      }
+    },
+    "required": [
+      "id",
+      "createdAt",
+      "traceId",
+      "process",
+      "workspaceId",
+      "workspaceName",
+      "route"
+    ]
+  },
+  "AdminErrorResponse": {
+    "type": "object",
+    "properties": {
+      "event": {
+        "$ref": "#/components/schemas/AdminErrorEvent"
+      },
+      "group": {
+        "type": "object",
+        "properties": {
+          "fingerprint": {
+            "type": "string"
+          },
+          "count": {
+            "type": "number"
+          },
+          "firstSeenAt": {
+            "type": "string"
+          },
+          "lastSeenAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "fingerprint",
+          "count",
+          "firstSeenAt",
+          "lastSeenAt"
+        ]
+      },
+      "recent": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/AdminErrorOccurrence"
+        }
+      }
+    },
+    "required": [
+      "event",
+      "group",
+      "recent"
+    ]
+  },
+  "AdminErrorWorkspaceFacet": {
+    "type": "object",
+    "properties": {
+      "workspaceId": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "count": {
+        "type": "number"
+      }
+    },
+    "required": [
+      "workspaceId",
+      "name",
+      "count"
+    ]
+  },
+  "AdminErrorsResponse": {
+    "type": "object",
+    "properties": {
+      "groups": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/AdminErrorGroup"
+        }
+      },
+      "nextCursor": {
+        "type": "string",
+        "nullable": true
+      },
+      "workspaces": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/AdminErrorWorkspaceFacet"
+        }
+      },
+      "retentionDays": {
+        "type": "number"
+      },
+      "recording": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "groups",
+      "nextCursor",
+      "workspaces",
+      "retentionDays",
+      "recording"
+    ]
+  },
+  "AdminHealthResponse": {
+    "type": "object",
+    "properties": {
+      "checkedAt": {
+        "type": "string"
+      },
+      "version": {
+        "type": "string"
+      },
+      "dependencies": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/AdminDependency"
+        }
+      },
+      "queues": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/AdminQueue"
+        }
+      },
+      "processes": {
+        "anyOf": [
+          {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdminProcess"
+            }
+          }
+        ],
+        "nullable": true
+      },
+      "ticks": {
+        "anyOf": [
+          {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdminTick"
+            }
+          }
+        ],
+        "nullable": true
+      }
+    },
+    "required": [
+      "checkedAt",
+      "version",
+      "dependencies",
+      "queues",
+      "processes",
+      "ticks"
+    ]
+  },
+  "AdminProcess": {
+    "type": "object",
+    "properties": {
+      "kind": {
+        "$ref": "#/components/schemas/OpsProcessKind"
+      },
+      "expected": {
+        "type": "boolean"
+      },
+      "instances": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/AdminProcessInstance"
+        }
+      }
+    },
+    "required": [
+      "kind",
+      "expected",
+      "instances"
+    ]
+  },
+  "AdminProcessInstance": {
+    "type": "object",
+    "properties": {
+      "host": {
+        "type": "string"
+      },
+      "pid": {
+        "type": "number"
+      },
+      "version": {
+        "type": "string"
+      },
+      "startedAt": {
+        "type": "string"
+      },
+      "lastSeenAt": {
+        "type": "string"
+      },
+      "live": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "host",
+      "pid",
+      "version",
+      "startedAt",
+      "lastSeenAt",
+      "live"
+    ]
+  },
+  "AdminQueue": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string"
+      },
+      "counts": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "waiting": {
+                "type": "number"
+              },
+              "active": {
+                "type": "number"
+              },
+              "delayed": {
+                "type": "number"
+              },
+              "failed": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "waiting",
+              "active",
+              "delayed",
+              "failed"
+            ]
+          }
+        ],
+        "nullable": true
+      }
+    },
+    "required": [
+      "name",
+      "counts"
+    ]
+  },
+  "AdminTick": {
+    "type": "object",
+    "properties": {
+      "process": {
+        "$ref": "#/components/schemas/OpsProcessKind"
+      },
+      "name": {
+        "type": "string"
+      },
+      "host": {
+        "type": "string"
+      },
+      "intervalMs": {
+        "type": "number",
+        "nullable": true
+      },
+      "lastAt": {
+        "type": "string"
+      },
+      "ok": {
+        "type": "boolean"
+      },
+      "ms": {
+        "type": "number"
+      },
+      "late": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "process",
+      "name",
+      "host",
+      "intervalMs",
+      "lastAt",
+      "ok",
+      "ms",
+      "late"
+    ]
+  },
   "AgentCapability": {
     "type": "string",
     "enum": [
@@ -1376,6 +1973,81 @@
       "cancelled"
     ]
   },
+  "AgentRunStep": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "kind": {
+        "$ref": "#/components/schemas/AgentRunStepKind"
+      },
+      "name": {
+        "type": "string",
+        "nullable": true
+      },
+      "args": {
+        "type": "string",
+        "nullable": true
+      },
+      "output": {
+        "type": "string",
+        "nullable": true
+      },
+      "sources": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "documentId": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "documentId",
+            "title"
+          ]
+        }
+      },
+      "ok": {
+        "type": "boolean"
+      },
+      "tokens": {
+        "type": "number",
+        "nullable": true
+      },
+      "durationMs": {
+        "type": "number",
+        "nullable": true
+      },
+      "createdAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id",
+      "kind",
+      "name",
+      "args",
+      "output",
+      "sources",
+      "ok",
+      "tokens",
+      "durationMs",
+      "createdAt"
+    ]
+  },
+  "AgentRunStepKind": {
+    "type": "string",
+    "enum": [
+      "model",
+      "tool",
+      "warning"
+    ]
+  },
   "AgentRunSummary": {
     "type": "object",
     "properties": {
@@ -1429,6 +2101,26 @@
       "findingCount": {
         "type": "number"
       },
+      "queuedBehind": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "runId": {
+                "type": "string"
+              },
+              "agentName": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "runId",
+              "agentName"
+            ]
+          }
+        ],
+        "nullable": true
+      },
       "error": {
         "type": "string",
         "nullable": true
@@ -1446,6 +2138,10 @@
         "items": {
           "type": "string"
         }
+      },
+      "model": {
+        "type": "string",
+        "nullable": true
       },
       "startedAt": {
         "type": "string",
@@ -1473,10 +2169,12 @@
       "summary",
       "findings",
       "findingCount",
+      "queuedBehind",
       "error",
       "stage",
       "progress",
       "warnings",
+      "model",
       "startedAt",
       "finishedAt",
       "createdAt"
@@ -11072,6 +11770,69 @@
       "edges"
     ]
   },
+  "DocumentPermissionsResponse": {
+    "type": "object",
+    "properties": {
+      "document:view": {
+        "type": "boolean"
+      },
+      "document:comment": {
+        "type": "boolean"
+      },
+      "document:edit": {
+        "type": "boolean"
+      },
+      "document:manage": {
+        "type": "boolean"
+      },
+      "document:history": {
+        "type": "boolean"
+      },
+      "document:publish": {
+        "type": "boolean"
+      },
+      "branch:edit": {
+        "type": "boolean"
+      },
+      "project:edit": {
+        "type": "boolean"
+      },
+      "project:manage-access": {
+        "type": "boolean"
+      },
+      "project:manage-settings": {
+        "type": "boolean"
+      },
+      "project:manage-gates": {
+        "type": "boolean"
+      },
+      "project:delete": {
+        "type": "boolean"
+      },
+      "merge-request:contribute": {
+        "type": "boolean"
+      },
+      "merge-request:override-checks": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "document:view",
+      "document:comment",
+      "document:edit",
+      "document:manage",
+      "document:history",
+      "document:publish",
+      "branch:edit",
+      "project:edit",
+      "project:manage-access",
+      "project:manage-settings",
+      "project:manage-gates",
+      "project:delete",
+      "merge-request:contribute",
+      "merge-request:override-checks"
+    ]
+  },
   "DocumentQualityResponse": {
     "type": "object",
     "properties": {
@@ -11332,6 +12093,10 @@
       "createdAt": {
         "type": "string"
       },
+      "createdBy": {
+        "type": "string",
+        "nullable": true
+      },
       "kind": {
         "$ref": "#/components/schemas/ApiDocumentKind"
       },
@@ -11438,6 +12203,9 @@
       },
       "restricted": {
         "type": "boolean"
+      },
+      "accessLevel": {
+        "$ref": "#/components/schemas/EffectiveAccessLevel"
       },
       "draftOwnerId": {
         "type": "string",
@@ -11571,6 +12339,10 @@
       "createdAt": {
         "type": "string"
       },
+      "createdBy": {
+        "type": "string",
+        "nullable": true
+      },
       "kind": {
         "$ref": "#/components/schemas/ApiDocumentKind"
       },
@@ -11677,6 +12449,9 @@
       },
       "restricted": {
         "type": "boolean"
+      },
+      "accessLevel": {
+        "$ref": "#/components/schemas/EffectiveAccessLevel"
       },
       "draftOwnerId": {
         "type": "string",
@@ -12240,6 +13015,34 @@
       "type",
       "name",
       "degree"
+    ]
+  },
+  "EnvGroup": {
+    "type": "string",
+    "enum": [
+      "core",
+      "storage",
+      "auth",
+      "mail",
+      "ai",
+      "agents",
+      "memory",
+      "ingestion",
+      "search",
+      "quality",
+      "publishing",
+      "connectors",
+      "chat",
+      "memos",
+      "live",
+      "other"
+    ]
+  },
+  "EnvSource": {
+    "type": "string",
+    "enum": [
+      "env",
+      "default"
     ]
   },
   "ExportCapabilitiesResponse": {
@@ -13950,6 +14753,264 @@
       "editors"
     ]
   },
+  "HomeAgentRun": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "agentName": {
+        "type": "string"
+      },
+      "stage": {
+        "type": "string",
+        "nullable": true
+      },
+      "startedAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id",
+      "agentName",
+      "stage",
+      "startedAt"
+    ]
+  },
+  "HomeLayoutResponse": {
+    "type": "object",
+    "properties": {
+      "workspaceId": {
+        "type": "string"
+      },
+      "layout": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/HomeWidget"
+        }
+      },
+      "custom": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "workspaceId",
+      "layout",
+      "custom"
+    ]
+  },
+  "HomeMetrics": {
+    "type": "object",
+    "properties": {
+      "pages": {
+        "type": "number"
+      },
+      "verified": {
+        "type": "number",
+        "nullable": true
+      },
+      "stale": {
+        "type": "number",
+        "nullable": true
+      },
+      "openMergeRequests": {
+        "type": "number",
+        "nullable": true
+      },
+      "unansweredSearches": {
+        "type": "number",
+        "nullable": true
+      },
+      "searchDays": {
+        "type": "number"
+      }
+    },
+    "required": [
+      "pages",
+      "verified",
+      "stale",
+      "openMergeRequests",
+      "unansweredSearches",
+      "searchDays"
+    ]
+  },
+  "HomeNeedsYou": {
+    "type": "object",
+    "properties": {
+      "reviews": {
+        "anyOf": [
+          {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HomeReview"
+            }
+          }
+        ],
+        "nullable": true
+      },
+      "reviewCount": {
+        "type": "number"
+      },
+      "notifications": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/HomeNotification"
+        }
+      },
+      "unreadCount": {
+        "type": "number"
+      }
+    },
+    "required": [
+      "reviews",
+      "reviewCount",
+      "notifications",
+      "unreadCount"
+    ]
+  },
+  "HomeNotification": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "title": {
+        "type": "string",
+        "nullable": true
+      },
+      "documentId": {
+        "type": "string",
+        "nullable": true
+      },
+      "createdAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id",
+      "title",
+      "documentId",
+      "createdAt"
+    ]
+  },
+  "HomeRecentPage": {
+    "type": "object",
+    "properties": {
+      "documentId": {
+        "type": "string"
+      },
+      "title": {
+        "type": "string"
+      },
+      "updatedAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "documentId",
+      "title",
+      "updatedAt"
+    ]
+  },
+  "HomeResponse": {
+    "type": "object",
+    "properties": {
+      "workspaceId": {
+        "type": "string"
+      },
+      "layout": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/HomeWidget"
+        }
+      },
+      "custom": {
+        "type": "boolean"
+      },
+      "widgets": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/HomeWidget"
+        }
+      },
+      "metrics": {
+        "$ref": "#/components/schemas/HomeMetrics"
+      },
+      "needsYou": {
+        "$ref": "#/components/schemas/HomeNeedsYou"
+      },
+      "recent": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/HomeRecentPage"
+        }
+      },
+      "activity": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/ActivityEntry"
+        }
+      },
+      "agents": {
+        "type": "object",
+        "properties": {
+          "runs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HomeAgentRun"
+            }
+          },
+          "queued": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "runs",
+          "queued"
+        ]
+      }
+    },
+    "required": [
+      "workspaceId",
+      "layout",
+      "custom",
+      "widgets"
+    ]
+  },
+  "HomeReview": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "title": {
+        "type": "string"
+      },
+      "authorId": {
+        "type": "string"
+      },
+      "createdAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id",
+      "title",
+      "authorId",
+      "createdAt"
+    ]
+  },
+  "HomeWidget": {
+    "type": "string",
+    "enum": [
+      "metrics",
+      "actions",
+      "needs-you",
+      "recent",
+      "activity",
+      "agents"
+    ]
+  },
   "IdentityProviderView": {
     "type": "object",
     "properties": {
@@ -14963,6 +16024,9 @@
       "total": {
         "type": "number"
       },
+      "verified": {
+        "type": "number"
+      },
       "counts": {
         "type": "object",
         "properties": {
@@ -15038,6 +16102,7 @@
     "required": [
       "workspaceId",
       "total",
+      "verified",
       "counts"
     ]
   },
@@ -15416,6 +16481,52 @@
     "required": [
       "learnings",
       "promptLimit"
+    ]
+  },
+  "ListAgentRunStepsResponse": {
+    "type": "object",
+    "properties": {
+      "steps": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/AgentRunStep"
+        }
+      },
+      "nextCursor": {
+        "type": "string",
+        "nullable": true
+      },
+      "usage": {
+        "type": "object",
+        "properties": {
+          "calls": {
+            "type": "number"
+          },
+          "totalTokens": {
+            "type": "number"
+          },
+          "estimated": {
+            "type": "boolean"
+          },
+          "costs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CostAmount"
+            }
+          }
+        },
+        "required": [
+          "calls",
+          "totalTokens",
+          "estimated",
+          "costs"
+        ]
+      }
+    },
+    "required": [
+      "steps",
+      "nextCursor",
+      "usage"
     ]
   },
   "ListAgentRunsResponse": {
@@ -17061,6 +18172,49 @@
       "key-toolsets"
     ]
   },
+  "MePermissionsResponse": {
+    "type": "object",
+    "properties": {
+      "platform:admin": {
+        "type": "boolean"
+      },
+      "workspace:create": {
+        "type": "boolean"
+      },
+      "workspace:view": {
+        "type": "boolean"
+      },
+      "workspace:contribute": {
+        "type": "boolean"
+      },
+      "workspace:admin": {
+        "type": "boolean"
+      },
+      "workspace:history": {
+        "type": "boolean"
+      },
+      "workspace:publish-direct": {
+        "type": "boolean"
+      },
+      "api-test-suites:generate": {
+        "type": "boolean"
+      },
+      "api-test-suites:run": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "platform:admin",
+      "workspace:create",
+      "workspace:view",
+      "workspace:contribute",
+      "workspace:admin",
+      "workspace:history",
+      "workspace:publish-direct",
+      "api-test-suites:generate",
+      "api-test-suites:run"
+    ]
+  },
   "MeResponse": {
     "type": "object",
     "properties": {
@@ -18311,6 +19465,21 @@
       "hiddenPages"
     ]
   },
+  "MergeRequestDetailResponse": {
+    "type": "object",
+    "properties": {
+      "mergeRequest": {
+        "$ref": "#/components/schemas/MergeRequestInfo"
+      },
+      "permissions": {
+        "$ref": "#/components/schemas/MergeRequestPermissions"
+      }
+    },
+    "required": [
+      "mergeRequest",
+      "permissions"
+    ]
+  },
   "MergeRequestDiffResponse": {
     "type": "object",
     "properties": {
@@ -18489,6 +19658,69 @@
       "documentId",
       "title",
       "compare"
+    ]
+  },
+  "MergeRequestPermissions": {
+    "type": "object",
+    "properties": {
+      "document:view": {
+        "type": "boolean"
+      },
+      "document:comment": {
+        "type": "boolean"
+      },
+      "document:edit": {
+        "type": "boolean"
+      },
+      "document:manage": {
+        "type": "boolean"
+      },
+      "document:history": {
+        "type": "boolean"
+      },
+      "document:publish": {
+        "type": "boolean"
+      },
+      "branch:edit": {
+        "type": "boolean"
+      },
+      "project:edit": {
+        "type": "boolean"
+      },
+      "project:manage-access": {
+        "type": "boolean"
+      },
+      "project:manage-settings": {
+        "type": "boolean"
+      },
+      "project:manage-gates": {
+        "type": "boolean"
+      },
+      "project:delete": {
+        "type": "boolean"
+      },
+      "merge-request:contribute": {
+        "type": "boolean"
+      },
+      "merge-request:override-checks": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "document:view",
+      "document:comment",
+      "document:edit",
+      "document:manage",
+      "document:history",
+      "document:publish",
+      "branch:edit",
+      "project:edit",
+      "project:manage-access",
+      "project:manage-settings",
+      "project:manage-gates",
+      "project:delete",
+      "merge-request:contribute",
+      "merge-request:override-checks"
     ]
   },
   "MergeRequestProvenance": {
@@ -19079,6 +20311,15 @@
       "issuer",
       "clientId",
       "scopes"
+    ]
+  },
+  "OpsProcessKind": {
+    "type": "string",
+    "enum": [
+      "api",
+      "worker",
+      "learner",
+      "git"
     ]
   },
   "OverrideSetting<number>": {
@@ -19807,6 +21048,59 @@
       "cascade"
     ]
   },
+  "ProjectDetailResponse": {
+    "type": "object",
+    "properties": {
+      "projectId": {
+        "type": "string"
+      },
+      "workspaceId": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "description": {
+        "type": "string",
+        "nullable": true
+      },
+      "avatarUrl": {
+        "$ref": "#/components/schemas/AvatarUrl"
+      },
+      "avatarEmoji": {
+        "type": "string",
+        "nullable": true
+      },
+      "avatarColor": {
+        "type": "string",
+        "nullable": true
+      },
+      "documentCount": {
+        "type": "number"
+      },
+      "createdAt": {
+        "type": "string"
+      },
+      "restricted": {
+        "type": "boolean"
+      },
+      "permissions": {
+        "$ref": "#/components/schemas/ProjectPermissions"
+      }
+    },
+    "required": [
+      "avatarColor",
+      "avatarEmoji",
+      "avatarUrl",
+      "createdAt",
+      "description",
+      "documentCount",
+      "name",
+      "permissions",
+      "projectId",
+      "workspaceId"
+    ]
+  },
   "ProjectGitResponse": {
     "type": "object",
     "properties": {
@@ -19989,6 +21283,69 @@
       "recentPages"
     ]
   },
+  "ProjectPermissions": {
+    "type": "object",
+    "properties": {
+      "document:view": {
+        "type": "boolean"
+      },
+      "document:comment": {
+        "type": "boolean"
+      },
+      "document:edit": {
+        "type": "boolean"
+      },
+      "document:manage": {
+        "type": "boolean"
+      },
+      "document:history": {
+        "type": "boolean"
+      },
+      "document:publish": {
+        "type": "boolean"
+      },
+      "branch:edit": {
+        "type": "boolean"
+      },
+      "project:edit": {
+        "type": "boolean"
+      },
+      "project:manage-access": {
+        "type": "boolean"
+      },
+      "project:manage-settings": {
+        "type": "boolean"
+      },
+      "project:manage-gates": {
+        "type": "boolean"
+      },
+      "project:delete": {
+        "type": "boolean"
+      },
+      "merge-request:contribute": {
+        "type": "boolean"
+      },
+      "merge-request:override-checks": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "document:view",
+      "document:comment",
+      "document:edit",
+      "document:manage",
+      "document:history",
+      "document:publish",
+      "branch:edit",
+      "project:edit",
+      "project:manage-access",
+      "project:manage-settings",
+      "project:manage-gates",
+      "project:delete",
+      "merge-request:contribute",
+      "merge-request:override-checks"
+    ]
+  },
   "ProjectSettingKey": {
     "type": "string",
     "enum": [
@@ -20030,25 +21387,6 @@
     },
     "required": [
       "overrides"
-    ]
-  },
-  "ProjectSettingsAccess": {
-    "type": "object",
-    "properties": {
-      "projectId": {
-        "type": "string"
-      },
-      "canWrite": {
-        "type": "boolean"
-      },
-      "canWriteGates": {
-        "type": "boolean"
-      }
-    },
-    "required": [
-      "projectId",
-      "canWrite",
-      "canWriteGates"
     ]
   },
   "ProjectSiteResponse": {
@@ -26134,10 +27472,45 @@
       "createdAt": {
         "type": "string"
       },
+      "lastSignInAt": {
+        "type": "string",
+        "nullable": true
+      },
       "memberships": {
         "type": "array",
         "items": {
-          "$ref": "#/components/schemas/WorkspaceMembership"
+          "type": "object",
+          "properties": {
+            "workspaceName": {
+              "type": "string"
+            },
+            "workspaceId": {
+              "type": "string"
+            },
+            "role": {
+              "$ref": "#/components/schemas/WorkspaceRole"
+            },
+            "trustedOperator": {
+              "type": "boolean"
+            },
+            "capabilities": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/MemberCapability"
+              }
+            },
+            "source": {
+              "$ref": "#/components/schemas/MembershipSource"
+            }
+          },
+          "required": [
+            "capabilities",
+            "role",
+            "source",
+            "trustedOperator",
+            "workspaceId",
+            "workspaceName"
+          ]
         }
       }
     },
@@ -26152,6 +27525,7 @@
       "emailVerified",
       "hasApiKey",
       "createdAt",
+      "lastSignInAt",
       "memberships"
     ]
   },

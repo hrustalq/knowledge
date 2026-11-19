@@ -1099,12 +1099,20 @@ export const envSchema = z.object({
    * either way; this only controls whether errors are also queryable in SQL.
    */
   OPS_SINK_ENABLED: boolish(true),
+  /** Days ops_events rows are kept; the worker's OpsRetentionSweeper deletes older ones (#1240). */
+  OPS_EVENTS_RETENTION_DAYS: z.coerce.number().int().positive().default(30),
   /**
    * Write the backtest event stream (search / ai / ingest) to LOG_DIR. Separate
    * from LOG_LEVEL on purpose: these are measurements, not diagnostics, and a
    * full corpus re-index emits tens of thousands of them.
    */
   OPS_JSONL_ENABLED: boolish(true),
+  /**
+   * Count Prisma operations per HTTP request onto the `http.request` event
+   * (`queries`, `queryMs`), for N+1 hunting (#1242). Off by default: it wraps
+   * every operation in a client extension.
+   */
+  OPS_QUERY_COUNT_ENABLED: boolish(false),
 
   /**
    * Chat bots (issue #71). Off: the webhook answers 404, settings are still
@@ -1208,8 +1216,20 @@ function smtpUrlHasUserinfo(url: string): boolean {
   }
 }
 
+/**
+ * The schema keys the environment set, as the last `validateEnv` saw them —
+ * what the admin console's configuration view calls source `env` (#1237).
+ * Captured here because nothing later can tell: @nestjs/config writes the
+ * validated values, defaults included, back into `process.env`.
+ */
+let providedKeys: ReadonlySet<string> = new Set();
+export function providedEnvKeys(): ReadonlySet<string> {
+  return providedKeys;
+}
+
 /** Fail-fast env validation, plugged into @nestjs/config `validate`. */
 export function validateEnv(config: Record<string, unknown>): Env {
+  providedKeys = new Set(Object.keys(envSchema.shape).filter((key) => config[key] !== undefined));
   // #1143: production's default for an unset line is the closed one.
   if (config.NODE_ENV === 'production' && config.AUTH_REQUIRE_VERIFIED_EMAIL === undefined) {
     config = { ...config, AUTH_REQUIRE_VERIFIED_EMAIL: true };

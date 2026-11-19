@@ -62,20 +62,19 @@ import {
   descendantsOf,
   isRunActive,
 } from '@/modules/connectors/model/connector-ui'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { useDocumentsStore } from '@/stores/documents'
 
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const queryClient = useQueryClient()
-const auth = useAuthStore()
 const documents = useDocumentsStore()
 
 const runId = computed(() => String(route.params.runId ?? ''))
 
 /** Approving a page writes to the knowledge base, which is an editor's act. */
-const canManage = computed(() => auth.canEdit)
+const canManage = usePermission('workspace:contribute')
 
 // --- the run row, polled while it is still moving -------------------------
 

@@ -1,5 +1,6 @@
 import type { IngestionJobStatus, Locale, RevisionStatus, ScopedSetting } from '@knowledge/contracts/core';
 import type { FactExtractor } from '@knowledge/contracts/graph';
+import type { ActivityEntry } from '@knowledge/contracts/documents';
 
 // stale detection / reindex scheduling, historical fact queries
 // ---------------------------------------------------------------------------
@@ -176,6 +177,17 @@ export const AUDIT_ACTIONS = [
   'memory.directive_changed',
   'memory.operation_cancelled',
   'memory.promoted',
+  /**
+   * Account writes by a platform admin (#1239), `target` the user. One action per kind of change, written only when
+   * the value changed: `renamed` carries `from`/`to`, `created` whether an invite was mailed. Never a password.
+   */
+  'user.created',
+  'user.renamed',
+  'user.admin_granted',
+  'user.admin_revoked',
+  'user.disabled',
+  'user.enabled',
+  'user.password_set',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
@@ -835,7 +847,10 @@ export interface UserSummary {
   emailVerified: boolean;
   hasApiKey: boolean;
   createdAt: string;
-  memberships: WorkspaceMembership[];
+  /** The newest session's `created_at` (#1239), derived, never stored. Null: never signed in with a session. */
+  lastSignInAt: string | null;
+  /** Live workspaces only: a deleted one's memberships are left out. */
+  memberships: (WorkspaceMembership & { workspaceName: string })[];
 }
 
 // GET /v1/users
@@ -1735,6 +1750,110 @@ export interface WorkspaceFeaturesResponse {
   uses: WorkspaceUse[];
   /** False until an admin confirmed or skipped the first-visit purpose question. */
   purposeAsked: boolean;
+}
+
+/**
+ * The workspace home's widgets (#1243), in the built-in order. Each sits in a
+ * fixed zone: `top` spans the page, `main` is the wide column and `side` the
+ * narrow one. A workspace's layout is one ordered list of the widgets it shows
+ * (`workspace_settings.home_widgets`): a widget left out is hidden, the order
+ * applies within a zone, and null means every widget in this order.
+ */
+export const HOME_WIDGETS = ['metrics', 'actions', 'needs-you', 'recent', 'activity', 'agents'] as const;
+export type HomeWidget = (typeof HOME_WIDGETS)[number];
+export type HomeZone = 'top' | 'main' | 'side';
+export const HOME_WIDGET_ZONE: Record<HomeWidget, HomeZone> = {
+  metrics: 'top',
+  actions: 'top',
+  'needs-you': 'main',
+  recent: 'main',
+  activity: 'side',
+  agents: 'side',
+};
+
+export function isHomeWidget(value: unknown): value is HomeWidget {
+  return (HOME_WIDGETS as readonly unknown[]).includes(value);
+}
+
+/** The stored column read back: anything but a list is the default; unknown keys and repeats drop. */
+export function homeLayoutOf(stored: unknown): HomeWidget[] {
+  if (!Array.isArray(stored)) return [...HOME_WIDGETS];
+  return [...new Set(stored.filter(isHomeWidget))];
+}
+
+/** A metric the caller may not see, or whose section is off, is null — never a zero. */
+export interface HomeMetrics {
+  /** Pages the caller may open (archived and scaffold stubs excluded when knowledge health counts them). */
+  pages: number;
+  /** Verified pages, out of `pages`; null while knowledge health is off. */
+  verified: number | null;
+  /** Pages whose review interval ran out; null while knowledge health is off. */
+  stale: number | null;
+  /** Open merge requests on pages the caller may open; null for a guest. */
+  openMergeRequests: number | null;
+  /** Searches that found nothing in the last `searchDays`; workspace admins only, while analytics is on. */
+  unansweredSearches: number | null;
+  searchDays: number;
+}
+
+export interface HomeReview {
+  id: string;
+  title: string;
+  authorId: string;
+  createdAt: string;
+}
+
+export interface HomeNotification {
+  id: string;
+  title: string | null;
+  documentId: string | null;
+  createdAt: string;
+}
+
+export interface HomeNeedsYou {
+  /** Open merge requests with the caller as a reviewer, newest first; null for a guest. */
+  reviews: HomeReview[] | null;
+  reviewCount: number;
+  /** The caller's newest unread notifications. */
+  notifications: HomeNotification[];
+  unreadCount: number;
+}
+
+export interface HomeRecentPage {
+  documentId: string;
+  title: string;
+  updatedAt: string;
+}
+
+/** A running agent, without its input, findings or subject: the home names what runs, not what it reads. */
+export interface HomeAgentRun {
+  id: string;
+  agentName: string;
+  stage: string | null;
+  startedAt: string;
+}
+
+// GET /v1/workspaces/:id/home
+export interface HomeResponse {
+  workspaceId: string;
+  /** The workspace's layout, the shown widgets in order: what Customize edits. */
+  layout: HomeWidget[];
+  /** False while the workspace uses the built-in layout. */
+  custom: boolean;
+  /** What this caller sees, in order: the layout minus widgets they may not read. */
+  widgets: HomeWidget[];
+  metrics?: HomeMetrics;
+  needsYou?: HomeNeedsYou;
+  recent?: HomeRecentPage[];
+  activity?: ActivityEntry[];
+  agents?: { runs: HomeAgentRun[]; queued: number };
+}
+
+// PUT /v1/workspaces/:id/home/layout (workspace admin)
+export interface HomeLayoutResponse {
+  workspaceId: string;
+  layout: HomeWidget[];
+  custom: boolean;
 }
 
 /**

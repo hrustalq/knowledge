@@ -15,3 +15,9 @@ import type { AssistantChatMode } from '@knowledge/contracts'
  * every request and nothing can leak between them.
  */
 export const assistantMode = useStorage<AssistantChatMode>('kn_assistant_mode', 'ask')
+
+/**
+ * The agents the server picks by mode (researcher for Ask, author for Agent).
+ * The agent picker and `/agent-key` offer only the workspace's own beside them.
+ */
+export const MODE_AGENT_KEYS: ReadonlySet<string> = new Set(['researcher', 'author'])

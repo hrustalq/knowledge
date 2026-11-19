@@ -152,6 +152,46 @@
     },
     {
       "method": "GET",
+      "path": "/v1/admin/config",
+      "tag": "admin",
+      "summary": "This API process's resolved environment, with each key's source; secrets only as set/unset (platform admin)",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/errors",
+      "tag": "admin",
+      "summary": "Error groups (derived fingerprint) in a period, newest first, with count, first and last seen (platform admin)",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/errors/{id}",
+      "tag": "admin",
+      "summary": "One error event with its trace id, context and stack, plus its group (platform admin)",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/admin/health",
+      "tag": "admin",
+      "summary": "Every store probed (status, latency), BullMQ counts per queue, process heartbeats and each sweeper's last tick (platform admin)",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": true
+    },
+    {
+      "method": "GET",
       "path": "/v1/agent-outcomes",
       "tag": "ai",
       "summary": "Per agent, how many findings were accepted, dismissed or are pending, and how answers were voted; optionally split by prompt hash or model. Derived on read from runs, merge requests and votes",
@@ -312,6 +352,16 @@
     },
     {
       "method": "POST",
+      "path": "/v1/ai/agents/runs/{id}/cancel",
+      "tag": "ai",
+      "summary": "Cancel a pending or running run",
+      "role": "editor",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
       "path": "/v1/ai/agents/runs/{id}/findings/{index}/add-term",
       "tag": "ai",
       "summary": "Add the glossary term a finding proposes, optionally edited, as the caller",
@@ -366,6 +416,16 @@
       "tag": "ai",
       "summary": "Open a merge request that addresses one finding",
       "role": "editor",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/ai/agents/runs/{id}/steps",
+      "tag": "ai",
+      "summary": "One run's step log, oldest first, with its model spend",
+      "role": "viewer",
       "source": "query",
       "public": false,
       "platformAdmin": false
@@ -1707,6 +1767,16 @@
       "summary": "Revoke one of the caller's API keys; clients using it get 401 from the next request",
       "role": null,
       "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/me/permissions",
+      "tag": "auth",
+      "summary": "What the caller may do in a workspace: every workspace action of the permission catalogue (#1296)",
+      "role": "viewer",
+      "source": "query",
       "public": false,
       "platformAdmin": false
     },
@@ -3171,6 +3241,16 @@
       "platformAdmin": false
     },
     {
+      "method": "GET",
+      "path": "/v1/documents/{id}/permissions",
+      "tag": "documents",
+      "summary": "What the caller may do with the page, one flag per document action of the permission catalogue (#1298)",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
       "method": "POST",
       "path": "/v1/documents/{id}/publish",
       "tag": "documents",
@@ -4464,7 +4544,7 @@
       "method": "GET",
       "path": "/v1/merge-requests/{id}",
       "tag": "merge-requests",
-      "summary": "Get merge request state (heads, merge base, approvals, reviewers)",
+      "summary": "Get merge request state (heads, merge base, approvals, reviewers) and what the caller may do with it (#1298)",
       "role": "viewer",
       "source": "merge-request",
       "public": false,
@@ -4914,7 +4994,7 @@
       "method": "GET",
       "path": "/v1/projects/{id}",
       "tag": "projects",
-      "summary": "Project detail",
+      "summary": "Project detail, with what the caller may do with it (#1298)",
       "role": "viewer",
       "source": "project",
       "public": false,
@@ -4995,16 +5075,6 @@
       "path": "/v1/projects/{id}/overview",
       "tag": "projects",
       "summary": "Project overview: counts, contributors, recent pages",
-      "role": "viewer",
-      "source": "project",
-      "public": false,
-      "platformAdmin": false
-    },
-    {
-      "method": "GET",
-      "path": "/v1/projects/{id}/settings/access",
-      "tag": "projects",
-      "summary": "What the caller may change on the project's settings page: the non-gate settings, and the merge gates",
       "role": "viewer",
       "source": "project",
       "public": false,
@@ -6275,6 +6345,26 @@
       "path": "/v1/workspaces/{id}/features",
       "tag": "workspaces",
       "summary": "Switch sections off or back on (workspace admin): hides them in the app, 404s their routes and MCP tools",
+      "role": "admin",
+      "source": "workspace",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/workspaces/{id}/home",
+      "tag": "workspaces",
+      "summary": "The workspace home: the layout and the data of every widget the caller may read",
+      "role": "viewer",
+      "source": "workspace",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/workspaces/{id}/home/layout",
+      "tag": "workspaces",
+      "summary": "Set which home widgets show and in what order (workspace admin)",
       "role": "admin",
       "source": "workspace",
       "public": false,

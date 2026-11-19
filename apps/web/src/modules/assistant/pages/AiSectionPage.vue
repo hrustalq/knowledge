@@ -12,7 +12,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { Badge } from '@knowledge/ui/badge'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { aiSectionLabel } from '@/modules/assistant/model/ai-sections'
 import AiConfigPanel from '@/modules/assistant/components/AiConfigPanel.vue'
 import AiCapturePanel from '@/modules/assistant/components/AiCapturePanel.vue'
@@ -29,7 +29,6 @@ import AiLogsPanel from '@/modules/assistant/components/AiLogsPanel.vue'
 
 const { t } = useI18n()
 const route = useRoute()
-const auth = useAuthStore()
 
 const section = computed(() => route.params.section as string)
 const label = computed(() => aiSectionLabel(section.value))
@@ -37,7 +36,7 @@ const label = computed(() => aiSectionLabel(section.value))
 // Every endpoint behind these panels is @Access('admin', …) except the skill
 // roster, the styleguide (any member reads the rules they are held to) and the
 // learnings list (any member reads; editors propose), so a non-admin is told plainly rather than shown a wall of 403s.
-const canManage = computed(() => auth.canAdminWorkspace)
+const canManage = usePermission('workspace:admin')
 </script>
 
 <template>

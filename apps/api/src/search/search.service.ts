@@ -138,9 +138,13 @@ export class SearchService {
     };
 
     // The query embedding is computed once and reused by a refill round.
+    // `embedMs` is the share of the vector leg spent embedding the query (#1242).
     let embedding: Promise<number[]> | null = null;
+    let embedMs: number | undefined;
     const vectorLeg = (n: number) =>
-      (embedding ??= this.embeddings.embed(dto.query)).then((e) => this.graph.searchChunks(dto.workspaceId, e, n, acl, at));
+      (embedding ??= timed(() => this.embeddings.embed(dto.query)).then(([e, ms]) => ((embedMs = ms), e))).then((e) =>
+        this.graph.searchChunks(dto.workspaceId, e, n, acl, at),
+      );
     /**
      * Both legs, concurrently. The vector index is authoritative and the BM25
      * one optional (docs/architecture/04), so a failed or slow BM25 leg is
@@ -189,9 +193,12 @@ export class SearchService {
     let docById = new Map<string, Awaited<ReturnType<SearchService['loadDocs']>>[number]>();
     let trustOf = new Map<string, DocumentTrust>();
     let aclFiltered = 0;
+    // The PG join + trust read, summed over the refill round (#1242).
+    let joinMs = 0;
     const join = async () => {
       const pool = [...vectorHits, ...textHits];
       if (pool.length === 0) return;
+      const joinStart = process.hrtime.bigint();
       const docs = await this.loadDocs([...new Set(pool.map((h) => h.documentId))], scope);
       // #716: a scaffold stub has no chunks to match, so this only keeps one
       // out should a stub ever be indexed — search and Ask never show a skeleton.
@@ -202,6 +209,7 @@ export class SearchService {
       docById = new Map(pages.map((d) => [d.id, d]));
       trustOf = await this.trustOf(pages, await this.policy.thresholds(dto.workspaceId));
       aclFiltered = new Set(pool.filter((h) => !docById.has(h.documentId)).map((h) => h.chunkId)).size;
+      joinMs += since(joinStart);
     };
     // Archived pages drop first, whatever the switch says: they are put away,
     // not demoted.
@@ -247,6 +255,8 @@ export class SearchService {
         limit: k,
         fetchK,
         vectorMs: useVector ? vectorMs : undefined,
+        embedMs,
+        joinMs,
         fulltextMs: useText || degraded.length ? fulltextMs : undefined,
         tagsMs: tagKeys ? tagsMs : undefined,
         vectorHits: vectorHits.length,

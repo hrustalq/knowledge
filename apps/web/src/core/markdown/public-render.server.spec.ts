@@ -204,4 +204,35 @@ describe('renderPublicMarkdown', () => {
       expect(hrefs(html)).toEqual([`/s/kp_t/${IN}`, 'https://other.example/x'])
     })
   })
+  // #1244: the public reader explores a C4 model in the browser, so it gets the
+  // source; an export cannot be clicked, so it gets every view drawn in turn.
+  describe('C4 models', () => {
+    const md = '```structurizr\nmodel {\n  u = person "User"\n  s = softwareSystem "Shop" {\n    w = container "Web"\n  }\n  u -> w "Buys"\n}\n```'
+
+    it('stay their source for the reader', () => {
+      const { html } = renderPublicMarkdown(md, options)
+      expect(html).toContain('<code class="language-structurizr">')
+      expect(html).not.toContain('data-kn-mermaid')
+    })
+
+    it('become one titled mermaid block per view for an export', () => {
+      const { html } = renderPublicMarkdown(md, { ...options, staticC4: (type) => `[${type}]` })
+      expect(html).not.toContain('language-structurizr')
+      expect(html.match(/data-kn-mermaid="1"/g)).toHaveLength(2)
+      expect(html).toContain('Shop · [systemContext]')
+      expect(html).toContain('Shop · [container]')
+    })
+
+    it('draw a laid-out view on the server, no script needed', () => {
+      const placed = md.replace('}\n```', '}\nviews {\n  systemContext s {\n    include *\n    // @layout u 0 0, s 0 300\n  }\n}\n```')
+      const { html } = renderPublicMarkdown(placed, { ...options, staticC4: (type) => `[${type}]` })
+      expect(html).toContain('data-c4-node')
+      expect(html).not.toContain('data-kn-mermaid')
+    })
+
+    it('keep the source when the model does not parse', () => {
+      const broken = '```structurizr\nmodel {\n  c = container "C"\n}\n```'
+      expect(renderPublicMarkdown(broken, { ...options, staticC4: String }).html).toContain('language-structurizr')
+    })
+  })
 })

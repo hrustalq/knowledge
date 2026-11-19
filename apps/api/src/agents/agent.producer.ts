@@ -35,4 +35,18 @@ export class AgentProducer {
       { jobId: `${runId}#${attempt}`, attempts: 1, removeOnComplete: true, removeOnFail: false },
     );
   }
+
+  /**
+   * A run that waited behind another on its subject (#1248), woken when that
+   * one settles. A fresh jobId every time: the waiter's own job may still be
+   * finishing, and re-adding under its id would be silently dropped. Extra
+   * jobs for one run are harmless — only one wins the processor's guarded claim.
+   */
+  async enqueueWake(runId: string): Promise<void> {
+    await this.queue.add(
+      'run',
+      { runId },
+      { jobId: `${runId}#wake-${Date.now()}`, attempts: 1, removeOnComplete: true, removeOnFail: true },
+    );
+  }
 }

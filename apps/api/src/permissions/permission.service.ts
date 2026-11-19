@@ -20,6 +20,7 @@ import { ROLE_ORDER, type Principal } from '../auth/principal.js';
 import { t } from '../i18n/t.js';
 import {
   canSeeProject,
+  chainIds,
   clampToAudience,
   hidesAnything,
   levelOn,
@@ -40,6 +41,16 @@ export interface BranchRefs {
 }
 
 export type { AccessResource, ResolvedChain } from './acl-read.js';
+
+/** A guard's verdict as a boolean: a refusal is `false`, anything else (a 404, an outage) still throws. */
+export const allowed = (check: Promise<unknown>): Promise<boolean> =>
+  check.then(
+    () => true,
+    (error: unknown) => {
+      if (error instanceof ForbiddenException) return false;
+      throw error;
+    },
+  );
 
 /** One `acl.bypass` audit row per admin, resource and window — a page view is a dozen requests. */
 const BYPASS_AUDIT_WINDOW_MS = 60_000;
@@ -333,6 +344,45 @@ export class PermissionService {
     return levelOn(scope, resolved.chain, resolved.grants);
   }
 
+  /**
+   * `levelOn` for many pages of one workspace at once (#1298): the tree and the
+   * list stamp each row with the caller's level. Two reads whatever the row
+   * count — the workspace's restricted nodes, then every grant on them plus the
+   * caller's own — and the chain of a row is its `path`, so nothing is asked
+   * per row. Never `requireResource`, which audits an admin's bypass per page.
+   */
+  async rowLevels(scope: AccessScope): Promise<(row: { id: string; projectId: string; path: string }) => EffectiveAccessLevel> {
+    if (scope.bypass) {
+      const level: EffectiveAccessLevel = scope.readOnly ? 'view' : 'manage';
+      return () => level;
+    }
+    const restricted = new Set(
+      (
+        await this.prisma.$queryRaw<{ id: string }[]>`
+          SELECT "id"::text FROM "projects" WHERE "workspace_id" = ${scope.workspaceId}::uuid AND "restricted"
+          UNION ALL
+          SELECT "id"::text FROM "documents" WHERE "workspace_id" = ${scope.workspaceId}::uuid AND "restricted"`
+      ).map((r) => r.id),
+    );
+    const grants = await this.prisma.accessGrant.findMany({
+      where: {
+        workspaceId: scope.workspaceId,
+        OR: [
+          ...(restricted.size ? [{ resourceId: { in: [...restricted] } }] : []),
+          { subjectType: 'user', subjectId: scope.userId },
+          ...(scope.groupIds.size ? [{ subjectType: 'group', subjectId: { in: [...scope.groupIds] } }] : []),
+        ],
+      },
+      select: { resourceId: true, subjectType: true, subjectId: true, level: true },
+    });
+    return (row) => {
+      const ids = chainIds(row);
+      if (!ids.includes(row.id)) ids.push(row.id); // a `/pending/` row: itself alone, as `resolveChain` reads it
+      const chain = ids.map((id, i) => ({ type: i === 0 ? ('project' as const) : ('document' as const), id, restricted: restricted.has(id) }));
+      return levelOn(scope, chain, grants);
+    };
+  }
+
   /** `levelFor`, throwing the guard's refusal when it falls short of `needed`. */
   async requireLevel(scope: AccessScope, resource: AccessResource, needed: AccessLevel): Promise<EffectiveAccessLevel> {
     const level = await this.levelFor(scope, resource);
@@ -379,6 +429,18 @@ export class PermissionService {
     throw new ForbiddenException({ statusCode: 403, message: t('error.access.historyRestricted'), reason: 'history-restricted' });
   }
 
+  /**
+   * May this person write a published page's default branch without a merge
+   * request (#958): any writer in a `direct` workspace, a workspace or platform
+   * admin in a `review` one. The publish mode half of `assertMayWrite` in the
+   * documents service; the caller has already passed `requireRole('editor')`.
+   */
+  async mayPublishDirect(principal: Principal, workspaceId: string): Promise<boolean> {
+    if (principal.mode === 'dev') return true;
+    if ((await this.editing.policy(workspaceId)).publishMode.effective === 'direct') return true;
+    return (await this.scopeFor(principal, workspaceId)).bypass;
+  }
+
   /** `requireHistory` for a principal: the scope is built only when the workspace restricts history. */
   async requireHistoryAs(principal: Principal, workspaceId: string, documentId?: string, revisionIds?: readonly string[]): Promise<void> {
     if (principal.mode === 'dev') return;
@@ -416,24 +478,6 @@ export class PermissionService {
     if (level === 'manage' && (scope.bypass || holdsGrant)) return;
     // An editor's implicit manage on an unmanaged project reads as `edit` here.
     throw this.refusal(scope, resource, level === 'manage' ? 'edit' : level, 'manage');
-  }
-
-  /** What the caller may change on a project's settings page (#928): the answers of the two guards, asked without throwing. */
-  async projectSettingsAccess(principal: Principal, projectId: string): Promise<{ canWrite: boolean; canWriteGates: boolean }> {
-    const allowed = (check: Promise<void>) =>
-      check.then(
-        () => true,
-        (error: unknown) => {
-          if (error instanceof ForbiddenException) return false;
-          throw error;
-        },
-      );
-    const { workspaceId } = await this.resolveChain({ type: 'project', id: projectId });
-    const [canWrite, canWriteGates] = await Promise.all([
-      allowed(this.requireProjectManage(principal, projectId)),
-      allowed(this.access.requireRole(principal, workspaceId, 'admin')),
-    ]);
-    return { canWrite, canWriteGates };
   }
 
   /**

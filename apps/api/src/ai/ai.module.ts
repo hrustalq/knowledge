@@ -1,5 +1,6 @@
 import { ConflictsCoreModule } from '../conflicts/conflicts-core.module.js';
 import { forwardRef, Module } from '@nestjs/common';
+import { EventsModule } from '../events/events.module.js';
 import { PrismaModule } from '../prisma/prisma.module.js';
 import { ActivityModule } from '../activity/activity.module.js';
 import { DocumentsModule } from '../documents/documents.module.js';
@@ -49,6 +50,8 @@ import { AgentOutcomesController } from './agent-outcomes.controller.js';
     // A signed delivery fires its trigger inline (#70); controller-free.
     AgentTriggerCoreModule,
     ActivityModule,
+    // A cancelled run is announced on the bus (#1247).
+    EventsModule,
     // Turning a finding into a merge request writes a branch, a revision and an
     // MR — the API half of feature 17's "the worker generates, the API
     // publishes". DocumentsModule does not import this one, so no new cycle.
@@ -68,6 +71,7 @@ import { AgentOutcomesController } from './agent-outcomes.controller.js';
   providers: [AiAgentsService, AgentRunsService, AgentTriggersService, AgentRecipesService, AgentFindingsService, AgentTiebreakService, AiPluginsService, AiSettingsService, McpClientService, SecretResealService],
   // AgentFindingsService for the drift check's publisher (docs/features/35),
   // which proposes through the very path the Propose button takes.
-  exports: [AiCoreModule, AgentCoreModule, AiPluginsService, AgentTiebreakService, AgentFindingsService],
+  // AgentRunsService for the workspace home's running agents (#1243).
+  exports: [AiCoreModule, AgentCoreModule, AiPluginsService, AgentTiebreakService, AgentFindingsService, AgentRunsService],
 })
 export class AiModule {}

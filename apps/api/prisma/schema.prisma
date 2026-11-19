@@ -122,6 +122,10 @@ model Document {
   /// until `acl_stamped_version` catches up (#76, phase 3).
   aclVersion            Int       @default(0) @map("acl_version")
   aclStampedVersion     Int       @default(0) @map("acl_stamped_version")
+  /// Who created the page (#1256): its first revision's author, written by
+  /// `createDocument` (head-less pages too) and backfilled in the migration.
+  /// Null only for a page that never had a revision. No FK, house policy.
+  createdBy             String?   @map("created_by") @db.Uuid
   createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
   project              Project               @relation(fields: [projectId], references: [id])
@@ -154,6 +158,8 @@ model Document {
   @@index([workspaceId, lastActivityAt])
   @@index([workspaceId, archivedAt])
   @@index([workspaceId, kind])
+  @@index([workspaceId, createdBy])
+  @@index([workspaceId, title])
   @@map("documents")
 }
 
@@ -1736,13 +1742,48 @@ model AgentRun {
   createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
-  agent AiAgent? @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  agent AiAgent?        @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  steps AgentRunStep[]
 
   @@index([workspaceId, status, createdAt])
   @@index([workspaceId, agentKey, createdAt])
   @@index([workspaceId, agentKey, subjectKey, createdAt])
   @@index([triggerId, subjectKey, createdAt])
   @@map("agent_runs")
+}
+
+/// One step of a background agent run (#1247): a model call, a tool call or a
+/// warning, appended by the worker as the run goes and read on the run page.
+/// Inserted only while the run is `running`, in one guarded statement — which
+/// is also how the worker learns the run was cancelled or handed to a retry.
+/// Readable by whoever may read the run (`mayReadRun`), never by anyone else.
+model AgentRunStep {
+  /// Write order, and the steps cursor.
+  id          BigInt   @id @default(autoincrement())
+  workspaceId String   @map("workspace_id") @db.Uuid
+  runId       String   @map("run_id") @db.Uuid
+  /// 'model' | 'tool' | 'warning' — AGENT_RUN_STEP_KINDS.
+  kind        String
+  /// A model call's operation, a tool's name; null for a warning.
+  name        String?
+  /// A tool call's arguments as the model wrote them, truncated.
+  args        String?
+  /// A prefix of what a tool handed the model (its own untrusted wrapper
+  /// included), a failed call's error, or a warning's text. Truncated.
+  output      String?
+  /// The pages a tool returned: `{ documentId, title }[]`, capped.
+  sources     Json?
+  ok          Boolean  @default(true)
+  /// A model call's tokens and wall time.
+  tokens      Int?
+  durationMs  Int?     @map("duration_ms")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  run AgentRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId, id])
+  @@index([workspaceId])
+  @@map("agent_run_steps")
 }
 
 /// Starts an agent run when something happens in the workspace (#70).
@@ -1914,6 +1955,7 @@ model AiUsage {
 
   @@index([workspaceId, createdAt])
   @@index([workspaceId, userId, createdAt])
+  @@index([agentRunId])
   @@map("ai_usage")
 }
 
@@ -1937,6 +1979,10 @@ model OpsEvent {
   traceId     String   @map("trace_id")
   /// 'http' | 'job' | 'ws' | 'mcp' | 'cli'
   source      String
+  /// The entrypoint that wrote it (`OpsProcessKind`: api | worker | learner |
+  /// git), stamped by the sink (#1240). Null for a process with no beacon (the
+  /// MCP stdio server, a script) and for every row written before the column.
+  process     String?
   /// pino level name — in practice 'warn' | 'error' | 'fatal'.
   level       String
   /// OpsCode or ApiErrorCode from contracts. A closed set, so failures can be
@@ -1958,6 +2004,8 @@ model OpsEvent {
   @@index([workspaceId, createdAt])
   @@index([traceId])
   @@index([code, createdAt])
+  /// The admin errors list (#1240) and the retention sweep read across workspaces by time.
+  @@index([createdAt])
   @@map("ops_events")
 }
 
@@ -4248,6 +4296,8 @@ model WorkspaceSettings {
   historyAudience         String?  @map("history_audience")
   /// Non-author approvals a merge needs; null is MR_REQUIRED_APPROVALS (a default, not a ceiling).
   requiredApprovals       Int?     @map("required_approvals")
+  /// #1243 workspace home: the shown HOME_WIDGETS keys, in order; null is the built-in layout (`homeLayoutOf`).
+  homeWidgets             Json?    @map("home_widgets")
   updatedAt               DateTime @updatedAt @map("updated_at") @db.Timestamptz
   updatedBy               String?  @map("updated_by") @db.Uuid
 

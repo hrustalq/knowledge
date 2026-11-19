@@ -6,6 +6,9 @@ export const routes: RouteRecordRaw[] = [
   // meta.trail 'lg': below lg the breadcrumb only repeated "Assistant" above the
   // chat header and cost a short screen 36px of transcript (#1067).
   { path: '/assistant', component: () => import('./pages/AssistantPage.vue'), meta: { fill: true, feature: 'assistant', trail: 'lg' } },
+  // One background run and its step log (#1247). Not behind the `assistant`
+  // section: runs are listed to every member, as the API lists them.
+  { path: '/agents/runs/:id', component: () => import('./pages/AgentRunPage.vue') },
 ]
 
 // AI (issue #182): Connect AI plus the assistant's provider config,
@@ -28,9 +31,8 @@ export const aiSectionRoutes: RouteRecordRaw[] = [
       return { path: `/settings/ai/${isAiSection(tab) ? tab : DEFAULT_AI_SECTION}`, query }
     },
   },
-  // Workspace administration. Gated in the page on workspace admin
-  // rather than meta.platformAdmin — these are workspace settings,
-  // not platform ones.
+  // Workspace administration that every member reads: gated in the
+  // page on `workspace:admin`, not by the router.
   {
     path: `:section(${AI_PANEL_SECTIONS.join('|')})`,
     component: () => import('./pages/AiSectionPage.vue'),

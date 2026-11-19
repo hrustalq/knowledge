@@ -71,6 +71,74 @@
     "indexed": "Indexed",
     "failed": "Indexing failed"
   },
+  "home": {
+    "title": "Home",
+    "widget": {
+      "metrics": "Key numbers",
+      "actions": "Quick actions",
+      "needsYou": "Needs you",
+      "recent": "Recent pages",
+      "activity": "Activity",
+      "agents": "Running agents"
+    },
+    "metrics": {
+      "pages": "Pages",
+      "pagesHint": "Browse all pages",
+      "verified": "Verified",
+      "verifiedHint": "no pages verified | {n} page verified | {n} pages verified",
+      "stale": "Needs attention",
+      "staleHint": "Expired, outdated or inactive",
+      "openChanges": "Open changes",
+      "openChangesHint": "Merge requests waiting",
+      "unanswered": "Unanswered searches",
+      "unansweredHint": "Found nothing, last {n} days"
+    },
+    "actions": {
+      "newPage": "New page",
+      "import": "Import",
+      "ask": "Ask",
+      "workflow": "Start a workflow"
+    },
+    "needsYou": {
+      "empty": "Nothing waits on you: no reviews, no unread notifications.",
+      "reviews": "Your reviews",
+      "allReviews": "All {n}",
+      "unread": "Unread",
+      "inbox": "Inbox | Inbox ({n}) | Inbox ({n})",
+      "untitled": "Notification"
+    },
+    "activity": {
+      "all": "View all activity"
+    },
+    "recent": {
+      "empty": "No pages yet.",
+      "create": "Create the first one",
+      "all": "All pages"
+    },
+    "agents": {
+      "empty": "No agent is running.",
+      "onlyQueued": "No agent is running; {n} queued. | No agent is running; {n} queued. | No agent is running; {n} queued.",
+      "queued": "and {n} queued | and {n} queued | and {n} queued",
+      "all": "All runs"
+    },
+    "customize": {
+      "start": "Customize",
+      "reset": "Reset to default",
+      "saved": "Home layout saved for everyone in this workspace",
+      "hint": "Choose which widgets everyone in this workspace sees, and their order. Members only see the widgets they have access to.",
+      "hidden": "(hidden)",
+      "show": "Show",
+      "hide": "Hide",
+      "moveUp": "Move {name} up",
+      "moveDown": "Move {name} down",
+      "afterSave": "Appears once you save.",
+      "hideNamed": "Hide {name}",
+      "showNamed": "Show {name}",
+      "moved": "{name} moved to {n} of {total}",
+      "nowShown": "{name} shown",
+      "nowHidden": "{name} hidden"
+    }
+  },
   "nav": {
     "toggleSidebar": "Toggle navigation",
     "searchPages": "Search pages",
@@ -264,6 +332,8 @@
     }
   },
   "documents": {
+    "previewRoot": "Top level",
+    "previewOpen": "Open page",
     "title": "Pages",
     "scopeProject": "in {name}",
     "scopeWorkspace": "in this workspace",
@@ -275,7 +345,6 @@
     "upload": "Upload",
     "newPage": "New page",
     "ofMembers": "{shown} of {total}",
-    "ofAccounts": "{shown} of {total}",
     "backToHead": "Back to head",
     "revision": "Revision",
     "status": "Status",
@@ -288,6 +357,29 @@
     "viewGraph": "Graph",
     "viewTree": "Tree",
     "viewList": "List",
+    "sort": {
+      "title": "Sort by",
+      "label": "Sort: {sort}",
+      "by": {
+        "createdAt": "Created",
+        "lastActivityAt": "Last activity",
+        "title": "Title"
+      },
+      "date": {
+        "desc": "Newest first",
+        "asc": "Oldest first"
+      },
+      "alpha": {
+        "asc": "A → Z",
+        "desc": "Z → A"
+      }
+    },
+    "author": {
+      "label": "Created by",
+      "all": "Anyone",
+      "me": "Me",
+      "others": "Others"
+    },
     "noPagesForFilters": "No pages match these filters.",
     "topLevel": "Top level",
     "relationsCount": "Relations",
@@ -329,7 +421,7 @@
     "generalHint": "Workspace name and deletion",
     "projectsHint": "Organize documents",
     "glossaryHint": "Shared vocabulary",
-    "accessHint": "Members, roles and accounts",
+    "accessHint": "Members, roles and groups",
     "activityHint": "Workspace timeline",
     "aiHint": "Connect agents, assistant, usage",
     "workflowsHint": "Document step chains",
@@ -2034,6 +2126,7 @@
     "newChildFromTemplate": "New child page from template…"
   },
   "graph": {
+    "centerHere": "Center graph here",
     "depth": "Depth",
     "hops": "{n} hop | {n} hops",
     "zoomIn": "Zoom in",
@@ -2125,7 +2218,6 @@
     "fields": "{n} field | {n} fields",
     "relations": "{n} relation | {n} relations",
     "members": "{n} member | {n} members",
-    "accounts": "{n} account | {n} accounts",
     "runs": "{n} run | {n} runs",
     "openComments": "{n} open comment | {n} open comments",
     "pages": "no pages | {n} page | {n} pages",
@@ -2261,7 +2353,13 @@
     "copyReply": "Copy reply",
     "dictateMessage": "Dictate a message",
     "modelDefault": "Default",
-    "fromChat": "From chat"
+    "fromChat": "From chat",
+    "slash": {
+      "label": "Commands",
+      "noMatch": "Nothing matches",
+      "loading": "Loading…",
+      "keys": "↑↓ choose · Enter or Tab apply · Esc close"
+    }
   },
   "ai": {
     "excludesCalls": "excludes {calls} with no price",
@@ -2510,6 +2608,7 @@
       "emptyTitle": "No runs yet",
       "emptyBody": "Start one from the Agents tab, or give an agent a schedule.",
       "noSummary": "No summary.",
+      "queuedBehind": "Waiting for {agent} to finish working on the same item.",
       "findings": "no findings | {count} finding | {count} findings",
       "status": {
         "pending": "Pending",
@@ -2577,7 +2676,33 @@
       "dismissedToast": "Finding dismissed",
       "dismissedWithLearning": "Finding dismissed. Your learning is waiting for review.",
       "showDismissed": "Show dismissed ({count})",
-      "learningProposed": "Learning proposed"
+      "learningProposed": "Learning proposed",
+      "openRun": "Open run",
+      "page": {
+        "started": "Started {when}",
+        "queued": "Queued {when}",
+        "took": "took {duration}",
+        "tokens": "{n} tokens | {n} token | {n} tokens",
+        "subjectPage": "The page",
+        "subjectMergeRequest": "The merge request",
+        "cancel": "Cancel run",
+        "cancelTitle": "Cancel this run?",
+        "cancelBody": "A pending run never starts. A running one stops before its next step; what it already did stays in the log.",
+        "keepRunning": "Keep running",
+        "cancelled": "Run cancelled",
+        "steps": "Steps",
+        "stepsEmptyLive": "No steps yet. They appear here as the run works.",
+        "stepsEmpty": "This run logged no steps.",
+        "loadMore": "Load more steps",
+        "output": "Output",
+        "error": "Error",
+        "failed": "failed",
+        "kind": {
+          "model": "Model call",
+          "tool": "Tool",
+          "warning": "Warning"
+        }
+      }
     },
     "providerNone": "None — assistant disabled",
     "overridden": "· overridden",
@@ -3394,7 +3519,7 @@
     "tabMembers": "Members",
     "tabRoles": "Roles",
     "tabGroups": "Groups",
-    "tabAccounts": "Accounts",
+    "accountsInConsole": "Accounts",
     "rolesHint": "Four roles, each one adding to the one before it. A guest starts from nothing. A role is held per workspace.",
     "rolesNoteMerge": "Merging is an editor’s right, not an admin’s — there is no separate approver rank.",
     "rolesNoteViewer": "A viewer can comment and can use the AI assistant; neither needs edit access.",
@@ -3639,49 +3764,6 @@
       "noGrants": "Nobody yet — only you and workspace admins can read this draft.",
       "askOwner": "Only the person who started this draft, or an admin, changes who it is shared with."
     }
-  },
-  "users": {
-    "user": "User",
-    "status": "Status",
-    "newUser": "New user",
-    "noneMatch": "No accounts match these filters.",
-    "workspaces": "Workspaces",
-    "credentials": "Credentials",
-    "actions": "Actions",
-    "platformAdminBadge": "platform admin",
-    "disabledBadge": "disabled",
-    "activeBadge": "active",
-    "unverifiedBadge": "unconfirmed email",
-    "memberships": "{roles} ({n})",
-    "credPassword": "password",
-    "credApiKey": "api key",
-    "credNone": "none",
-    "revokeAdmin": "Revoke admin",
-    "makeAdmin": "Make admin",
-    "setPassword": "Set password",
-    "enable": "Enable",
-    "disable": "Disable",
-    "adminRemoved": "Admin removed",
-    "promotedToAdmin": "Promoted to platform admin",
-    "accountEnabled": "Account enabled",
-    "accountDisabled": "Account disabled",
-    "passwordSet": "Password set — existing sessions revoked",
-    "passwordPrompt": "New password for {email} (min 8 chars):",
-    "created": "Created {email}",
-    "newUserDesc": "Leave the password empty to email an invite with a link to set one.",
-    "email": "Email",
-    "displayName": "Display name",
-    "displayNamePlaceholder": "Teammate",
-    "initialPassword": "Initial password",
-    "viaResetLink": "invite by email if empty",
-    "creating": "Creating…",
-    "sessions": "Sessions",
-    "sessionsTitle": "Sessions of {name}",
-    "sessionsDesc": "Where {email} is signed in. A signed-out session has to log in again on its next request; API keys keep working.",
-    "sessionsNone": "No live sessions.",
-    "sessionsLoadFailed": "Could not load sessions",
-    "sessionsRevokeAll": "Sign out everywhere",
-    "sessionsRevokedAll": "Signed out of {n} session | Signed out of {n} sessions"
   },
   "glossary": {
     "level": "Belongs to",
@@ -4123,6 +4205,7 @@
     "tableOfContents": "Table of contents",
     "apiContract": "API contract",
     "mermaid": "Mermaid diagram",
+    "c4": "C4 diagram",
     "whiteboard": "Whiteboard",
     "figmaEmbed": "Figma frames",
     "image": "Image",
@@ -4551,22 +4634,10 @@
     "sessions": {
       "title": "Where you are signed in",
       "hint": "Every browser or device with a live session. Sign one out and it has to log in again on its next request.",
-      "current": "This browser",
-      "revoke": "Sign out",
       "revoked": "Session signed out",
       "failed": "Could not sign that session out",
       "none": "No other sessions.",
-      "lastSeen": "Last active {when}",
-      "neverSeen": "Not used since sign-in",
-      "signedIn": "Signed in {when}",
-      "unknownDevice": "Unknown device",
-      "onDevice": "{browser} on {os}",
-      "method": {
-        "password": "Password",
-        "oidc": "Single sign-on (OIDC)",
-        "saml": "Single sign-on (SAML)",
-        "ldap": "Directory (LDAP)"
-      }
+      "neverSeen": "Not used since sign-in"
     },
     "accounts": {
       "title": "Connected accounts",
@@ -5673,8 +5744,6 @@
     "selectAll": "Select every loaded page",
     "selectRow": "Select “{title}”",
     "preview": "Preview",
-    "previewRoot": "Top level",
-    "openPage": "Open page",
     "emptyChip": "Empty",
     "missingPathsChip": "{n} missing path | {n} missing paths",
     "brokenCallsChip": "{n} missing operation | {n} missing operations",
@@ -7374,7 +7443,14 @@
         "memory_mental_model_changed": "Mental model changed",
         "memory_directive_changed": "Memory directive changed",
         "memory_operation_cancelled": "Memory operation cancelled or removed",
-        "memory_promoted": "Memory proposed as a page"
+        "memory_promoted": "Memory proposed as a page",
+        "user_created": "Account created",
+        "user_renamed": "Account renamed",
+        "user_admin_granted": "Made platform admin",
+        "user_admin_revoked": "Platform admin revoked",
+        "user_disabled": "Account disabled",
+        "user_enabled": "Account enabled",
+        "user_password_set": "Password set by an admin"
       }
     },
     "tabs": {
@@ -9071,6 +9147,77 @@
       "proposed": "Page proposed for review",
       "duplicate": "An identical capture was already proposed",
       "open": "Open"
+    }
+  },
+  "c4": {
+    "tabs": "Diagram or source",
+    "tab": {
+      "diagram": "Diagram",
+      "source": "Source"
+    },
+    "trail": "C4 views",
+    "zoom": "Diagram zoom",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "fit": "Fit to width ({percent}%)",
+    "fullscreen": "Open full screen",
+    "build": "Edit on a canvas",
+    "open": "{name}: open {view}",
+    "showing": "Showing {view}",
+    "level": {
+      "systemContext": "System context",
+      "container": "Containers",
+      "component": "Components"
+    },
+    "studio": {
+      "title": "C4 model",
+      "titleEdit": "C4 builder",
+      "hint": "Click an element that has a view of its own to open it. Drag to pan; Ctrl and the wheel zoom.",
+      "hintEdit": "Drag from the palette to add an element, drag an element to move it, and drag the dot on its edge onto another to connect them. Arrow keys move the selected element, Delete removes it.",
+      "view": "View",
+      "autoLayout": "Automatic layout",
+      "fit": "Fit to screen",
+      "close": "Close",
+      "palette": "Elements",
+      "add": "Add to this view",
+      "addHint": "Click to add beside the diagram, or drag onto the canvas",
+      "inspector": "Selected",
+      "name": "Name",
+      "description": "Description",
+      "technology": "Technology",
+      "technologyHint": "e.g. NestJS, PostgreSQL",
+      "external": "Outside this system",
+      "database": "Database",
+      "openLevel": "Open {view}",
+      "addContainers": "Add its containers",
+      "addComponents": "Add its components",
+      "delete": "Delete",
+      "relationship": "Relationship",
+      "relationshipHint": "e.g. Reads orders",
+      "protocolHint": "e.g. REST, gRPC",
+      "emptyAdd": "Drag a person, system, container or component from the palette onto the canvas.",
+      "emptyConnect": "Drag the dot on an element's edge onto another element to connect them.",
+      "emptyKeys": "Double-click an element with a view of its own to open it. Arrow keys move the selection, Delete removes it, ⌘Z undoes.",
+      "refused": "This part of the model can't be changed here",
+      "deleted": "Deleted",
+      "undo": "Undo",
+      "new": {
+        "person": "Person",
+        "softwareSystem": "Software system",
+        "container": "Container",
+        "component": "Component"
+      },
+      "kind": {
+        "person": "Person",
+        "softwareSystem": "Software system",
+        "container": "Container",
+        "component": "Component"
+      }
+    },
+    "starter": {
+      "user": "User",
+      "system": "System",
+      "uses": "Uses"
     }
   }
 }

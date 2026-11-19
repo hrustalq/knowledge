@@ -242,6 +242,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/me/permissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What the caller may do in a workspace: every workspace action of the permission catalogue (#1296) */
+        get: operations["MeController_grants"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/me/api-key": {
         parameters: {
             query?: never;
@@ -696,6 +713,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** This API process's resolved environment, with each key's source; secrets only as set/unset (platform admin) */
+        get: operations["AdminConfigController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every store probed (status, latency), BullMQ counts per queue, process heartbeats and each sweeper's last tick (platform admin) */
+        get: operations["AdminHealthController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/errors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Error groups (derived fingerprint) in a period, newest first, with count, first and last seen (platform admin) */
+        get: operations["AdminErrorsController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/errors/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One error event with its trace id, context and stack, plus its group (platform admin) */
+        get: operations["AdminErrorsController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workspaces": {
         parameters: {
             query?: never;
@@ -908,23 +993,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/projects/{id}/settings/access": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** What the caller may change on the project's settings page: the non-gate settings, and the merge gates */
-        get: operations["ProjectsController_settingsAccess"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/projects/{id}": {
         parameters: {
             query?: never;
@@ -932,7 +1000,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Project detail */
+        /** Project detail, with what the caller may do with it (#1298) */
         get: operations["ProjectsController_get"];
         put?: never;
         post?: never;
@@ -1442,6 +1510,23 @@ export interface paths {
         head?: never;
         /** Update title / category / parent (features 07 + 08); parentId: null re-roots */
         patch: operations["DocumentsController_update"];
+        trace?: never;
+    };
+    "/v1/documents/{id}/permissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What the caller may do with the page, one flag per document action of the permission catalogue (#1298) */
+        get: operations["DocumentsController_permissionsOf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/v1/documents/{id}/move": {
@@ -1999,7 +2084,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get merge request state (heads, merge base, approvals, reviewers) */
+        /** Get merge request state (heads, merge base, approvals, reviewers) and what the caller may do with it (#1298) */
         get: operations["MergeRequestsController_get"];
         put?: never;
         post?: never;
@@ -3461,6 +3546,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/ai/agents/runs/{id}/steps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One run's step log, oldest first, with its model spend */
+        get: operations["AiController_listAgentRunSteps"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/ai/agents/runs/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel a pending or running run */
+        post: operations["AiController_cancelAgentRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/ai/agents/triggers": {
         parameters: {
             query?: never;
@@ -3955,6 +4074,40 @@ export interface paths {
         /** Per agent, how many findings were accepted, dismissed or are pending, and how answers were voted; optionally split by prompt hash or model. Derived on read from runs, merge requests and votes */
         get: operations["AgentOutcomesController_list"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{id}/home": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The workspace home: the layout and the data of every widget the caller may read */
+        get: operations["HomeController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{id}/home/layout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set which home widgets show and in what order (workspace admin) */
+        put: operations["HomeController_setLayout"];
         post?: never;
         delete?: never;
         options?: never;
@@ -10150,6 +10303,10 @@ export interface components {
             /** @description Monthly token budget; null = unlimited */
             monthlyTokenBudget?: number | null;
         };
+        UpdateHomeLayoutDto: {
+            /** @description The widgets to show, in order; one left out is hidden. Null (or omitted) goes back to the built-in layout. */
+            widgets?: ("metrics" | "actions" | "needs-you" | "recent" | "activity" | "agents")[] | null;
+        };
         CreateConnectorDto: {
             /** Format: uuid */
             workspaceId: string;
@@ -11774,6 +11931,137 @@ export interface components {
             term: string;
             projectId: string;
         };
+        AdminConfigEntry: {
+            key: string;
+            group: components["schemas"]["EnvGroup"];
+            source: components["schemas"]["EnvSource"];
+            secret: boolean;
+            set: boolean;
+            value: (string | number | boolean) | null;
+        };
+        AdminConfigResponse: {
+            /** @enum {string} */
+            process: "api";
+            version: string;
+            entries: components["schemas"]["AdminConfigEntry"][];
+        };
+        AdminDependency: {
+            name: components["schemas"]["AdminDependencyName"];
+            /** @enum {string} */
+            status: "up" | "down" | "off";
+            latencyMs: number | null;
+            error: string | null;
+        };
+        /** @enum {string} */
+        AdminDependencyName: "postgres" | "redis" | "minio" | "arcadedb" | "opensearch" | "searxng";
+        AdminErrorEvent: {
+            id: string;
+            createdAt: string;
+            traceId: string;
+            process: components["schemas"]["OpsProcessKind"] | null;
+            source: string;
+            level: string;
+            code: string | null;
+            message: string;
+            context: string | null;
+            route: string | null;
+            durationMs: number | null;
+            workspaceId: string | null;
+            workspaceName: string | null;
+            userId: string | null;
+            userEmail: string | null;
+            stack: string | null;
+            fields: {
+                [key: string]: unknown;
+            };
+        };
+        AdminErrorGroup: {
+            fingerprint: string;
+            latestId: string;
+            message: string;
+            detail: string | null;
+            level: string;
+            code: string | null;
+            source: string;
+            context: string | null;
+            route: string | null;
+            processes: (components["schemas"]["OpsProcessKind"] | null)[];
+            count: number;
+            workspaceCount: number;
+            firstSeenAt: string;
+            lastSeenAt: string;
+        };
+        AdminErrorOccurrence: {
+            id: string;
+            createdAt: string;
+            traceId: string;
+            process: components["schemas"]["OpsProcessKind"] | null;
+            workspaceId: string | null;
+            workspaceName: string | null;
+            route: string | null;
+        };
+        AdminErrorResponse: {
+            event: components["schemas"]["AdminErrorEvent"];
+            group: {
+                fingerprint: string;
+                count: number;
+                firstSeenAt: string;
+                lastSeenAt: string;
+            };
+            recent: components["schemas"]["AdminErrorOccurrence"][];
+        };
+        AdminErrorWorkspaceFacet: {
+            workspaceId: string;
+            name: string;
+            count: number;
+        };
+        AdminErrorsResponse: {
+            groups: components["schemas"]["AdminErrorGroup"][];
+            nextCursor: string | null;
+            workspaces: components["schemas"]["AdminErrorWorkspaceFacet"][];
+            retentionDays: number;
+            recording: boolean;
+        };
+        AdminHealthResponse: {
+            checkedAt: string;
+            version: string;
+            dependencies: components["schemas"]["AdminDependency"][];
+            queues: components["schemas"]["AdminQueue"][];
+            processes: components["schemas"]["AdminProcess"][] | null;
+            ticks: components["schemas"]["AdminTick"][] | null;
+        };
+        AdminProcess: {
+            kind: components["schemas"]["OpsProcessKind"];
+            expected: boolean;
+            instances: components["schemas"]["AdminProcessInstance"][];
+        };
+        AdminProcessInstance: {
+            host: string;
+            pid: number;
+            version: string;
+            startedAt: string;
+            lastSeenAt: string;
+            live: boolean;
+        };
+        AdminQueue: {
+            name: string;
+            counts: {
+                waiting: number;
+                active: number;
+                delayed: number;
+                failed: number;
+            } | null;
+        };
+        AdminTick: {
+            process: components["schemas"]["OpsProcessKind"];
+            name: string;
+            host: string;
+            intervalMs: number | null;
+            lastAt: string;
+            ok: boolean;
+            ms: number;
+            late: boolean;
+        };
         /** @enum {string} */
         AgentCapability: "tools" | "vision" | "json";
         AgentFinding: {
@@ -12017,6 +12305,23 @@ export interface components {
         };
         /** @enum {string} */
         AgentRunStatus: "pending" | "running" | "succeeded" | "failed" | "cancelled";
+        AgentRunStep: {
+            id: string;
+            kind: components["schemas"]["AgentRunStepKind"];
+            name: string | null;
+            args: string | null;
+            output: string | null;
+            sources: {
+                documentId: string;
+                title: string;
+            }[];
+            ok: boolean;
+            tokens: number | null;
+            durationMs: number | null;
+            createdAt: string;
+        };
+        /** @enum {string} */
+        AgentRunStepKind: "model" | "tool" | "warning";
         AgentRunSummary: {
             id: string;
             workspaceId: string;
@@ -12031,10 +12336,15 @@ export interface components {
             summary: string | null;
             findings: components["schemas"]["AgentFinding"][];
             findingCount: number;
+            queuedBehind: {
+                runId: string;
+                agentName: string;
+            } | null;
             error: string | null;
             stage: string | null;
             progress: number | null;
             warnings: string[];
+            model: string | null;
             startedAt: string | null;
             finishedAt: string | null;
             createdAt: string;
@@ -14246,6 +14556,22 @@ export interface components {
             edges: components["schemas"]["DocumentGraphEdge"][];
             resolvedAsOf?: components["schemas"]["ResolvedAsOf"];
         };
+        DocumentPermissionsResponse: {
+            "document:view": boolean;
+            "document:comment": boolean;
+            "document:edit": boolean;
+            "document:manage": boolean;
+            "document:history": boolean;
+            "document:publish": boolean;
+            "branch:edit": boolean;
+            "project:edit": boolean;
+            "project:manage-access": boolean;
+            "project:manage-settings": boolean;
+            "project:manage-gates": boolean;
+            "project:delete": boolean;
+            "merge-request:contribute": boolean;
+            "merge-request:override-checks": boolean;
+        };
         DocumentQualityResponse: {
             documentId: string;
             score: components["schemas"]["QualityScore"] | null;
@@ -14302,6 +14628,7 @@ export interface components {
             headRevisionId: string | null;
             headRevisionStatus: components["schemas"]["RevisionStatus"] | null;
             createdAt: string;
+            createdBy?: string | null;
             kind?: components["schemas"]["ApiDocumentKind"];
             sourceBacked?: boolean;
             sourceSync?: {
@@ -14327,6 +14654,7 @@ export interface components {
             childTemplateRef?: string | null;
             childTitlePattern?: string | null;
             restricted?: boolean;
+            accessLevel?: components["schemas"]["EffectiveAccessLevel"];
             draftOwnerId?: string | null;
             hidden?: boolean;
             level?: components["schemas"]["PageLevel"];
@@ -14357,6 +14685,7 @@ export interface components {
             headRevisionId: string | null;
             headRevisionStatus: components["schemas"]["RevisionStatus"] | null;
             createdAt: string;
+            createdBy?: string | null;
             kind?: components["schemas"]["ApiDocumentKind"];
             sourceBacked?: boolean;
             sourceSync?: {
@@ -14382,6 +14711,7 @@ export interface components {
             childTemplateRef?: string | null;
             childTitlePattern?: string | null;
             restricted?: boolean;
+            accessLevel?: components["schemas"]["EffectiveAccessLevel"];
             draftOwnerId?: string | null;
             hidden?: boolean;
             level?: components["schemas"]["PageLevel"];
@@ -14508,6 +14838,10 @@ export interface components {
             name: string;
             degree: number;
         };
+        /** @enum {string} */
+        EnvGroup: "core" | "storage" | "auth" | "mail" | "ai" | "agents" | "memory" | "ingestion" | "search" | "quality" | "publishing" | "connectors" | "chat" | "memos" | "live" | "other";
+        /** @enum {string} */
+        EnvSource: "env" | "default";
         ExportCapabilitiesResponse: {
             formats: {
                 zip: boolean;
@@ -14896,6 +15230,64 @@ export interface components {
         };
         /** @enum {string} */
         HistoryAudience: "everyone" | "editors";
+        HomeAgentRun: {
+            id: string;
+            agentName: string;
+            stage: string | null;
+            startedAt: string;
+        };
+        HomeLayoutResponse: {
+            workspaceId: string;
+            layout: components["schemas"]["HomeWidget"][];
+            custom: boolean;
+        };
+        HomeMetrics: {
+            pages: number;
+            verified: number | null;
+            stale: number | null;
+            openMergeRequests: number | null;
+            unansweredSearches: number | null;
+            searchDays: number;
+        };
+        HomeNeedsYou: {
+            reviews: components["schemas"]["HomeReview"][] | null;
+            reviewCount: number;
+            notifications: components["schemas"]["HomeNotification"][];
+            unreadCount: number;
+        };
+        HomeNotification: {
+            id: string;
+            title: string | null;
+            documentId: string | null;
+            createdAt: string;
+        };
+        HomeRecentPage: {
+            documentId: string;
+            title: string;
+            updatedAt: string;
+        };
+        HomeResponse: {
+            workspaceId: string;
+            layout: components["schemas"]["HomeWidget"][];
+            custom: boolean;
+            widgets: components["schemas"]["HomeWidget"][];
+            metrics?: components["schemas"]["HomeMetrics"];
+            needsYou?: components["schemas"]["HomeNeedsYou"];
+            recent?: components["schemas"]["HomeRecentPage"][];
+            activity?: components["schemas"]["ActivityEntry"][];
+            agents?: {
+                runs: components["schemas"]["HomeAgentRun"][];
+                queued: number;
+            };
+        };
+        HomeReview: {
+            id: string;
+            title: string;
+            authorId: string;
+            createdAt: string;
+        };
+        /** @enum {string} */
+        HomeWidget: "metrics" | "actions" | "needs-you" | "recent" | "activity" | "agents";
         IdentityProviderView: {
             id: string;
             workspaceId: string;
@@ -15124,6 +15516,7 @@ export interface components {
         KnowledgeHealthSummaryResponse: {
             workspaceId: string;
             total: number;
+            verified: number;
             counts: {
                 stale: number;
                 unowned: number;
@@ -15228,6 +15621,16 @@ export interface components {
         ListAgentLearningsResponse: {
             learnings: components["schemas"]["AgentLearningSummary"][];
             promptLimit: number;
+        };
+        ListAgentRunStepsResponse: {
+            steps: components["schemas"]["AgentRunStep"][];
+            nextCursor: string | null;
+            usage: {
+                calls: number;
+                totalTokens: number;
+                estimated: boolean;
+                costs: components["schemas"]["CostAmount"][];
+            };
         };
         ListAgentRunsResponse: {
             runs: components["schemas"]["AgentRunSummary"][];
@@ -15592,6 +15995,17 @@ export interface components {
         McpToolset: "core" | "authoring" | "quality" | "review" | "graph" | "conflicts" | "captures" | "qa" | "api-reference" | "code" | "connectors" | "workflows" | "agents" | "insights" | "memos" | "sharing" | "embeds" | "chat" | "projects" | "drafts";
         /** @enum {string} */
         McpToolsetOffReason: "section-off" | "key-toolsets";
+        MePermissionsResponse: {
+            "platform:admin": boolean;
+            "workspace:create": boolean;
+            "workspace:view": boolean;
+            "workspace:contribute": boolean;
+            "workspace:admin": boolean;
+            "workspace:history": boolean;
+            "workspace:publish-direct": boolean;
+            "api-test-suites:generate": boolean;
+            "api-test-suites:run": boolean;
+        };
         MeResponse: {
             userId: string;
             email: string;
@@ -15876,6 +16290,10 @@ export interface components {
             pages: components["schemas"]["MergeRequestConflictPage"][];
             hiddenPages: number;
         };
+        MergeRequestDetailResponse: {
+            mergeRequest: components["schemas"]["MergeRequestInfo"];
+            permissions: components["schemas"]["MergeRequestPermissions"];
+        };
         MergeRequestDiffResponse: {
             mergeRequest: components["schemas"]["MergeRequestInfo"];
             compare: components["schemas"]["CompareResponse"];
@@ -15915,6 +16333,22 @@ export interface components {
             documentId: string;
             title: string;
             compare: components["schemas"]["CompareResponse"];
+        };
+        MergeRequestPermissions: {
+            "document:view": boolean;
+            "document:comment": boolean;
+            "document:edit": boolean;
+            "document:manage": boolean;
+            "document:history": boolean;
+            "document:publish": boolean;
+            "branch:edit": boolean;
+            "project:edit": boolean;
+            "project:manage-access": boolean;
+            "project:manage-settings": boolean;
+            "project:manage-gates": boolean;
+            "project:delete": boolean;
+            "merge-request:contribute": boolean;
+            "merge-request:override-checks": boolean;
         };
         /** @enum {string} */
         MergeRequestProvenance: "manual" | "agent" | "captured";
@@ -16049,6 +16483,8 @@ export interface components {
             clientId: string;
             scopes: string[];
         };
+        /** @enum {string} */
+        OpsProcessKind: "api" | "worker" | "learner" | "git";
         "OverrideSetting<number>": {
             requested: number | null;
             effective: number;
@@ -16227,6 +16663,19 @@ export interface components {
             glossaryConflicts: string[];
             cascade: components["schemas"]["ProjectCascadeCounts"];
         };
+        ProjectDetailResponse: {
+            projectId: string;
+            workspaceId: string;
+            name: string;
+            description: string | null;
+            avatarUrl: components["schemas"]["AvatarUrl"];
+            avatarEmoji: string | null;
+            avatarColor: string | null;
+            documentCount: number;
+            createdAt: string;
+            restricted?: boolean;
+            permissions: components["schemas"]["ProjectPermissions"];
+        };
         ProjectGitResponse: {
             url: string | null;
         };
@@ -16268,6 +16717,22 @@ export interface components {
                 updatedAt: string;
             }[];
         };
+        ProjectPermissions: {
+            "document:view": boolean;
+            "document:comment": boolean;
+            "document:edit": boolean;
+            "document:manage": boolean;
+            "document:history": boolean;
+            "document:publish": boolean;
+            "branch:edit": boolean;
+            "project:edit": boolean;
+            "project:manage-access": boolean;
+            "project:manage-settings": boolean;
+            "project:manage-gates": boolean;
+            "project:delete": boolean;
+            "merge-request:contribute": boolean;
+            "merge-request:override-checks": boolean;
+        };
         /** @enum {string} */
         ProjectSettingKey: "verification" | "breakingChanges" | "lintPolicy" | "workItems" | "captureParent";
         ProjectSettingOverridesResponse: {
@@ -16276,11 +16741,6 @@ export interface components {
                 name: string;
                 settings: components["schemas"]["ProjectSettingKey"][];
             }[];
-        };
-        ProjectSettingsAccess: {
-            projectId: string;
-            canWrite: boolean;
-            canWriteGates: boolean;
         };
         ProjectSiteResponse: {
             site: components["schemas"]["PublishedSiteSummary"] | null;
@@ -17702,7 +18162,15 @@ export interface components {
             emailVerified: boolean;
             hasApiKey: boolean;
             createdAt: string;
-            memberships: components["schemas"]["WorkspaceMembership"][];
+            lastSignInAt: string | null;
+            memberships: {
+                workspaceName: string;
+                workspaceId: string;
+                role: components["schemas"]["WorkspaceRole"];
+                trustedOperator: boolean;
+                capabilities: components["schemas"]["MemberCapability"][];
+                source: components["schemas"]["MembershipSource"];
+            }[];
         };
         ValidateWorkflowResponse: {
             valid: boolean;
@@ -18652,6 +19120,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResetPasswordResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    MeController_grants: {
+        parameters: {
+            query: {
+                workspaceId: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MePermissionsResponse"];
                 };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
@@ -20184,6 +20694,179 @@ export interface operations {
             };
         };
     };
+    AdminConfigController_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminConfigResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AdminHealthController_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminHealthResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AdminErrorsController_list: {
+        parameters: {
+            query?: {
+                /** @description Hours back from now. Omitted: 24 */
+                hours?: 1 | 24 | 168 | 720;
+                /** @description Comma-separated processes (api, worker, learner, git) */
+                process?: string;
+                /** @description Comma-separated workspace ids */
+                workspaceId?: string;
+                /** @description Text the message contains, or a trace id */
+                q?: string;
+                /** @description The previous page's nextCursor */
+                cursor?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminErrorsResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AdminErrorsController_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
     WorkspacesController_list: {
         parameters: {
             query?: never;
@@ -21068,48 +21751,6 @@ export interface operations {
             };
         };
     };
-    ProjectsController_settingsAccess: {
-        parameters: {
-            query?: never;
-            header?: {
-                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
-                "Accept-Language"?: "en" | "ru";
-            };
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProjectSettingsAccess"];
-                };
-            };
-            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
-            "5XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-        };
-    };
     ProjectsController_get: {
         parameters: {
             query?: never;
@@ -21129,7 +21770,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProjectSummary"];
+                    "application/json": components["schemas"]["ProjectDetailResponse"];
                 };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
@@ -22761,6 +23402,12 @@ export interface operations {
                 tags?: string;
                 /** @description 1 to include archived pages (docs/features/39) */
                 includeArchived?: string;
+                /** @description Sort column; createdAt when omitted (#1256) */
+                sort?: "createdAt" | "lastActivityAt" | "title";
+                /** @description desc when omitted; asc for title */
+                order?: "asc" | "desc";
+                /** @description Pages whose first revision the caller wrote (`me`) or didn't (`others`); everyone when omitted */
+                author?: "me" | "others";
             };
             header?: {
                 /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
@@ -23009,6 +23656,51 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DocumentSummary"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    DocumentsController_permissionsOf: {
+        parameters: {
+            query?: {
+                /** @description The branch the page is read on; branch:edit answers for it */
+                branch?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentPermissionsResponse"];
                 };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
@@ -24995,7 +25687,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CreateMergeRequestResponse"];
+                    "application/json": components["schemas"]["MergeRequestDetailResponse"];
                 };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
@@ -29737,6 +30429,95 @@ export interface operations {
             };
         };
     };
+    AiController_listAgentRunSteps: {
+        parameters: {
+            query: {
+                workspaceId: string;
+                cursor?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListAgentRunStepsResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AiController_cancelAgentRun: {
+        parameters: {
+            query: {
+                workspaceId: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRunSummary"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
     AiController_listAgentTriggers: {
         parameters: {
             query: {
@@ -31365,6 +32146,94 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentOutcomesResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    HomeController_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HomeResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    HomeController_setLayout: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateHomeLayoutDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HomeLayoutResponse"];
                 };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */

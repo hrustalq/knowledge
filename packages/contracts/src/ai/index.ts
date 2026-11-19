@@ -3122,6 +3122,12 @@ export interface AgentRunSummary {
   summary: string | null;
   findings: AgentFinding[];
   findingCount: number;
+  /**
+   * Why a `pending` run has not started (#1248): another run — of any agent —
+   * is `running` on the same subject, and this one starts when it settles.
+   * Null for any other run, and when the reader may not see the blocker.
+   */
+  queuedBehind: { runId: string; agentName: string } | null;
   error: string | null;
   /**
    * What the run is doing now, free text from the executor (docs/features/29).
@@ -3137,6 +3143,8 @@ export interface AgentRunSummary {
   progress: number | null;
   /** What degraded without failing the run. Capped at MAX_RUN_WARNINGS. */
   warnings: string[];
+  /** The model that served the run, stamped when it ends (#305); null before then and for a run with no model. */
+  model: string | null;
   startedAt: string | null;
   finishedAt: string | null;
   createdAt: string;
@@ -3147,6 +3155,48 @@ export interface ListAgentRunsResponse {
   runs: AgentRunSummary[];
   nextCursor: string | null;
   counts: Record<AgentRunStatus, number>;
+}
+
+/** What one step of a run's log is (#1247). */
+export const AGENT_RUN_STEP_KINDS = ['model', 'tool', 'warning'] as const;
+export type AgentRunStepKind = (typeof AGENT_RUN_STEP_KINDS)[number];
+
+/**
+ * One step of a background run (#1247), appended by the worker as it happens.
+ * Text fields are truncated; `output` is a prefix of what the tool handed the
+ * model, its untrusted wrapper included — render it as text, never as markup.
+ */
+export interface AgentRunStep {
+  id: string;
+  kind: AgentRunStepKind;
+  /** A model call's operation, a tool's name; null for a warning. */
+  name: string | null;
+  /** A tool call's arguments as the model wrote them. */
+  args: string | null;
+  /** What the tool returned, a failed call's error, or the warning. */
+  output: string | null;
+  /** The pages a tool returned. */
+  sources: Array<{ documentId: string; title: string }>;
+  ok: boolean;
+  tokens: number | null;
+  durationMs: number | null;
+  createdAt: string;
+}
+
+// GET /v1/ai/agents/runs/:id/steps?workspaceId=&cursor=
+export interface ListAgentRunStepsResponse {
+  /** Oldest first. */
+  steps: AgentRunStep[];
+  nextCursor: string | null;
+  /** Every model call billed to the run so far, from `ai_usage`. */
+  usage: {
+    calls: number;
+    totalTokens: number;
+    /** Some call reported no usage, so part of the count is a local estimate. */
+    estimated: boolean;
+    /** Summed per currency: a run can mix providers that bill in different ones. */
+    costs: CostAmount[];
+  };
 }
 
 /** Why the router chose what it chose — the dry-run endpoint's answer. */

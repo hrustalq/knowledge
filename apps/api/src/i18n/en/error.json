@@ -120,6 +120,9 @@
     "notFoundOnDocument": "Revision {revisionId} not found on document {documentId}",
     "notComparable": "Revision {id} is {status} — only finalized revisions can be compared"
   },
+  "listQuery": {
+    "oneOf": "{param} must be one of {allowed}, got \"{value}\""
+  },
   "compare": {
     "badMode": "mode must be \"direct\" or \"merge-base\", got \"{mode}\""
   },
@@ -352,9 +355,11 @@
     "agentDisabled": "Agent \"{key}\" is disabled.",
     "agentNotBackground": "Agent \"{key}\" cannot be run in the background.",
     "agentRunNotFound": "Unknown run {id}",
+    "agentRunNotCancellable": "Run {id} has already finished, so it cannot be cancelled",
     "agentNoExecutor": "Agent \"{key}\" has no background executor.",
     "findingNotFound": "Run {runId} has no finding at index {index}",
     "findingAlreadyProposed": "This finding has already been proposed as a merge request.",
+    "agentMergeRequestOpen": "This page already has an open merge request from an agent. Merge or close it first, then propose this finding.",
     "findingInFlight": "This finding is already being proposed.",
     "findingNoDocument": "This finding cites no page to change.",
     "findingOrphan": "An orphan finding is about missing relations, not page content. Use Apply relations instead, or add one in the page's frontmatter.",

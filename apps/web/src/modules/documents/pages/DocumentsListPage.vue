@@ -21,13 +21,14 @@
  */
 import { computed, onMounted, onServerPrefetch, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { useQueryClient } from '@tanstack/vue-query'
-import { Archive, FileText, List, ListTree, Loader2, Network, NotepadTextDashed, Plus, SlidersHorizontal, Upload, X } from 'lucide-vue-next'
+import { Archive, ArrowDownUp, FileText, List, ListTree, Loader2, Network, NotepadTextDashed, Plus, SlidersHorizontal, Upload, X } from 'lucide-vue-next'
+import { DOCUMENT_SORTS, type DocumentAuthorFilter, type DocumentSort, type SortOrder } from '@knowledge/contracts'
 import { formatDate } from '@/shared/utils/format'
 import { labelFor } from '@/shared/i18n/labels'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { EMPTY_FILTERS, useDocumentsStore } from '@/stores/documents'
 import { useProjectsStore } from '@/stores/projects'
 import { getProjectId, getWorkspaceId, statusDot, statusVariant } from '@/shared/api/api'
@@ -35,6 +36,15 @@ import { fetchApi } from '@/shared/api/queries'
 import { Button } from '@knowledge/ui/button'
 import { Badge } from '@knowledge/ui/badge'
 import { Skeleton } from '@knowledge/ui/skeleton'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@knowledge/ui/dropdown-menu'
 import DocumentTreeNode from '@/modules/documents/components/DocumentTreeNode.vue'
 import TreeDragLayer from '@/modules/documents/components/TreeDragLayer.vue'
 import { provideTreeDnd } from '@/modules/documents/model/tree-dnd'
@@ -47,7 +57,7 @@ import { VERIFICATION_MARK_CLASS, needsAttention, verificationDotClass } from '@
 
 const { t } = useI18n()
 
-const auth = useAuthStore()
+const canContribute = usePermission('workspace:contribute')
 const store = useDocumentsStore()
 // Feature 32: the index tree drags too. Same controller, same store, so a
 // move made here and one made in the rail cannot mean different things.
@@ -60,7 +70,6 @@ const projects = useProjectsStore()
  * graph, tags and timeline, then the project's.
  */
 const scopeReady = computed(() => projects.activeId !== null || projects.loaded)
-const router = useRouter()
 const route = useRoute()
 const queryClient = useQueryClient()
 
@@ -103,6 +112,31 @@ function setFacet(key: 'categories' | 'projectIds' | 'tags', value: string[]) {
 }
 function clearFacets() {
   void store.setFilters({ ...EMPTY_FILTERS })
+}
+
+/**
+ * Sort (#1256). Picking a column also picks the order people mean by it —
+ * newest first for a date, A→Z for a title — and the second group flips it.
+ * The direction's words follow the column, so "ascending" never has to be decoded.
+ */
+const naturalOrder = (sort: DocumentSort): SortOrder => (sort === 'title' ? 'asc' : 'desc')
+function pickSort(value: unknown) {
+  const sort = value as DocumentSort
+  if (sort !== store.sort) void store.setSort(sort, naturalOrder(sort))
+}
+function pickOrder(value: unknown) {
+  const order = value as SortOrder
+  if (order !== store.order) void store.setSort(store.sort, order)
+}
+/** The column's natural order listed first: "Newest first" above "Oldest first", "A → Z" above "Z → A". */
+const orderChoices = computed<SortOrder[]>(() => (naturalOrder(store.sort) === 'asc' ? ['asc', 'desc'] : ['desc', 'asc']))
+const orderLabel = (order: SortOrder) =>
+  t(`documents.sort.${store.sort === 'title' ? 'alpha' : 'date'}.${order}`)
+
+/** "Created by" (#1256): a filter like the facets, so it counts and clears with them. */
+const AUTHOR_CHOICES: (DocumentAuthorFilter | null)[] = [null, 'me', 'others']
+function setAuthor(author: DocumentAuthorFilter | null) {
+  if (author !== store.filters.author) void store.setFilters({ ...store.filters, author })
 }
 
 const scopeLabel = computed(() =>
@@ -269,6 +303,29 @@ watch(virtualRows, (rows) => {
         <span class="sr-only sm:not-sr-only">{{ t('verification.archived.showArchived') }}</span>
       </Button>
 
+      <DropdownMenu v-if="showFilters">
+        <DropdownMenuTrigger as-child>
+          <Button variant="outline" size="sm" :aria-label="t('documents.sort.label', { sort: t(`documents.sort.by.${store.sort}`) })">
+            <ArrowDownUp class="size-4" />
+            <span class="hidden sm:inline">{{ t(`documents.sort.by.${store.sort}`) }}</span>
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" class="w-52">
+          <DropdownMenuLabel class="text-xs text-muted-foreground">{{ t('documents.sort.title') }}</DropdownMenuLabel>
+          <DropdownMenuRadioGroup :model-value="store.sort" @update:model-value="pickSort">
+            <DropdownMenuRadioItem v-for="s in DOCUMENT_SORTS" :key="s" :value="s">
+              {{ t(`documents.sort.by.${s}`) }}
+            </DropdownMenuRadioItem>
+          </DropdownMenuRadioGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuRadioGroup :model-value="store.order" @update:model-value="pickOrder">
+            <DropdownMenuRadioItem v-for="o in orderChoices" :key="o" :value="o">
+              {{ orderLabel(o) }}
+            </DropdownMenuRadioItem>
+          </DropdownMenuRadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
       <Button
         v-if="showFilters"
         variant="outline"
@@ -285,7 +342,7 @@ watch(virtualRows, (rows) => {
         >{{ store.activeFilterCount }}</span>
       </Button>
 
-      <div v-if="auth.canEdit" class="flex gap-2">
+      <div v-if="canContribute" class="flex gap-2">
         <Button variant="outline" size="sm" as-child>
           <RouterLink to="/upload"><Upload class="size-4" /> <span class="sr-only sm:not-sr-only">{{ t('documents.upload') }}</span></RouterLink>
         </Button>
@@ -307,9 +364,9 @@ watch(virtualRows, (rows) => {
             <FileText class="mx-auto size-8 text-muted-foreground/50" />
             <p class="mt-3 font-medium">{{ t('documents.noPagesYet') }}</p>
             <p class="mt-1 text-sm text-muted-foreground">
-              {{ auth.canEdit ? t('documents.createFirst', { scope: scopeLabel }) : t('documents.nothingPublished', { scope: scopeLabel }) }}
+              {{ canContribute ? t('documents.createFirst', { scope: scopeLabel }) : t('documents.nothingPublished', { scope: scopeLabel }) }}
             </p>
-            <Button v-if="auth.canEdit" class="mt-4" as-child>
+            <Button v-if="canContribute" class="mt-4" as-child>
               <RouterLink to="/create"><Plus class="size-4" /> {{ t('documents.newPage') }}</RouterLink>
             </Button>
           </div>
@@ -325,7 +382,6 @@ watch(virtualRows, (rows) => {
             :show-entity-controls="hasEntities"
             :time="graphTime"
             storage-key="kn_graph_opts_workspace"
-            @open="(id) => router.push(`/documents/${id}`)"
           />
         </template>
 
@@ -414,8 +470,9 @@ watch(virtualRows, (rows) => {
                 >
                   {{ labelFor(t, 'revisionStatus', store.items[row.index]!.headRevisionStatus ?? 'draft') }}
                 </Badge>
-                <span class="ml-auto shrink-0 text-xs text-muted-foreground">
-                  {{ formatDate(store.items[row.index]!.createdAt) }}
+                <!-- The date the list is ordered by, so the order is legible down the column. -->
+                <span class="ml-auto shrink-0 text-xs tabular-nums text-muted-foreground">
+                  {{ formatDate(store.sort === 'lastActivityAt' ? (store.items[row.index]!.lastActivityAt ?? store.items[row.index]!.createdAt) : store.items[row.index]!.createdAt) }}
                 </span>
               </RouterLink>
               <!-- The sentinel: "more is coming" as a row in the list rather
@@ -456,6 +513,25 @@ watch(virtualRows, (rows) => {
             </button>
           </div>
           <div class="min-h-0 flex-1 space-y-5 overflow-y-auto p-3">
+            <div role="radiogroup" aria-labelledby="docs-author-label" class="space-y-1.5">
+              <span id="docs-author-label" class="block text-caption font-semibold uppercase tracking-wider text-muted-foreground">
+                {{ t('documents.author.label') }}
+              </span>
+              <!-- The view switcher's segmented control: three exclusive choices, all visible. -->
+              <div class="flex rounded-md border bg-card p-0.5">
+                <button
+                  v-for="c in AUTHOR_CHOICES"
+                  :key="String(c)"
+                  role="radio"
+                  :aria-checked="store.filters.author === c"
+                  class="flex h-7 flex-1 items-center justify-center rounded px-2 text-xs font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring"
+                  :class="store.filters.author === c ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground'"
+                  @click="setAuthor(c)"
+                >
+                  {{ t(`documents.author.${c ?? 'all'}`) }}
+                </button>
+              </div>
+            </div>
             <DocumentFacets
               :projects="store.filters.projectIds"
               :categories="store.filters.categories"

@@ -26,6 +26,7 @@ ENV NODE_OPTIONS=--max-old-space-size=2560
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY apps/web/package.json apps/web/
 COPY apps/api/package.json apps/api/
+COPY packages/api-client/package.json    packages/api-client/
 COPY packages/contracts/package.json     packages/contracts/
 COPY packages/observability/package.json packages/observability/
 COPY packages/workflow/package.json      packages/workflow/
@@ -60,6 +61,7 @@ ENV NODE_ENV=production
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY apps/web/package.json apps/web/
 COPY apps/api/package.json apps/api/
+COPY packages/api-client/package.json    packages/api-client/
 COPY packages/contracts/package.json     packages/contracts/
 COPY packages/observability/package.json packages/observability/
 COPY packages/workflow/package.json      packages/workflow/

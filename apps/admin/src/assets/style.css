@@ -1,0 +1,15 @@
+@import "tailwindcss";
+/* The palette, the dark variant and the kit's theme (packages/ui/src/styles). */
+@import "@knowledge/ui/theme.css";
+
+@layer base {
+  * {
+    @apply border-border outline-ring;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+  ::selection {
+    background: color-mix(in oklch, var(--primary) 20%, transparent);
+  }
+}

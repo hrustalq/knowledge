@@ -10,7 +10,7 @@
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { useQueryClient } from '@tanstack/vue-query'
 import type { DocumentGraphResponse } from '@knowledge/contracts'
 import { fetchApi } from '@/shared/api/queries'
@@ -29,7 +29,6 @@ const props = withDefaults(
 )
 
 const { t } = useI18n()
-const router = useRouter()
 const queryClient = useQueryClient()
 
 const depth = ref(props.variant === 'full' ? 2 : 1)
@@ -93,10 +92,6 @@ async function load() {
   }
 }
 
-function open(id: string) {
-  if (id !== props.documentId) void router.push(`/documents/${id}`)
-}
-
 onMounted(() => {
   void load()
   void graphTime?.loadTimeline()
@@ -131,7 +126,6 @@ onBeforeUnmount(() => { graph.value = null })
         :root-id="documentId"
         :time="graphTime"
         storage-key="kn_graph_opts_page"
-        @open="open"
       />
       <div v-else class="grid size-full place-items-center">
         <Skeleton class="size-full" />
@@ -167,7 +161,6 @@ onBeforeUnmount(() => { graph.value = null })
         :root-id="documentId"
         :options="railOptions"
         density="compact"
-        @open="open"
         @stats="stats = { nodes: $event.nodes, edges: $event.edges }"
       />
     </div>

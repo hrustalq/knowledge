@@ -3,6 +3,10 @@ import type {
   AccessRequestEntry,
   ActivityCalendarResponse,
   AddFindingTermResponse,
+  AdminConfigResponse,
+  AdminErrorResponse,
+  AdminErrorsResponse,
+  AdminHealthResponse,
   AgentLearningSummary,
   AgentOutcomesResponse,
   AgentRouteDecision,
@@ -120,6 +124,7 @@ import type {
   DocumentDetailResponse,
   DocumentEmbedsResponse,
   DocumentGraphResponse,
+  DocumentPermissionsResponse,
   DocumentQualityResponse,
   DocumentSourceInfo,
   DocumentSourceWebhookResponse,
@@ -159,6 +164,8 @@ import type {
   GraphQueryResponse,
   GraphTimelineResponse,
   GroupMappingView,
+  HomeLayoutResponse,
+  HomeResponse,
   IdentityProviderView,
   ImpactAnalysisResponse,
   ImportContentResponse,
@@ -173,6 +180,7 @@ import type {
   ListAccessRequestsResponse,
   ListActivityResponse,
   ListAgentLearningsResponse,
+  ListAgentRunStepsResponse,
   ListAgentRunsResponse,
   ListAgentTriggersResponse,
   ListAiAgentChoicesResponse,
@@ -246,6 +254,7 @@ import type {
   LogoutResponse,
   MarkNotificationsReadResponse,
   McpConnectionInfo,
+  MePermissionsResponse,
   MeResponse,
   MemoDetailResponse,
   MemoListResponse,
@@ -261,6 +270,7 @@ import type {
   MergeMergeRequestResponse,
   MergeRequestApiChangesResponse,
   MergeRequestConflictsResponse,
+  MergeRequestDetailResponse,
   MergeRequestDiffResponse,
   MergeRequestThreadResponse,
   MethodologyPreviewResponse,
@@ -278,12 +288,12 @@ import type {
   ProjectBreakingChangeSettings,
   ProjectCaptureParentSettings,
   ProjectDeletionPreview,
+  ProjectDetailResponse,
   ProjectGitResponse,
   ProjectLevelsResponse,
   ProjectMethodologyResponse,
   ProjectOverviewResponse,
   ProjectSettingOverridesResponse,
-  ProjectSettingsAccess,
   ProjectSiteResponse,
   ProjectSummary,
   ProjectVerificationSettings,
@@ -387,6 +397,10 @@ export interface ContractResponses {
   AccessRequestEntry: AccessRequestEntry;
   ActivityCalendarResponse: ActivityCalendarResponse;
   AddFindingTermResponse: AddFindingTermResponse;
+  AdminConfigResponse: AdminConfigResponse;
+  AdminErrorResponse: AdminErrorResponse;
+  AdminErrorsResponse: AdminErrorsResponse;
+  AdminHealthResponse: AdminHealthResponse;
   AgentLearningSummary: AgentLearningSummary;
   AgentOutcomesResponse: AgentOutcomesResponse;
   AgentRouteDecision: AgentRouteDecision;
@@ -504,6 +518,7 @@ export interface ContractResponses {
   DocumentDetailResponse: DocumentDetailResponse;
   DocumentEmbedsResponse: DocumentEmbedsResponse;
   DocumentGraphResponse: DocumentGraphResponse;
+  DocumentPermissionsResponse: DocumentPermissionsResponse;
   DocumentQualityResponse: DocumentQualityResponse;
   DocumentSourceInfo: DocumentSourceInfo;
   DocumentSourceWebhookResponse: DocumentSourceWebhookResponse;
@@ -543,6 +558,8 @@ export interface ContractResponses {
   GraphQueryResponse: GraphQueryResponse;
   GraphTimelineResponse: GraphTimelineResponse;
   GroupMappingView: GroupMappingView;
+  HomeLayoutResponse: HomeLayoutResponse;
+  HomeResponse: HomeResponse;
   IdentityProviderView: IdentityProviderView;
   ImpactAnalysisResponse: ImpactAnalysisResponse;
   ImportContentResponse: ImportContentResponse;
@@ -557,6 +574,7 @@ export interface ContractResponses {
   ListAccessRequestsResponse: ListAccessRequestsResponse;
   ListActivityResponse: ListActivityResponse;
   ListAgentLearningsResponse: ListAgentLearningsResponse;
+  ListAgentRunStepsResponse: ListAgentRunStepsResponse;
   ListAgentRunsResponse: ListAgentRunsResponse;
   ListAgentTriggersResponse: ListAgentTriggersResponse;
   ListAiAgentChoicesResponse: ListAiAgentChoicesResponse;
@@ -630,6 +648,7 @@ export interface ContractResponses {
   LogoutResponse: LogoutResponse;
   MarkNotificationsReadResponse: MarkNotificationsReadResponse;
   McpConnectionInfo: McpConnectionInfo;
+  MePermissionsResponse: MePermissionsResponse;
   MeResponse: MeResponse;
   MemoDetailResponse: MemoDetailResponse;
   MemoListResponse: MemoListResponse;
@@ -645,6 +664,7 @@ export interface ContractResponses {
   MergeMergeRequestResponse: MergeMergeRequestResponse;
   MergeRequestApiChangesResponse: MergeRequestApiChangesResponse;
   MergeRequestConflictsResponse: MergeRequestConflictsResponse;
+  MergeRequestDetailResponse: MergeRequestDetailResponse;
   MergeRequestDiffResponse: MergeRequestDiffResponse;
   MergeRequestThreadResponse: MergeRequestThreadResponse;
   MethodologyPreviewResponse: MethodologyPreviewResponse;
@@ -662,12 +682,12 @@ export interface ContractResponses {
   ProjectBreakingChangeSettings: ProjectBreakingChangeSettings;
   ProjectCaptureParentSettings: ProjectCaptureParentSettings;
   ProjectDeletionPreview: ProjectDeletionPreview;
+  ProjectDetailResponse: ProjectDetailResponse;
   ProjectGitResponse: ProjectGitResponse;
   ProjectLevelsResponse: ProjectLevelsResponse;
   ProjectMethodologyResponse: ProjectMethodologyResponse;
   ProjectOverviewResponse: ProjectOverviewResponse;
   ProjectSettingOverridesResponse: ProjectSettingOverridesResponse;
-  ProjectSettingsAccess: ProjectSettingsAccess;
   ProjectSiteResponse: ProjectSiteResponse;
   ProjectSummary: ProjectSummary;
   ProjectVerificationSettings: ProjectVerificationSettings;

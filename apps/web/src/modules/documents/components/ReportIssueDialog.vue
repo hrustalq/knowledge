@@ -30,7 +30,7 @@ import {
 } from '@knowledge/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@knowledge/ui/select'
 import { Textarea } from '@knowledge/ui/textarea'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { useFeedbackStore } from '@/entities/assistant'
 
 const props = defineProps<{
@@ -43,7 +43,7 @@ const open = defineModel<boolean>('open', { default: false })
 const emit = defineEmits<{ reported: [ReportKnowledgeIssueResponse] }>()
 
 const { t } = useI18n()
-const auth = useAuthStore()
+const canContribute = usePermission('workspace:contribute')
 const feedback = useFeedbackStore()
 
 const kind = ref<KnowledgeIssueKind>('wrong')
@@ -153,7 +153,7 @@ async function submit() {
           <span class="text-xs text-muted-foreground">{{ t('knowledgeIssue.suggestion') }}</span>
           <Textarea v-model="suggestion" rows="5" maxlength="200000" class="font-mono text-xs" :placeholder="t('knowledgeIssue.suggestionPlaceholder')" />
           <span class="block text-xs text-muted-foreground">
-            {{ auth.canEdit ? t('knowledgeIssue.suggestionEditorHint') : t('knowledgeIssue.suggestionViewerHint') }}
+            {{ canContribute ? t('knowledgeIssue.suggestionEditorHint') : t('knowledgeIssue.suggestionViewerHint') }}
           </span>
         </label>
 

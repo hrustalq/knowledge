@@ -12,8 +12,7 @@ import { useI18n } from 'vue-i18n'
 import { computed, nextTick, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { BookmarkCheck, BookmarkPlus, Check, CircleHelp, Copy, CornerDownRight, Pencil, RotateCcw, Sparkles, X } from 'lucide-vue-next'
-import { toast } from 'vue-sonner'
-import type { AssistantFlowAnswer, AssistantMessageInfo, AssistantUiBlock, CaptureResult } from '@knowledge/contracts'
+import type { AssistantFlowAnswer, AssistantMessageInfo, AssistantUiBlock } from '@knowledge/contracts'
 import { assistantSourceHref, assistantSourceKey, isChatSource, isPageSource, isWebSource } from '@knowledge/contracts'
 import { Button } from '@knowledge/ui/button'
 import { MarkdownView } from '@/entities/document'
@@ -32,10 +31,10 @@ import {
   sourceHref,
   unsupportedMarkers,
 } from '@/entities/assistant/model/citations'
-import { api } from '@/shared/api/client'
-import { errorMessage } from '@/shared/api/errors'
+import { useAssistantStore } from '../model/assistant.store'
+import { useCaptureReply } from '../model/capture-reply'
 import { answerText, type AnswerTurn, type FlowStep } from '@/entities/assistant/model/flow-steps'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 
 const { t } = useI18n()
 
@@ -182,39 +181,20 @@ async function copy() {
 // Offered only when the reply cites a page of this base: an answer is written
 // back with the pages it stands on (the API refuses one without), and a web
 // citation is not a page anyone here can review. Editors only — it opens a
-// merge request in the reader's name.
-const auth = useAuthStore()
-const canSave = computed(() => auth.canEdit && props.message.sources.some(isPageSource))
+// merge request in the reader's name. `/capture` in the composer does the same
+// to the latest reply, so the saved state lives in the store.
+const canContribute = usePermission('workspace:contribute')
+const canSave = computed(() => canContribute.value && props.message.sources.some(isPageSource))
+const assistant = useAssistantStore()
+const captureReply = useCaptureReply()
 const saving = ref(false)
-const saved = ref<CaptureResult | null>(null)
+const saved = computed(() => assistant.capturedReplies[props.message.id] ?? null)
 
 async function saveToBase() {
   if (saving.value || saved.value) return
   saving.value = true
-  try {
-    const result = await api.post('/v1/assistant/messages/{id}/capture', {
-      path: { id: props.message.id },
-      body: {},
-    })
-    saved.value = result
-    if (result.state === 'duplicate' && result.targetDocumentId) {
-      const page = result.targetDocumentId
-      toast.info(t('assistant.saveToKb.duplicate'), {
-        action: { label: t('assistant.saveToKb.openPage'), onClick: () => void router.push(`/documents/${page}`) },
-      })
-    } else if (result.mergeRequestId) {
-      const mr = result.mergeRequestId
-      toast.success(result.outcome === 'amend-page' ? t('assistant.saveToKb.amended') : t('assistant.saveToKb.proposed'), {
-        action: { label: t('assistant.saveToKb.openMergeRequest'), onClick: () => void router.push(`/merge-requests/${mr}`) },
-      })
-    } else {
-      toast.success(t('assistant.saveToKb.staged'))
-    }
-  } catch (e) {
-    toast.error(errorMessage(e, t))
-  } finally {
-    saving.value = false
-  }
+  await captureReply(props.message.id)
+  saving.value = false
 }
 
 // Editing happens in place — the bubble becomes its own textarea. Sending the

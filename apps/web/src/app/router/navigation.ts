@@ -26,6 +26,7 @@ import { prefetchDocument } from '@/entities/document'
 import { whenIdle } from '@/shared/utils/hydration'
 import { useAuthStore } from '@/stores/auth'
 import { useFeaturesStore } from '@/stores/features'
+import { usePermissionsStore } from '@/stores/permissions'
 import { HOME_NAV, KNOWLEDGE_NAV, PRIMARY_NAV, SETTINGS_NAV } from '@/app/shell/nav'
 import { refusal } from './index'
 
@@ -56,6 +57,7 @@ export function isSlowTarget(to: string): boolean {
 export function installNavigation(router: Router, pinia: Pinia, queryClient: QueryClient) {
   const auth = useAuthStore(pinia)
   const features = useFeaturesStore(pinia)
+  const permissions = usePermissionsStore(pinia)
   const historyKey = () => (auth.me ? `kn_route_visits:${auth.me.userId}` : null)
 
   function record(to: RouteLocationNormalized) {
@@ -74,7 +76,7 @@ export function installNavigation(router: Router, pinia: Pinia, queryClient: Que
   function prefetch(to: string) {
     if (!auth.authenticated || savingData()) return
     const route = router.resolve(to)
-    if (!route.matched.length || route.meta.public || refusal(route, auth, features)) return
+    if (!route.matched.length || route.meta.public || refusal(route, auth, features, permissions)) return
     for (const loader of route.matched.flatMap(lazyLoaders)) {
       if (started.has(loader)) continue
       started.add(loader)
@@ -88,19 +90,19 @@ export function installNavigation(router: Router, pinia: Pinia, queryClient: Que
   function prefetchPage(path: string) {
     if (pageReads >= MAX_PAGE_PREFETCH || !auth.authenticated || savingData()) return
     const route = router.resolve(path)
-    if (route.matched.at(-1)?.path !== '/documents/:id' || refusal(route, auth, features)) return
+    if (route.matched.at(-1)?.path !== '/documents/:id' || refusal(route, auth, features, permissions)) return
     pageReads++
     void prefetchDocument(queryClient, route.params.id as string).finally(() => pageReads--)
   }
 
   const leafOf = (p: string) => router.resolve(p).matched.at(-1)?.path
-  const adminOnly = new Set(KNOWLEDGE_NAV.filter((l) => l.workspaceAdmin).map((l) => l.to))
 
   function prefetchLikely() {
     const key = historyKey()
     if (!key) return
-    // A pattern from an older build that no longer names its own record is dropped.
-    const keep = (p: string) => leafOf(p) === p && (auth.canAdminWorkspace || !adminOnly.has(p))
+    // A pattern from an older build that no longer names its own record is dropped,
+    // and so is one the caller may not open.
+    const keep = (p: string) => leafOf(p) === p && !refusal(router.resolve(p), auth, features, permissions)
     likelyRoutes(readVisits(key), SEED, keep, PREFETCH_COUNT).forEach(prefetch)
   }
 

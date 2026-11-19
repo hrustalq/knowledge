@@ -14,6 +14,7 @@ import {
   type WorkspaceRole,
 } from '@knowledge/contracts';
 import { AuditService } from '../auth/audit.service.js';
+import { AclEventsService } from '../permissions/acl-events.service.js';
 import type { Principal } from '../auth/principal.js';
 import { workspaceCreationRefusal } from '../auth/workspace-creation.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -41,6 +42,7 @@ export class WorkspacesService {
     private readonly teardown: WorkspaceTeardownService,
     private readonly sweeper: WorkspaceTeardownSweeper,
     private readonly config: ConfigService,
+    private readonly aclEvents: AclEventsService,
   ) {}
 
   async list(principal: Principal): Promise<ListWorkspacesResponse> {
@@ -251,7 +253,10 @@ export class WorkspacesService {
       data: [{ workspaceId, userId: user.id, role: dto.role, trustedOperator: dto.trustedOperator ?? false, capabilities }],
       skipDuplicates: true,
     });
-    if (created.count === 1) this.recordCapabilities(workspaceId, user.id, actorId, [], capabilities);
+    if (created.count === 1) {
+      this.recordCapabilities(workspaceId, user.id, actorId, [], capabilities);
+      this.aclEvents.permissionsChanged(workspaceId, [user.id]);
+    }
     return this.listMembers(workspaceId);
   }
 
@@ -294,6 +299,9 @@ export class WorkspacesService {
     if (dto.capabilities !== undefined) {
       this.recordCapabilities(workspaceId, userId, actorId, capabilitiesBefore, memberCapabilitiesOf(dto.capabilities));
     }
+    if (dto.role !== undefined || dto.trustedOperator !== undefined || dto.capabilities !== undefined) {
+      this.aclEvents.permissionsChanged(workspaceId, [userId]);
+    }
     return this.listMembers(workspaceId);
   }
 
@@ -328,6 +336,7 @@ export class WorkspacesService {
     if (!(await removeMemberGuarded(this.prisma, workspaceId, userId))) {
       throw new BadRequestException(t('error.workspace.lastAdminRemove'));
     }
+    this.aclEvents.permissionsChanged(workspaceId, [userId]);
     return this.listMembers(workspaceId);
   }
 

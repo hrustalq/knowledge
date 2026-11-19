@@ -31,9 +31,9 @@ export const routes: RouteRecordRaw[] = [
 ]
 
 export const settingsRoutes: RouteRecordRaw[] = [
-  // Connectors (docs/features/19): workspace administration, so like AI
-  // settings it gates on auth.canAdminWorkspace rather than meta.platformAdmin.
+  // Connectors (docs/features/19): every member reads the list; the page
+  // gates its controls on `workspace:admin`, and the API enforces admin.
   { path: 'connectors', component: () => import('./pages/ConnectorsPage.vue') },
-  // Chat bots (issue #71): workspace administration, gated like connectors.
-  { path: 'chat', component: () => import('./pages/ChatSettingsPage.vue') },
+  // Chat bots (issue #71): admin-only, so the router refuses anyone else (#1299).
+  { path: 'chat', component: () => import('./pages/ChatSettingsPage.vue'), meta: { permission: 'workspace:admin' } },
 ]

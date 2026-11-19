@@ -417,6 +417,34 @@ to answer 400. While such a merge request is open,
 merge clears it in the same transaction, and closing leaves the stub hidden so
 a reopen still merges.
 
+## One open agent merge request per page
+
+Issue #1248. A page has at most one open merge request with provenance
+`agent` opened from a finding. When `AgentFindingsService.propose` or
+`applyRelations` targets a page that already has one, the request is **held**:
+it answers 409 `agent-merge-request-open` with that merge request's id. The
+finding keeps its draft and its claim is released, so **Propose** works again
+once that merge request is merged or closed.
+
+Holding was chosen over adding a revision to the open branch. Every finding's
+draft is written against the page's default head, not against the other
+proposal's branch. A second revision on that branch would replace the first
+proposal without anyone noticing, and the reviewer would approve one fix
+believing it was two. Holding loses nothing, and a reviewer reads one change at
+a time.
+
+- **Checked twice.** Once before the drafter is paid for, and again inside the
+  transaction that opens the merge request. That transaction first takes
+  `lockSubject('agent-proposal:<documentId>')`, so two findings proposed at once
+  cannot both see none open.
+- **Sweepers inherit it.** The drift, source-change, scribe, memo and report
+  sweepers call `propose`. A held finding is logged and skipped like any other
+  failed proposal, and it stays proposable by hand. The drift comment already
+  points at the open merge request for the same page.
+- **Not held.** A person's own merge request on the page, a new page proposed
+  from a finding (`proposePage`), and the assistant's propose-change tool,
+  which is a person's turn and not a run.
+
 ## Data model
 
 | Table                     | Notes                                                                                                                                                 |

@@ -12,6 +12,7 @@ import { apiQueryOptions } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
 import { Button } from '@knowledge/ui/button'
 import { ResponsivePopover } from '@knowledge/ui/popover'
+import { MODE_AGENT_KEYS } from '../model/use-mode'
 
 const { t } = useI18n()
 
@@ -24,10 +25,8 @@ const props = defineProps<{ levelAgent?: string | null }>()
 const query = useQuery(apiQueryOptions('/v1/ai/agents/choices', { query: { workspaceId: getWorkspaceId() } }))
 const choices = computed(() => (query.data.value as ListAiAgentChoicesResponse | undefined)?.agents ?? [])
 
-// The built-ins the server already offers by mode. A workspace that has added
-// none of its own gets no picker at all.
-const BUILT_IN = new Set(['researcher', 'author'])
-const custom = computed(() => choices.value.filter((a) => !BUILT_IN.has(a.key)))
+// A workspace that has added no agent of its own gets no picker at all.
+const custom = computed(() => choices.value.filter((a) => !MODE_AGENT_KEYS.has(a.key)))
 
 const levelAgentName = computed(() => props.levelAgent ?? null)
 

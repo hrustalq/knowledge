@@ -11,13 +11,8 @@
  */
 
 :root {
-  /* Panel accents. Distinct hues at equal weight so no callout out-shouts
-     another; the semantics come from the icon, not from loudness. */
-  --kn-panel-note: oklch(0.55 0.13 250);
-  --kn-panel-tip: oklch(0.55 0.13 155);
-  --kn-panel-important: oklch(0.52 0.14 300);
-  --kn-panel-warning: oklch(0.62 0.13 75);
-  --kn-panel-caution: oklch(0.56 0.17 25);
+  /* The panel ramp (--kn-panel-*) lives in @knowledge/ui's tokens.css: it is
+     also the UI's state colour, in both apps. */
 
   /* Diagram palette. Scenes store the *key*, never the value, so a diagram
      drawn in light mode stays legible in dark mode. */
@@ -54,12 +49,6 @@
 }
 
 .dark {
-  --kn-panel-note: oklch(0.72 0.11 250);
-  --kn-panel-tip: oklch(0.72 0.11 155);
-  --kn-panel-important: oklch(0.72 0.12 300);
-  --kn-panel-warning: oklch(0.78 0.11 75);
-  --kn-panel-caution: oklch(0.7 0.14 25);
-
   --kn-draw-ink: oklch(0.88 0.01 265);
   --kn-draw-blue: oklch(0.72 0.12 255);
   --kn-draw-green: oklch(0.73 0.11 155);
@@ -1074,6 +1063,141 @@ select.kn-api-method:focus-visible { outline: 2px solid var(--ring); outline-off
   color: var(--destructive);
   border-bottom: 1px solid var(--border);
 }
+
+/* C4 models (#1244): a trail of views over the drawing. An element that opens
+   a deeper view is structure, so it is the one thing in the drawing that glows. */
+.kn-c4 {
+  clear: both;
+  margin: var(--kn-space-block, 1.5rem) 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.kn-c4-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.25rem 0.75rem;
+  padding: 0.25rem 0.375rem 0.25rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+.kn-c4-trail { display: flex; flex-wrap: wrap; align-items: center; min-width: 0; color: var(--muted-foreground); }
+.kn-c4-trail > :not(:first-child)::before { content: '›'; padding-inline: 0.4rem; color: var(--muted-foreground); }
+.kn-c4-trail button { border-radius: 4px; color: inherit; text-underline-offset: 3px; }
+.kn-c4-trail button:hover { color: var(--foreground); text-decoration: underline; }
+.kn-c4-trail button:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.kn-c4-trail [aria-current] { color: var(--foreground); font-weight: 600; }
+.kn-c4-tools { display: flex; align-items: center; gap: 0.125rem; }
+.kn-c4-percent {
+  min-width: 3.25rem;
+  height: 2rem;
+  border-radius: 6px;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+.kn-c4-percent:not(:disabled):hover { color: var(--accent-foreground); background: var(--accent); }
+.kn-c4-percent:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+/* Pinch is left to the diagram (pan-y has no pinch-zoom); one finger still scrolls the page until it is zoomed. */
+.kn-c4-stage { overflow: hidden; touch-action: pan-y; outline: none; }
+.kn-c4-stage:focus-visible { box-shadow: inset 0 0 0 2px var(--ring); }
+.kn-c4-stage[data-zoomed] { touch-action: none; cursor: grab; }
+.kn-c4-stage[data-dragging] { cursor: grabbing; }
+.kn-c4-pan { transform-origin: center; }
+.kn-c4-canvas { display: flex; justify-content: center; padding: 1.1rem; }
+.kn-c4-canvas svg { max-width: 100%; height: auto; }
+.kn-c4-drill { cursor: pointer; outline: none; }
+.kn-c4-drill :is(rect, path, polygon, circle, ellipse) {
+  stroke: var(--primary) !important;
+  stroke-width: 3px !important;
+  transition: filter 120ms ease-out;
+}
+.kn-c4-drill:hover :is(rect, path, polygon, circle, ellipse) { filter: brightness(1.12); }
+.kn-c4-drill:focus-visible :is(rect, path, polygon, circle, ellipse) { stroke: var(--ring) !important; stroke-width: 5px !important; }
+/* Diagram | Source: the segmented header MrSidebar uses for two panes in one frame. */
+.kn-c4-tabs { display: inline-flex; gap: 0.25rem; padding: 0.1875rem; border-radius: 8px; background: color-mix(in oklab, var(--muted) 60%, transparent); }
+.kn-c4-tabs [role='tab'] {
+  padding: 0.25rem 0.625rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--muted-foreground);
+  transition: color 120ms ease-out, background-color 120ms ease-out;
+}
+.kn-c4-tabs [role='tab']:hover { color: var(--foreground); }
+.kn-c4-tabs [role='tab'][aria-selected='true'] { background: var(--card); color: var(--foreground); box-shadow: 0 0 0 1px var(--border); }
+.kn-c4-tabs [role='tab']:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+.kn-c4-bar > .kn-c4-trail { flex: 1; }
+.kn-c4-source pre { margin: 0; border: 0; border-radius: 0; }
+.kn-c4-empty { padding: 1.5rem 0.75rem; }
+.kn-c4-code { margin: var(--kn-space-block, 1.5rem) 0; }
+.kn-c4-code > .kn-c4 { margin: 0; }
+
+/* The builder (C4Studio): a dotted canvas that pans with its content. */
+.kn-c4-studio-stage {
+  position: relative;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  cursor: grab;
+  background-image: radial-gradient(color-mix(in oklab, var(--muted-foreground) 35%, transparent) 1px, transparent 1px);
+}
+.kn-c4-studio-stage:active { cursor: grabbing; }
+.kn-c4-studio-canvas .kn-c4-node { cursor: pointer; outline: none; }
+.kn-c4-studio-canvas[data-editable] .kn-c4-node { cursor: move; }
+.kn-c4-studio-canvas .kn-c4-node > :first-child { transition: filter 120ms ease-out; }
+.kn-c4-studio-canvas .kn-c4-node:hover > :first-child { filter: brightness(1.1); }
+.kn-c4-studio-canvas :is(.kn-c4-node, .kn-c4-rel)[data-selected] :is(rect, path):not([stroke='transparent']) {
+  stroke: var(--primary) !important;
+  stroke-width: 3px;
+}
+.kn-c4-studio-canvas .kn-c4-node:focus-visible > :first-child { stroke: var(--ring) !important; stroke-width: 4px; }
+.kn-c4-studio-canvas .kn-c4-rel { cursor: pointer; }
+.kn-c4-studio-canvas .kn-c4-rel:hover .kn-c4-line { stroke-width: 2.5px; }
+/* The connect handle shows on the element under the pointer and the one selected. */
+.kn-c4-handle {
+  fill: var(--background);
+  stroke: var(--primary);
+  stroke-width: 2px;
+  cursor: crosshair;
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+}
+.kn-c4-node:hover .kn-c4-handle,
+.kn-c4-node[data-selected] .kn-c4-handle { opacity: 1; }
+@media (hover: none) { .kn-c4-handle { opacity: 1; } }
+.kn-c4-palette-item {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.25rem;
+  padding: 0.375rem 0.625rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  font-size: 0.8125rem;
+  cursor: grab;
+  transition: border-color 120ms ease-out, background-color 120ms ease-out;
+}
+.kn-c4-palette-item:hover { border-color: var(--ring); }
+.kn-c4-palette-item:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+.kn-c4-palette-item[data-kind='person'] svg { color: #08427b; }
+.kn-c4-palette-item[data-kind='softwareSystem'] svg { color: #1168bd; }
+.kn-c4-palette-item[data-kind='container'] svg { color: #438dd5; }
+.kn-c4-palette-item[data-kind='component'] svg { color: #5d82a8; }
+@media (prefers-reduced-motion: reduce) {
+  .kn-c4-handle, .kn-c4-palette-item, .kn-c4-studio-canvas .kn-c4-node > :first-child { transition: none; }
+}
+
+/* An export prints every view, each under its title. */
+.kn-c4-static > .kn-c4-bar { padding-block: 0.5rem; }
+.kn-c4-static > :not(:first-child).kn-c4-bar { border-top: 1px solid var(--border); }
+.kn-c4-error { margin: 0; padding: 0.4rem 0.75rem; font-size: 0.8125rem; color: var(--destructive); }
+.kn-c4-broken pre { margin: 0; border-radius: 0; }
 
 .kn-drawing-view { cursor: default; }
 .kn-drawing-canvas { padding: 0.75rem; }

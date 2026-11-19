@@ -1,19 +1,13 @@
 <script setup lang="ts">
 /**
  * Access — who is in this workspace, what a role grants, which groups they
- * form, who is asking for what, and who has an account at all. One surface,
- * five tabs.
+ * form and who is asking for what. One surface, four tabs. The Roles tab
+ * answers the question under the roster: what *is* an editor.
  *
- * These were two routes. `/settings/access` held the workspace roster and
- * `/settings/users` held the platform accounts, which meant the two halves of a
- * single question — can this person sign in, and what may they do here — sat in
- * different places in the settings nav, and a workspace admin had a nav row
- * beside theirs that only ever 403'd. What neither page answered was the
- * question underneath both: what *is* an editor. That is the Roles tab.
- *
- * Accounts renders only for a platform admin. The guard is the API's
- * (@PlatformAdmin on UsersController) — hiding the tab just stops offering a
- * door that cannot open, and keeps the nav at one Access row for everybody.
+ * Who has an account at all is the platform's question, not the workspace's:
+ * it lives in the admin console (/admin/users, #1239), which the header links
+ * for a platform admin. That is a full page load into another app, so it is a
+ * plain link, never a router push.
  *
  * Tabs are the shared PageTabs strip over `usePageTabs`, as on the
  * merge-request and AI pages: `?tab=` is an opening instruction, replaced
@@ -22,7 +16,7 @@
 import { useI18n } from 'vue-i18n'
 import { computed, onMounted, ref, watch } from 'vue'
 import { toast } from 'vue-sonner'
-import { AtSign, Library, ShieldCheck, UserPlus, Wrench } from 'lucide-vue-next'
+import { AtSign, ExternalLink, Library, ShieldCheck, UserPlus, Wrench } from 'lucide-vue-next'
 import { WORKSPACE_ROLES } from '@knowledge/contracts'
 import type {
   ListWorkspaceMembersResponse,
@@ -35,7 +29,7 @@ import type {
 import { useQueryClient } from '@tanstack/vue-query'
 import { api, fetchApi } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { Autocomplete, type AutocompleteOption } from '@knowledge/ui/autocomplete'
 import { Badge } from '@knowledge/ui/badge'
 import { UserChip } from '@/entities/person'
@@ -72,7 +66,6 @@ import {
 } from '@knowledge/ui/table'
 import { PageTabs, panelId, tabId, usePageTabs, type PageTab } from '@knowledge/ui/layout'
 import AccessRoles from '@/modules/access/components/AccessRoles.vue'
-import AccessAccounts from '@/modules/access/components/AccessAccounts.vue'
 import AccessGroups from '@/modules/access/components/AccessGroups.vue'
 import AccessRequests from '@/modules/access/components/AccessRequests.vue'
 
@@ -80,7 +73,6 @@ const { t } = useI18n()
 
 const ROLES: readonly WorkspaceRole[] = WORKSPACE_ROLES
 
-const auth = useAuthStore()
 const queryClient = useQueryClient()
 const workspaces = ref<WorkspaceSummary[]>([])
 const selected = ref<string>(getWorkspaceId())
@@ -213,11 +205,8 @@ watch(selected, () => {
   candidateCache.clear()
 })
 
-const selectedWorkspace = computed(() => workspaces.value.find((w) => w.workspaceId === selected.value))
-/** Can the caller manage the selected workspace? (dev + platform admins always can) */
-const canManage = computed(
-  () => auth.isDev || auth.isAdmin || selectedWorkspace.value?.myRole === 'admin',
-)
+/** Can the caller manage the selected workspace? Asked of that workspace, not the active one. */
+const canManage = usePermission('workspace:admin', selected)
 
 // Fresh, here and for members: this page writes both, and no live event re-asks either.
 async function loadWorkspaces() {
@@ -355,13 +344,8 @@ async function removeMember(member: WorkspaceMemberEntry) {
 
 /* ------------------------------------------------------------------- tabs */
 
-/**
- * Accounts is platform-admin-only, so it is absent rather than disabled for
- * everyone else — and `usePageTabs` falls back to Members when `?tab=accounts`
- * names a tab this caller does not have, which is what keeps a link pasted by
- * an admin from landing a workspace admin on an empty panel.
- */
-const canSeeAccounts = computed(() => auth.isAdmin || auth.isDev)
+/** A platform admin (or the dev principal) searches every account in the picker and gets the console link. */
+const isPlatformAdmin = usePermission('platform:admin')
 
 const tabs = computed<PageTab[]>(() => [
   { key: 'members', label: t('access.tabMembers'), count: members.value.length },
@@ -369,7 +353,6 @@ const tabs = computed<PageTab[]>(() => [
   { key: 'groups', label: t('access.tabGroups') },
   // Every member: managers decide here, and anyone reads their own (#76).
   { key: 'requests', label: t('access.tabRequests') },
-  ...(canSeeAccounts.value ? [{ key: 'accounts', label: t('access.tabAccounts') }] : []),
 ])
 
 const tab = usePageTabs(tabs, 'members')
@@ -379,10 +362,15 @@ const tab = usePageTabs(tabs, 'members')
   <div class="space-y-4">
     <div class="flex items-center justify-between gap-3">
       <h1 class="font-display text-2xl font-bold tracking-tight">{{ t('access.title') }}</h1>
-      <Button v-if="canManage && tab === 'members'" size="sm" @click="addOpen = true">
-        <UserPlus class="size-3.5" /> {{ t('access.addMember') }}
-      </Button>
-      <Badge v-else-if="!canManage" variant="outline">{{ t('access.readOnly') }}</Badge>
+      <div class="flex items-center gap-2">
+        <Button v-if="isPlatformAdmin" as="a" href="/admin/users" size="sm" variant="ghost">
+          {{ t('access.accountsInConsole') }} <ExternalLink class="size-3.5" aria-hidden="true" />
+        </Button>
+        <Button v-if="canManage && tab === 'members'" size="sm" @click="addOpen = true">
+          <UserPlus class="size-3.5" /> {{ t('access.addMember') }}
+        </Button>
+        <Badge v-else-if="!canManage" variant="outline">{{ t('access.readOnly') }}</Badge>
+      </div>
     </div>
 
     <PageTabs v-model="tab" :tabs="tabs" :label="t('access.title')" />
@@ -507,9 +495,6 @@ const tab = usePageTabs(tabs, 'members')
 
       <!-- Requests: access asked for, decided by whoever manages the page. -->
       <AccessRequests v-else-if="tab === 'requests'" :workspace-id="selected" />
-
-      <!-- Accounts: the platform layer. Only rendered where it can be used. -->
-      <AccessAccounts v-else-if="tab === 'accounts' && canSeeAccounts" />
     </div>
 
     <Dialog v-model:open="addOpen">
@@ -517,14 +502,14 @@ const tab = usePageTabs(tabs, 'members')
         <DialogHeader>
           <DialogTitle>{{ t('access.addMember') }}</DialogTitle>
           <DialogDescription>
-            {{ canSeeAccounts ? t('access.pickerSearchesNonMembers') : t('access.pickerExactEmail') }}
+            {{ isPlatformAdmin ? t('access.pickerSearchesNonMembers') : t('access.pickerExactEmail') }}
           </DialogDescription>
         </DialogHeader>
         <form id="add-member" class="space-y-3" @submit.prevent="addMember">
           <Autocomplete
             v-model="pickedValue"
             :label="t('access.user')"
-            :placeholder="canSeeAccounts ? t('access.searchUsers') : t('access.fullEmail')"
+            :placeholder="isPlatformAdmin ? t('access.searchUsers') : t('access.fullEmail')"
             :multiple="false"
             :load="loadCandidates"
           />

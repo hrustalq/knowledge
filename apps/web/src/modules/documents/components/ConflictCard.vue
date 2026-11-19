@@ -22,7 +22,7 @@ import type { ConflictSide, KnowledgeConflictDto } from '@knowledge/contracts'
 import { api } from '@/shared/api/client'
 import { errorMessage, errorReason } from '@/shared/api/errors'
 import { formatDateTime, formatNumber, formatRelative } from '@/shared/utils/format'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { Badge } from '@knowledge/ui/badge'
 import { Button } from '@knowledge/ui/button'
 import { WorkItemChips } from '@/entities/document'
@@ -38,7 +38,7 @@ const props = withDefaults(
 )
 
 const { t } = useI18n()
-const auth = useAuthStore()
+const canContribute = usePermission('workspace:contribute')
 const queryClient = useQueryClient()
 const busy = ref<'propose' | 'resolved' | 'dismissed' | null>(null)
 
@@ -144,7 +144,7 @@ async function propose() {
       <span v-if="conflict.resolution" class="basis-full italic">“{{ conflict.resolution }}”</span>
     </p>
 
-    <div v-if="isOpen && auth.canEdit" class="mt-2.5 flex flex-wrap gap-1.5">
+    <div v-if="isOpen && canContribute" class="mt-2.5 flex flex-wrap gap-1.5">
       <Button
         v-if="!conflict.mergeRequestId && conflict.agentRunId"
         variant="outline"
@@ -163,6 +163,6 @@ async function propose() {
       </Button>
     </div>
     <!-- Handed off while open; a closed one still shows the ticket it had. -->
-    <WorkItemChips source-kind="conflict" :source-id="conflict.id" :can-handoff="isOpen && auth.canEdit" class="mt-2" />
+    <WorkItemChips source-kind="conflict" :source-id="conflict.id" :can-handoff="isOpen && canContribute" class="mt-2" />
   </article>
 </template>

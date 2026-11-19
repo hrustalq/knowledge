@@ -41,7 +41,7 @@ import { apiQueryOptions } from '@/shared/api/queries'
 import { errorMessage } from '@/shared/api/errors'
 import { formatBytes, formatNumber } from '@/shared/utils/format'
 import { methodTone, pathSegments, statusTone, type OperationView } from '@/entities/api-operation/model/api-spec'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { Button } from '@knowledge/ui/button'
 import { Input } from '@knowledge/ui/input'
 import { Textarea } from '@knowledge/ui/textarea'
@@ -66,7 +66,8 @@ const props = defineProps<{
 }>()
 
 const { t } = useI18n()
-const auth = useAuthStore()
+const canContribute = usePermission('workspace:contribute')
+const isWorkspaceAdmin = usePermission('workspace:admin')
 const uid = useId()
 
 // ---- Where the request goes --------------------------------------------------
@@ -81,7 +82,7 @@ const settings = computed(() => settingsQuery.data.value as ApiSettingsResponse 
 const proxyBlocked = computed<'off' | 'role' | 'loading' | null>(() => {
   if (!settings.value) return 'loading'
   if (settings.value.tryProxy.effective === 'off') return 'off'
-  if (!auth.canEdit) return 'role'
+  if (!canContribute.value) return 'role'
   return null
 })
 const via = computed<TryVia>(() => (props.env.via === 'proxy' && proxyBlocked.value === null ? 'proxy' : 'browser'))
@@ -327,7 +328,7 @@ const shownBody = computed(() => {
     </div>
     <p v-if="via === 'browser' && proxyBlocked && proxyBlocked !== 'loading'" :id="`${uid}-proxy-why`" class="-mt-2 text-ui leading-relaxed text-muted-foreground">
       {{ t(`apiTry.proxyBlocked.${proxyBlocked}`) }}
-      <RouterLink v-if="proxyBlocked === 'off' && auth.canAdminWorkspace" to="/settings/api" class="text-primary underline-offset-2 hover:underline">
+      <RouterLink v-if="proxyBlocked === 'off' && isWorkspaceAdmin" to="/settings/api" class="text-primary underline-offset-2 hover:underline">
         {{ t('apiTry.proxyBlocked.settings') }}
       </RouterLink>
     </p>

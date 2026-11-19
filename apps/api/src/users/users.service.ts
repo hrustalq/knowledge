@@ -10,10 +10,12 @@ import {
   type WorkspaceRole,
 } from '@knowledge/contracts';
 import type { Prisma, User, WorkspaceMember } from '@prisma/client';
+import type { AuditEntryInput } from '../auth/audit.service.js';
 import { hashPassword } from '../auth/password.js';
 import type { Principal } from '../auth/principal.js';
 import { SessionsService } from '../auth/sessions.service.js';
 import { AuditService } from '../auth/audit.service.js';
+import { AclEventsService } from '../permissions/acl-events.service.js';
 import { mintToken } from '../auth/auth-tokens.js';
 import { MailProducer } from '../mail/mail.producer.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -26,6 +28,12 @@ import type { Env } from '../config/env.js';
 
 /** One unrevoked key is enough to answer `hasApiKey` (docs/features/33). */
 const ACTIVE_KEY = { where: { revokedAt: null }, select: { id: true }, take: 1 } as const;
+/** What `toSummary` reads: a deleted workspace's memberships are left out (#1239). */
+const SUMMARY_INCLUDE = {
+  memberships: { where: { workspace: { deletedAt: null } }, include: { workspace: { select: { name: true } } } },
+  apiKeys: ACTIVE_KEY,
+} as const;
+type SummaryRow = User & { memberships: (WorkspaceMember & { workspace: { name: string } })[]; apiKeys: { id: string }[] };
 @Injectable()
 export class UsersService {
   constructor(
@@ -34,17 +42,19 @@ export class UsersService {
     private readonly mail: MailProducer,
     private readonly config: ConfigService<Env, true>,
     private readonly audit: AuditService,
+    private readonly aclEvents: AclEventsService,
   ) {}
 
   async list(): Promise<ListUsersResponse> {
-    const users = await this.prisma.user.findMany({
-      orderBy: { createdAt: 'asc' },
-      include: { memberships: true, apiKeys: ACTIVE_KEY },
-    });
-    return { users: users.map((u) => this.toSummary(u)) };
+    const [users, signIns] = await Promise.all([
+      this.prisma.user.findMany({ orderBy: { createdAt: 'asc' }, include: SUMMARY_INCLUDE }),
+      this.prisma.session.groupBy({ by: ['userId'], _max: { createdAt: true } }),
+    ]);
+    const last = new Map(signIns.map((r) => [r.userId, r._max.createdAt]));
+    return { users: users.map((u) => this.toSummary(u, last.get(u.id) ?? null)) };
   }
 
-  async create(actor: Principal, dto: CreateUserDto): Promise<UserSummary> {
+  async create(actor: Principal, dto: CreateUserDto, ip: string | null = null): Promise<UserSummary> {
     const email = dto.email.trim().toLowerCase();
     const existing = await this.prisma.user.findUnique({ where: { email } });
     if (existing) throw new ConflictException(t('error.auth.emailTaken'));
@@ -62,7 +72,7 @@ export class UsersService {
           // can switch it after signing in.
           locale: currentLocale(),
         },
-        include: { memberships: true, apiKeys: ACTIVE_KEY },
+        include: SUMMARY_INCLUDE,
       });
       // No password: the only way in is a link, so mail one (docs/features/41).
       // A redeemed invite also proves the address, the way a reset does.
@@ -77,10 +87,19 @@ export class UsersService {
       }
       return created;
     });
-    return this.toSummary(user);
+    void this.audit.record({
+      workspaceId: null,
+      actor: actor.userId,
+      action: 'user.created',
+      params: { isAdmin: user.isAdmin, invited: !passwordHash },
+      ok: true,
+      ip,
+      target: user.id,
+    });
+    return this.toSummary(user, null);
   }
 
-  async update(actor: Principal, userId: string, dto: UpdateUserDto): Promise<UserSummary> {
+  async update(actor: Principal, userId: string, dto: UpdateUserDto, ip: string | null = null): Promise<UserSummary> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new NotFoundException(t('error.user.notFound', { id: userId }));
 
@@ -104,13 +123,19 @@ export class UsersService {
         await this.sessions.revokeAllForUser(userId);
       }
       if (dto.password !== undefined) this.prisma.onCommit(() => this.mail.enqueue({ template: 'password-changed', userId }));
-      return this.prisma.user.update({
-        where: { id: userId },
-        data,
-        include: { memberships: true, apiKeys: ACTIVE_KEY },
-      });
+      return this.prisma.user.update({ where: { id: userId }, data, include: SUMMARY_INCLUDE });
     });
-    return this.toSummary(updated);
+    // The platform-admin flag reaches every workspace (#1297): one frame per
+    // membership. A workspace they only visit as admin hears it on reconnect.
+    if (dto.isAdmin !== undefined && dto.isAdmin !== user.isAdmin) {
+      for (const m of updated.memberships) this.aclEvents.permissionsChanged(m.workspaceId, [userId]);
+    }
+    for (const row of accountChanges(user, dto)) {
+      void this.audit.record({ workspaceId: null, actor: actor.userId, ok: true, ip, target: userId, ...row });
+    }
+    // The newest session is the last sign-in (#1239); revoked or expired, it still happened.
+    const last = await this.prisma.session.findFirst({ where: { userId }, orderBy: { createdAt: 'desc' }, select: { createdAt: true } });
+    return this.toSummary(updated, last?.createdAt ?? null);
   }
 
   async listSessions(userId: string, currentSessionId?: string): Promise<ListSessionsResponse> {
@@ -159,7 +184,7 @@ export class UsersService {
     if (!user) throw new NotFoundException(t('error.user.notFound', { id: userId }));
   }
 
-  private toSummary(user: User & { memberships: WorkspaceMember[]; apiKeys: { id: string }[] }): UserSummary {
+  private toSummary(user: SummaryRow, lastSignInAt: Date | null): UserSummary {
     return {
       userId: user.id,
       email: user.email,
@@ -171,8 +196,10 @@ export class UsersService {
       emailVerified: user.emailVerifiedAt !== null,
       hasApiKey: user.apiKeys.length > 0,
       createdAt: user.createdAt.toISOString(),
+      lastSignInAt: lastSignInAt?.toISOString() ?? null,
       memberships: user.memberships.map((m) => ({
         workspaceId: m.workspaceId,
+        workspaceName: m.workspace.name,
         role: m.role as WorkspaceRole,
         trustedOperator: m.trustedOperator,
         capabilities: memberCapabilitiesOf(m.capabilities),
@@ -180,4 +207,23 @@ export class UsersService {
       })),
     };
   }
+}
+
+/**
+ * The audit rows one account update writes (#1239): one per field whose value
+ * changed, each with its own action so the audit filter finds it. A password
+ * is recorded as set, never with its value.
+ */
+export function accountChanges(before: User, dto: UpdateUserDto): Pick<AuditEntryInput, 'action' | 'params'>[] {
+  const rows: Pick<AuditEntryInput, 'action' | 'params'>[] = [];
+  const name = dto.displayName?.trim();
+  if (name !== undefined && name !== before.displayName) {
+    rows.push({ action: 'user.renamed', params: { from: before.displayName, to: name } });
+  }
+  if (dto.isAdmin === true && !before.isAdmin) rows.push({ action: 'user.admin_granted', params: {} });
+  if (dto.isAdmin === false && before.isAdmin) rows.push({ action: 'user.admin_revoked', params: {} });
+  if (dto.disabled === true && !before.disabledAt) rows.push({ action: 'user.disabled', params: {} });
+  if (dto.disabled === false && before.disabledAt) rows.push({ action: 'user.enabled', params: {} });
+  if (dto.password !== undefined) rows.push({ action: 'user.password_set', params: {} });
+  return rows;
 }

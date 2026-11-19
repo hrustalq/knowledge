@@ -22,7 +22,7 @@ import type {
   ProjectGitResponse,
   ProjectOverviewResponse,
   ProjectSettingOverridesResponse,
-  ProjectSettingsAccess,
+  ProjectDetailResponse,
   ProjectSummary,
   ScaffoldProjectResponse,
 } from '@knowledge/contracts';
@@ -46,6 +46,7 @@ import { ProjectMethodologyService } from './project-methodology.service.js';
 import { ProjectsService } from './projects.service.js';
 import { AccessService } from '../auth/access.service.js';
 import { PermissionService } from '../permissions/permission.service.js';
+import { PermissionsResolver } from '../permissions/permissions.resolver.js';
 import { ProjectOverviewService } from './project-overview.service.js';
 import { ProjectCascadeService } from './project-cascade.service.js';
 import { Returns } from '../common/returns.decorator.js';
@@ -67,6 +68,7 @@ export class ProjectsController {
     private readonly permissions: PermissionService,
     private readonly access: AccessService,
     private readonly config: ConfigService<Env, true>,
+    private readonly grants: PermissionsResolver,
   ) {}
 
   private workspaceOf(projectId: string): Promise<string> {
@@ -125,20 +127,17 @@ export class ProjectsController {
     return this.projects.settingOverrides(await this.permissions.scopeFor(principal, query.workspaceId));
   }
 
-  @Get(':id/settings/access')
-  @Returns('ProjectSettingsAccess')
-  @Access('viewer', 'project')
-  @ApiOperation({ summary: "What the caller may change on the project's settings page: the non-gate settings, and the merge gates" })
-  async settingsAccess(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<ProjectSettingsAccess> {
-    return { projectId: id, ...(await this.permissions.projectSettingsAccess(principal, id)) };
-  }
-
   @Get(':id')
-  @Returns('ProjectSummary')
+  @Returns('ProjectDetailResponse')
   @Access('viewer', 'project')
-  @ApiOperation({ summary: 'Project detail' })
-  async get(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<ProjectSummary> {
-    return this.projects.get(id, await this.permissions.scopeFor(principal, await this.workspaceOf(id)));
+  @ApiOperation({ summary: 'Project detail, with what the caller may do with it (#1298)' })
+  async get(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<ProjectDetailResponse> {
+    // Express's body ETag: the permissions are in the body, so two callers who differ never share one.
+    const [project, permissions] = await Promise.all([
+      this.projects.get(id, await this.permissions.scopeFor(principal, await this.workspaceOf(id))),
+      this.grants.forProject(principal, id),
+    ]);
+    return { ...project, permissions };
   }
 
   /**

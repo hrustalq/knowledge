@@ -7,7 +7,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { BookMarked, ChevronRight, Inbox, Library } from 'lucide-vue-next'
 import { SwitcherCreateDialog } from '@/modules/projects'
 import { Collapse } from '@knowledge/ui/collapse'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { useFeaturesStore } from '@/stores/features'
 import { useLayoutStore } from '@/stores/layout'
 import ScopeSwitcher from './ScopeSwitcher.vue'
@@ -17,7 +17,7 @@ import SidebarNavLink from './SidebarNavLink.vue'
 import { HOME_NAV, KNOWLEDGE_NAV, NAV_CURRENT, NAV_IDLE, PRIMARY_NAV, SETTINGS_NAV, type NavItem } from './nav'
 
 const { t } = useI18n()
-const auth = useAuthStore()
+const isWorkspaceAdmin = usePermission('workspace:admin')
 const features = useFeaturesStore()
 
 const route = useRoute()
@@ -47,7 +47,7 @@ function openCreate(kind: 'workspace' | 'project', query = '') {
 
 /** A link to a section the workspace switched off (#604) is not drawn. */
 const shown = (list: NavItem[]) =>
-  list.filter((l) => (!l.feature || features.isOn(l.feature)) && (!l.workspaceAdmin || auth.canAdminWorkspace))
+  list.filter((l) => (!l.feature || features.isOn(l.feature)) && (!l.workspaceAdmin || isWorkspaceAdmin.value))
 
 // A direct workspace's merge requests are proposals from agents and captures (#958): same route, its own name.
 const links = computed(() =>
@@ -74,7 +74,7 @@ watch(inKnowledge, (inside) => {
        scrolls as one and the panes keep a usable minimum below it. -->
   <aside class="border-sidebar-border bg-sidebar text-sidebar-foreground relative flex h-full w-full shrink-0 flex-col border-r max-lg:overflow-x-hidden max-lg:overflow-y-auto">
     <div class="pt-4 pb-3">
-      <RouterLink to="/documents" class="flex items-center gap-2 px-4">
+      <RouterLink to="/" class="flex items-center gap-2 px-4">
         <span class="bg-primary text-primary-foreground grid size-7 shrink-0 place-items-center rounded-md">
           <Library class="size-4" />
         </span>

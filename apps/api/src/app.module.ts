@@ -1,10 +1,12 @@
 import { Module } from '@nestjs/common';
 import { BootstrapModule } from './config/bootstrap.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
+import { OpsBeaconModule } from './observability/ops-beacon.js';
 import { AuthModule } from './auth/auth.module.js';
 import { SsoModule } from './auth/sso/sso.module.js';
 import { ScimModule } from './scim/scim.module.js';
 import { UsersModule } from './users/users.module.js';
+import { AdminModule } from './admin/admin.module.js';
 import { WorkspacesModule } from './workspaces/workspaces.module.js';
 import { WorkspacePurposeModule } from './workspace-purpose/workspace-purpose.module.js';
 import { PermissionsModule } from './permissions/permissions.module.js';
@@ -31,6 +33,7 @@ import { DriftModule } from './connectors/drift/drift.module.js';
 import { ScribePublishModule } from './connectors/handoff/scribe-publish.module.js';
 import { LintModule } from './documents/lint/lint.module.js';
 import { AiModule } from './ai/ai.module.js';
+import { HomeModule } from './home/home.module.js';
 import { GlossaryModule } from './glossary/glossary.module.js';
 import { ImportModule } from './import/import.module.js';
 import { MemosModule } from './memos/memos.module.js';
@@ -60,6 +63,7 @@ import { MemoryModule } from './memory/memory.module.js';
 @Module({
   imports: [
     BootstrapModule,
+    OpsBeaconModule.forProcess('api'),
     PrismaModule,
     AuthModule,
     // Enterprise SSO (#75): API-only, every route 404s unless AUTH_SSO_ENABLED.
@@ -67,6 +71,7 @@ import { MemoryModule } from './memory/memory.module.js';
     // SCIM provisioning (#75): API-only, every route 404s unless AUTH_SCIM_ENABLED.
     ScimModule,
     UsersModule,
+    AdminModule,
     WorkspacesModule,
     WorkspacePurposeModule,
     PermissionsModule,
@@ -88,6 +93,7 @@ import { MemoryModule } from './memory/memory.module.js';
     CollabModule,
     AssistantModule,
     AiModule,
+    HomeModule,
     ConnectorsModule,
     // Publishes finished drift checks (docs/features/35); API-only, sweeper.
     DriftModule,

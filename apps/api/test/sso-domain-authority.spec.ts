@@ -16,7 +16,7 @@ const OTHER_WS = '33333333-3333-4333-8333-333333333333';
 function login() {
   const { prisma, db } = fakePrisma();
   const audit = { record: vi.fn(async () => undefined) };
-  const service = new SsoLoginService(prisma as never, audit as never, new RoleSyncService(prisma as never, audit as never));
+  const service = new SsoLoginService(prisma as never, audit as never, new RoleSyncService(prisma as never, audit as never, { permissionsChanged: () => {} } as never));
   const provider = (over: Row = {}) =>
     ({ id: 'idp-1', workspaceId: WS, kind: 'oidc', preset: 'keycloak', platformWide: false, jitEnabled: true, defaultRole: null, allowedDomains: ['victim.example'], groupsClaim: null, groupSyncMode: 'additive', ...over }) as never;
   const person = (email: string) => ({ subject: `sub-${email}`, email, emailVerified: true, displayName: null, groups: [], notes: [] }) as never;

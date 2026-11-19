@@ -14,6 +14,7 @@ import { ApiExceptionFilter } from '../src/common/api-exception.filter.js';
 import { SCIM_CONTENT_TYPE, SCIM_ERROR_SCHEMA, SCIM_PATH_PREFIX } from '../src/common/scim-error-body.js';
 import { validateEnv } from '../src/config/env.js';
 import { PrismaService } from '../src/prisma/prisma.service.js';
+import { AclEventsService } from '../src/permissions/acl-events.service.js';
 import { PublicRateLimiter } from '../src/public/public-rate-limit.js';
 import { ScimModule } from '../src/scim/scim.module.js';
 
@@ -62,11 +63,12 @@ async function boot(values: Record<string, unknown>) {
       { provide: AuditService, useValue: audit },
       { provide: SessionsService, useValue: {} },
       { provide: AuthFlowService, useValue: {} },
+      { provide: AclEventsService, useValue: {} },
       { provide: PublicRateLimiter, useValue: { hit: vi.fn(async () => ({ allowed: true })) } },
       AuthRateLimitGuard,
       AuthPolicyService,
     ],
-    exports: [ConfigService, AuditService, SessionsService, AuthFlowService, PublicRateLimiter, AuthRateLimitGuard, AuthPolicyService],
+    exports: [ConfigService, AuditService, SessionsService, AuthFlowService, AclEventsService, PublicRateLimiter, AuthRateLimitGuard, AuthPolicyService],
   };
   const moduleRef = await Test.createTestingModule({ imports: [authStandIn, SsoModule, ScimModule] })
     .overrideProvider(PrismaService)

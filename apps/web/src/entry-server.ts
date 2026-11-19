@@ -9,10 +9,13 @@ import type { QueryClient } from '@tanstack/vue-query'
 import { isStoreQuery, prefetchForRender } from './shared/api/queries'
 import { documentContentQuery, documentDetailQuery, type ContentAt } from './entities/document'
 import { useNotificationsStore } from './modules/notifications'
+import { homeQuery } from './modules/home'
 import { ensureLocaleMessages } from './shared/i18n'
 import { useAuthStore } from './stores/auth'
 import { useDocumentsStore } from './stores/documents'
+import { usePermissionsStore } from './stores/permissions'
 import { useProjectsStore } from './stores/projects'
+import { documentPermissionsQuery } from './stores/permissions'
 import { useWorkspacesStore } from './stores/workspaces'
 
 interface SsrRequestContext {
@@ -27,6 +30,7 @@ interface SsrRequestContext {
   aiPanel: string | null
   measure: string | null
   pageRail: string | null
+  docSort: string | null
   treeOpen: string | null
   locale: Locale | null
   /** The server's trace id for this page request, so API calls made during the render join it. */
@@ -82,7 +86,11 @@ async function prefetchShell(router: Router, pinia: Pinia, queryClient: QueryCli
       // The fallback's roster is this render's first load, not a refresh of
       // the gone workspace's empty one: the rail lands by it (#671).
       projects.loaded = false
-      await projects.fetchList().catch(() => undefined)
+      await Promise.all([
+        projects.fetchList().catch(() => undefined),
+        // The guard read the gone workspace's grants; the render draws this one's controls.
+        usePermissionsStore(pinia).ensureLoaded(auth.me?.userId),
+      ])
     }
   }
   if (projects.loaded && projects.activeId !== scoped) {
@@ -98,22 +106,28 @@ async function prefetchShell(router: Router, pinia: Pinia, queryClient: QueryCli
 }
 
 /**
- * A page view's detail and content (#643): the page draws its title, meta line
+ * A page view's detail, content and permissions (#643, #1298): the page draws its title, meta line
  * and body from these two on the server instead of skeletons, and the client
  * hydrates from the same answers without asking again. Workspace-independent
  * keys, so the fallback above cannot strand them.
  */
 async function prefetchPage(router: Router, queryClient: QueryClient) {
   const route = router.currentRoute.value
+  // The home (#1243): one read, so it renders with JS off.
+  if (route.path === '/') return prefetchForRender(queryClient, homeQuery())
   if (route.matched.at(-1)?.path !== '/documents/:id') return
   const id = route.params.id as string
   // The page's own `contentAt`: an explicit revision wins over `?asOf=`.
   const q = route.query
   const at: ContentAt =
     typeof q.revision === 'string' ? { revision: q.revision } : typeof q.asOf === 'string' ? { asOf: q.asOf } : null
+  const branch = typeof q.branch === 'string' ? q.branch : null
   await Promise.all([
     prefetchForRender(queryClient, documentDetailQuery(id)),
     prefetchForRender(queryClient, documentContentQuery(id, at)),
+    // What the caller may do with it (#1298), so the server draws the same controls the client will.
+    prefetchForRender(queryClient, documentPermissionsQuery(id)),
+    ...(branch ? [prefetchForRender(queryClient, documentPermissionsQuery(id, branch))] : []),
     installSsrDocument(),
   ])
 }
@@ -143,6 +157,7 @@ export async function render(url: string, ctx: Partial<SsrRequestContext> = {}) 
     aiPanel: ctx.aiPanel ?? null,
     measure: ctx.measure ?? null,
     pageRail: ctx.pageRail ?? null,
+    docSort: ctx.docSort ?? null,
     treeOpen: ctx.treeOpen ?? null,
     locale: ctx.locale ?? null,
     traceId: ctx.traceId ?? null,

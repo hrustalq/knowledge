@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import 'reflect-metadata';
+import { BadRequestException } from '@nestjs/common';
 import { DocumentsController } from '../src/documents/documents.controller.js';
 import { AiUsageService } from '../src/ai/ai-usage.service.js';
 
@@ -22,6 +23,19 @@ describe('list limits (#1109)', () => {
     for (const [raw, want] of [['NaN', 20], ['abc', 20], ['1000000000', 200], ['0', 1], ['-5', 1], ['50', 50], [undefined, 20]] as const) {
       await c.list({} as never, WS, raw);
       expect(documents.listDocuments.mock.calls.at(-1)![1], String(raw)).toBe(want);
+    }
+  });
+
+  it('GET /v1/documents: sort, order and author pass through, anything off the list is a 400 (#1256)', async () => {
+    const { c, documents } = controller();
+    const list = (sort?: string, order?: string, author?: string) =>
+      c.list({} as never, WS, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, sort, order, author);
+    await list('title', 'asc', 'me');
+    expect((documents.listDocuments.mock.calls.at(-1) as unknown[])[3]).toMatchObject({ sort: 'title', order: 'asc', author: 'me' });
+    await list();
+    expect((documents.listDocuments.mock.calls.at(-1) as unknown[])[3]).toMatchObject({ sort: undefined, order: undefined, author: undefined });
+    for (const bad of [['created_at'], [undefined, 'up'], [undefined, undefined, 'mine']]) {
+      await expect(list(...bad)).rejects.toBeInstanceOf(BadRequestException);
     }
   });
 

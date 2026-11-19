@@ -1,4 +1,3 @@
-import { EditingPolicyService } from '../auth/editing-policy.service.js';
 import type { WriteAuthority } from './write-authority.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { BadRequestException, ConflictException, Injectable, NotFoundException, PayloadTooLargeException } from '@nestjs/common';
@@ -18,10 +17,12 @@ import type {
   DocumentGraphEdge,
   DocumentGraphNode,
   DocumentGraphResponse,
+  DocumentSort,
   DocumentSummary,
   DocumentTreeNode,
   DocumentTreeResponse,
   DocumentAncestorsResponse,
+  DocumentAuthorFilter,
   DocumentBacklinksResponse,
   FinalizeRevisionResponse,
   ListBranchesResponse,
@@ -30,8 +31,10 @@ import type {
   ListRevisionsResponse,
   RevisionInfo,
   RevisionStatus,
+  SortOrder,
   WorkspaceGraphNode,
   WorkspaceGraphResponse,
+  EffectiveAccessLevel,
 } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { toRevisionInfo } from './revision-info.js';
@@ -146,7 +149,6 @@ export class DocumentsService {
     private readonly aclEvents: AclEventsService,
     private readonly cache: ReadCache,
     private readonly commits: ProjectCommitsService,
-    private readonly editing: EditingPolicyService,
   ) {}
 
   async createDocument(input: CreateDocumentDto, authorId?: string): Promise<CreateDocumentResponse>;
@@ -235,6 +237,8 @@ export class DocumentsService {
           position,
           templateRef: template?.ref ?? null,
           templateVersion: template?.version ?? null,
+          // #1256: the first revision's author, head-less pages included.
+          createdBy: authorId,
           // #474: a private draft is an ordinary restricted page whose author
           // manages it, so every reader that honours restrictions hides it
           // with no code of its own. The marker tells it apart from a page
@@ -747,12 +751,22 @@ export class DocumentsService {
     scope: AccessScope,
     limit = 20,
     cursor?: string,
-    filters: { categories?: string[]; projectIds?: string[]; tags?: string[]; includeArchived?: boolean } = {},
+    filters: {
+      categories?: string[];
+      projectIds?: string[];
+      tags?: string[];
+      includeArchived?: boolean;
+      sort?: DocumentSort;
+      order?: SortOrder;
+      author?: DocumentAuthorFilter;
+    } = {},
   ): Promise<ListDocumentsResponse> {
     const { workspaceId } = scope;
     const categories = filters.categories?.filter(Boolean) ?? [];
     const projectIds = filters.projectIds?.filter(Boolean) ?? [];
     const tags = filters.tags?.filter(Boolean) ?? [];
+    const sort = filters.sort ?? 'createdAt';
+    const order = filters.order ?? (sort === 'title' ? 'asc' : 'desc');
 
     let taggedIds: string[] | null = null;
     if (tags.length) {
@@ -776,9 +790,16 @@ export class DocumentsService {
         // Pages the caller may not open are not in the list at all (#76), nor
         // a page that is still only a merge request (#73).
         ...LISTED_PAGE,
-        AND: [visibilityWhere(scope)],
+        AND: [
+          visibilityWhere(scope),
+          // "Others" keeps the null rows: a page with no revision has no author to be.
+          ...(filters.author === 'me' ? [{ createdBy: scope.userId }] : []),
+          ...(filters.author === 'others' ? [{ OR: [{ createdBy: { not: scope.userId } }, { createdBy: null }] }] : []),
+        ],
       },
-      orderBy: { createdAt: 'desc' },
+      // Id breaks ties, so the cursor (an id) names one position in the order:
+      // Prisma pages from that row's (sort, id) pair, whatever the column (#1256).
+      orderBy: [{ [sort]: order }, { id: order }],
       take: limit + 1,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
       include: { branches: true },
@@ -790,11 +811,12 @@ export class DocumentsService {
     const headIds = page
       .map((d) => d.branches.find((b) => b.name === d.defaultBranch)?.headRevisionId)
       .filter((id): id is string => !!id);
-    const [heads, issues, settings, sources] = await Promise.all([
+    const [heads, issues, settings, sources, levelOf] = await Promise.all([
       this.prisma.documentRevision.findMany({ where: { id: { in: headIds } } }),
       this.provenance.openIssueCounts(page.map((d) => d.id)),
       this.policy.thresholds(workspaceId),
       sourceSyncOf(this.prisma, page.map((d) => d.id)),
+      this.permissions.rowLevels(scope),
     ]);
     const headById = new Map(heads.map((r) => [r.id, r]));
 
@@ -812,6 +834,7 @@ export class DocumentsService {
         headRevisionId: headId,
         headRevisionStatus: (head?.status as RevisionStatus) ?? null,
         createdAt: d.createdAt.toISOString(),
+        accessLevel: levelOf(d),
         ...this.trustFields(d, headId, issues.get(d.id) ?? 0, settings(d.projectId).inactiveAfterDays, sources.get(d.id)),
       };
     });
@@ -852,6 +875,7 @@ export class DocumentsService {
     | 'childTitlePattern'
     | 'restricted'
     | 'draftOwnerId'
+    | 'createdBy'
   > {
     return {
       verifiedAt: d.verifiedAt?.toISOString() ?? null,
@@ -876,6 +900,7 @@ export class DocumentsService {
       childTitlePattern: d.childTitlePattern,
       restricted: d.restrictedBy.length > 0,
       draftOwnerId: d.draftOwnerId,
+      createdBy: d.createdBy,
     };
   }
 
@@ -1907,6 +1932,7 @@ export class DocumentsService {
     };
     const lazy = typeof opts.depth === 'number';
     const parentId = opts.parentId ?? null;
+    const levelOf = await this.permissions.rowLevels(access);
 
     if (!lazy) {
       const docs = await this.prisma.document.findMany({
@@ -1919,7 +1945,7 @@ export class DocumentsService {
         sourceSyncOf(this.prisma, docs.map((d) => d.id)),
       ]);
       const nodes = new Map<string, DocumentTreeNode>();
-      for (const d of docs) nodes.set(d.id, this.toTreeNode(d, null, issues.get(d.id) ?? 0, sources.get(d.id)));
+      for (const d of docs) nodes.set(d.id, this.toTreeNode(d, null, issues.get(d.id) ?? 0, sources.get(d.id), levelOf(d)));
       const heads = await this.headStatuses(docs);
       for (const node of nodes.values()) node.headRevisionStatus = heads.get(node.headRevisionId ?? '') ?? null;
 
@@ -1934,7 +1960,7 @@ export class DocumentsService {
       return { workspaceId, projectId: projectId ?? null, parentId: null, roots };
     }
 
-    const roots = await this.treeLevel(scope, parentId, Math.max(1, Math.floor(opts.depth!)));
+    const roots = await this.treeLevel(scope, parentId, Math.max(1, Math.floor(opts.depth!)), levelOf);
     return { workspaceId, projectId: projectId ?? null, parentId, roots };
   }
 
@@ -1950,6 +1976,7 @@ export class DocumentsService {
     scope: Prisma.DocumentWhereInput,
     parentId: string | null,
     depth: number,
+    levelOf: (row: Document) => EffectiveAccessLevel,
   ): Promise<DocumentTreeNode[]> {
     let where: Prisma.DocumentWhereInput = { ...scope, parentId };
     if (parentId === null) {
@@ -1992,7 +2019,7 @@ export class DocumentsService {
     const countByParent = new Map(counts.map((c) => [c.parentId!, c._count._all]));
 
     const nodes = docs.map((d) => {
-      const node = this.toTreeNode(d, countByParent.get(d.id) ?? 0, issues.get(d.id) ?? 0, sources.get(d.id));
+      const node = this.toTreeNode(d, countByParent.get(d.id) ?? 0, issues.get(d.id) ?? 0, sources.get(d.id), levelOf(d));
       node.headRevisionStatus = heads.get(node.headRevisionId ?? '') ?? null;
       return node;
     });
@@ -2002,7 +2029,7 @@ export class DocumentsService {
         nodes
           .filter((n) => n.childCount > 0)
           .map(async (n) => {
-            n.children = await this.treeLevel(scope, n.documentId, depth - 1);
+            n.children = await this.treeLevel(scope, n.documentId, depth - 1, levelOf);
           }),
       );
     }
@@ -2013,7 +2040,8 @@ export class DocumentsService {
     d: Document & { branches: { name: string; headRevisionId: string | null }[] },
     childCount: number | null,
     openIssues: number,
-    source?: SourceSyncHealth,
+    source: SourceSyncHealth | undefined,
+    accessLevel: EffectiveAccessLevel,
   ): DocumentTreeNode {
     const headId = d.branches.find((b) => b.name === d.defaultBranch)?.headRevisionId ?? null;
     return {
@@ -2034,6 +2062,7 @@ export class DocumentsService {
       ownerId: d.ownerId,
       archivedAt: d.archivedAt?.toISOString() ?? null,
       restricted: d.restrictedBy.length > 0,
+      accessLevel,
       draftOwnerId: d.draftOwnerId,
       children: [],
       childCount: childCount ?? 0,
@@ -2481,8 +2510,7 @@ export class DocumentsService {
     if ('internal' in by || !by.person || by.person.mode === 'dev') return;
     if (branch.name !== document.defaultBranch || document.draftOwnerId) return;
     if (!branch.headRevisionId && !document.pendingMergeRequestId) return;
-    if ((await this.editing.policy(document.workspaceId)).publishMode.effective === 'direct') return;
-    if ((await this.permissions.scopeFor(by.person, document.workspaceId)).bypass) return;
+    if (await this.permissions.mayPublishDirect(by.person, document.workspaceId)) return;
     throw new ConflictException({ statusCode: 409, message: t('error.document.reviewRequired'), reason: 'review-required' });
   }
 

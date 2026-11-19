@@ -1,5 +1,6 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { Prisma, PrismaClient } from '@prisma/client';
+import { countQuery } from '@knowledge/observability';
 import {
   NEVER_FROM_TRANSACTION,
   activeTransaction,
@@ -71,8 +72,9 @@ export interface TransactionOptions {
  * written — which is precisely the read-your-own-writes bug these boundaries
  * exist to prevent.
  */
-export function createPrismaService(): PrismaService {
+export function createPrismaService(countQueries = false): PrismaService {
   const base = new PrismaService();
+  const counted = countQueries ? withQueryCount(base) : undefined;
   return new Proxy(base, {
     get(target, prop, receiver) {
       const tx = activeTransaction();
@@ -84,7 +86,38 @@ export function createPrismaService(): PrismaService {
           return typeof fromTx === 'function' ? fromTx.bind(tx) : fromTx;
         }
       }
+      // Counting on: everything but this class's own methods goes to the
+      // extended client, `$transaction` included, so a transaction client is
+      // counted too.
+      if (counted && !Object.hasOwn(PrismaService.prototype, prop) && prop in counted) {
+        const fromCounted = (counted as unknown as Record<string | symbol, unknown>)[prop];
+        return typeof fromCounted === 'function' ? fromCounted.bind(counted) : fromCounted;
+      }
       return Reflect.get(target, prop, receiver);
+    },
+  });
+}
+
+/**
+ * The client with every operation counted against the request trace (#1242).
+ *
+ * A query extension rather than `$on('query')`: the engine emits that event
+ * outside the caller's async context, so it cannot tell which request ran the
+ * query. The extension runs in the caller's context, inside interactive
+ * transactions and for raw SQL alike. It counts operations, not SQL statements:
+ * an `include` that Prisma splits into two statements is one.
+ */
+function withQueryCount(base: PrismaClient) {
+  return base.$extends({
+    query: {
+      async $allOperations({ args, query }) {
+        const startedAt = performance.now();
+        try {
+          return await query(args);
+        } finally {
+          countQuery(performance.now() - startedAt);
+        }
+      },
     },
   });
 }

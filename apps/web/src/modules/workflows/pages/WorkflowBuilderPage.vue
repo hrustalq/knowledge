@@ -60,7 +60,7 @@ import type {
 import { validateGraph } from '@knowledge/workflow'
 import { api } from '@/shared/api/client'
 import { apiQueryOptions, useApiMutation } from '@/shared/api/queries'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { useWorkflowsStore } from '@/entities/workflow'
 import { Button, buttonVariants } from '@knowledge/ui/button'
 import { confirm } from '@knowledge/ui/confirm'
@@ -95,11 +95,10 @@ import type { WizardTurn } from '@/modules/workflows/model/wizard-machine'
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
-const auth = useAuthStore()
 const store = useWorkflowsStore()
 
 const id = computed(() => String(route.params.id))
-const canManage = computed(() => auth.canAdminWorkspace)
+const canManage = usePermission('workspace:admin')
 
 const query = useQuery(computed(() => apiQueryOptions('/v1/workflows/{id}', { path: { id: id.value } })))
 const workflow = computed(() => query.data.value as WorkflowDefinitionInfo | undefined)

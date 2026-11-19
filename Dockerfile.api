@@ -146,6 +146,7 @@ await import('@knowledge/contracts'); \
 await import('@knowledge/contracts/core'); \
 await import('@knowledge/contracts/ids'); \
 await import('@knowledge/contracts/publishing'); \
+await import('@knowledge/contracts/permissions'); \
 await import('@knowledge/observability'); \
 await import('@knowledge/observability/express'); \
 await import('@knowledge/workflow'); \

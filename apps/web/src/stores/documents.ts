@@ -1,13 +1,16 @@
 import { defineStore } from 'pinia'
 import { toRaw } from 'vue'
 import type {
+  DocumentAuthorFilter,
   DocumentCategory,
+  DocumentSort,
   DocumentSummary,
+  SortOrder,
   DocumentTreeNode,
   WorkspaceGraphResponse,
 } from '@knowledge/contracts'
 import { api, fetchApi } from '@/shared/api/queries'
-import { getProjectId, getWorkspaceId } from '@/shared/api/api'
+import { getDocumentSort, getProjectId, getWorkspaceId, setDocumentSort } from '@/shared/api/api'
 
 /**
  * The scope every read here carries: the workspace, the active project when
@@ -28,9 +31,11 @@ export interface DocumentFilters {
   projectIds: string[]
   /** Tag entity keys, e.g. 'tag:security'. */
   tags: string[]
+  /** Created by me / by others (#1256); null is everyone. */
+  author: DocumentAuthorFilter | null
 }
 
-export const EMPTY_FILTERS: DocumentFilters = { categories: [], projectIds: [], tags: [] }
+export const EMPTY_FILTERS: DocumentFilters = { categories: [], projectIds: [], tags: [], author: null }
 
 /**
  * One ancestor above where the caller's tree begins (#76). `hidden` is a page
@@ -238,6 +243,8 @@ export const useDocumentsStore = defineStore('documents', {
     loaded: false,
     listBusy: false,
     filters: { ...EMPTY_FILTERS } as DocumentFilters,
+    /** The list's order (#1256), from `kn_docsort` so the server prefetches the same batch. */
+    ...getDocumentSort(),
     /** Pointer to the next batch; null once the end has been reached. */
     nextCursor: null as string | null,
 
@@ -304,7 +311,8 @@ export const useDocumentsStore = defineStore('documents', {
   }),
 
   getters: {
-    activeFilterCount: (s) => s.filters.categories.length + s.filters.projectIds.length + s.filters.tags.length,
+    activeFilterCount: (s) =>
+      s.filters.categories.length + s.filters.projectIds.length + s.filters.tags.length + (s.filters.author ? 1 : 0),
     hasMore: (s) => !s.loaded || s.nextCursor !== null,
   },
 
@@ -336,6 +344,9 @@ export const useDocumentsStore = defineStore('documents', {
           ...(this.filters.projectIds.length ? { projectIds: this.filters.projectIds.join(',') } : projectId ? { projectId } : {}),
           ...(this.filters.categories.length ? { categories: this.filters.categories.join(',') } : {}),
           ...(this.filters.tags.length ? { tags: this.filters.tags.join(',') } : {}),
+          ...(this.filters.author ? { author: this.filters.author } : {}),
+          sort: this.sort,
+          order: this.order,
           ...(!opts.reset && this.nextCursor ? { cursor: this.nextCursor } : {}),
         }
 
@@ -354,6 +365,14 @@ export const useDocumentsStore = defineStore('documents', {
     async loadMore() {
       if (!this.loaded || this.nextCursor === null || this.listBusy) return
       await this.fetchList()
+    },
+
+    /** The cursor is a position in one order, so a new order starts over like a filter does. */
+    async setSort(sort: DocumentSort, order: SortOrder) {
+      setDocumentSort(sort, order)
+      this.sort = sort
+      this.order = order
+      await this.setFilters(this.filters)
     },
 
     async setFilters(filters: DocumentFilters) {

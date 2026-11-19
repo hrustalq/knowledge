@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { EventsPublisher } from '../events/events.publisher.js';
 import { NotificationsService, type DirectNotifyInput } from '../notifications/notifications.service.js';
+import { deferUntilCommit } from '../prisma/transaction.js';
 import type { AccessResource } from './acl-read.js';
 
 /**
@@ -23,6 +24,23 @@ export class AclEventsService {
 
   async changed(workspaceId: string, actor?: string): Promise<void> {
     await this.events.publish({ type: 'acl.changed', workspaceId, ...(actor ? { actor } : {}) });
+  }
+
+  /**
+   * Tell people their own standing in a workspace moved (#1297): role,
+   * capabilities, operator flag, membership itself, or the platform-admin flag.
+   * One frame per person, addressed by `userId` (both transports deliver it to
+   * that person only) and carrying nothing else, so their open tabs re-read
+   * /v1/me and their grants. The API reads the role from PG on every request;
+   * this only stops the UI lagging behind it.
+   *
+   * Deferred to the outermost commit, so a tab never re-reads the old row; with
+   * no transaction open it publishes at once. Best-effort, like every frame.
+   */
+  permissionsChanged(workspaceId: string, userIds: readonly string[]): void {
+    const ids = [...new Set(userIds)];
+    if (!ids.length) return;
+    deferUntilCommit(() => Promise.all(ids.map((userId) => this.events.publish({ type: 'permissions.changed', workspaceId, userId }))));
   }
 
   /**

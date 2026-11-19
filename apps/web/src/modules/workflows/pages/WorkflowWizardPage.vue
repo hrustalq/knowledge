@@ -26,7 +26,7 @@ import type { WorkflowDefinitionInfo, WorkflowGraph, WorkflowValidationIssue } f
 import { validateGraph } from '@knowledge/workflow'
 import { useApiMutation } from '@/shared/api/queries'
 import { getProjectId, getWorkspaceId } from '@/shared/api/api'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { useWorkflowsStore } from '@/entities/workflow'
 import { Button } from '@knowledge/ui/button'
 import { Input } from '@knowledge/ui/input'
@@ -48,10 +48,9 @@ import {
 
 const { t } = useI18n()
 const router = useRouter()
-const auth = useAuthStore()
 const store = useWorkflowsStore()
 
-const canManage = computed(() => auth.canAdminWorkspace)
+const canManage = usePermission('workspace:admin')
 
 /* ------------------------------------------------------------------ machine */
 

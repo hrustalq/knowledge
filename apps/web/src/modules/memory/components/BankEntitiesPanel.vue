@@ -18,7 +18,7 @@ import type { MemoryEntityListResponse, MemoryEntitySummary, MemoryRelationSumma
 import { api } from '@/shared/api/client'
 import { apiQueryOptions } from '@/shared/api/queries'
 import { errorMessage } from '@/shared/api/errors'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { Button } from '@knowledge/ui/button'
 import { confirm } from '@knowledge/ui/confirm'
 import { Input } from '@knowledge/ui/input'
@@ -30,7 +30,7 @@ const PAGE = 50
 const MAX = 200
 
 const { t } = useI18n()
-const auth = useAuthStore()
+const canContribute = usePermission('workspace:contribute')
 const queryClient = useQueryClient()
 
 const search = ref('')
@@ -119,7 +119,7 @@ const removeRelation = (id: string) =>
             <span class="ml-2 font-mono text-xs break-all text-muted-foreground">{{ entity.entityType }}</span>
           </p>
           <Button
-            v-if="auth.canEdit"
+            v-if="canContribute"
             size="icon"
             variant="ghost"
             class="-my-1 size-8 shrink-0 text-muted-foreground hover:text-destructive"
@@ -140,7 +140,7 @@ const removeRelation = (id: string) =>
               <li v-for="o in entity.observations" :key="o.id" class="flex items-start gap-1">
                 <p class="kn-measure min-w-0 flex-1 text-sm break-words whitespace-pre-wrap">{{ o.text }}</p>
                 <Button
-                  v-if="auth.canEdit"
+                  v-if="canContribute"
                   size="icon"
                   variant="ghost"
                   class="-my-0.5 size-6 shrink-0 text-muted-foreground hover:text-destructive"
@@ -167,7 +167,7 @@ const removeRelation = (id: string) =>
                   <span :class="r.toId === entity.id ? 'text-muted-foreground' : ''">{{ r.to }}</span>
                 </p>
                 <Button
-                  v-if="auth.canEdit"
+                  v-if="canContribute"
                   size="icon"
                   variant="ghost"
                   class="-my-0.5 size-6 shrink-0 text-muted-foreground hover:text-destructive"

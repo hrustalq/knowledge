@@ -2,12 +2,10 @@
 // client load) and drives router guards + nav state. The session itself is an
 // HttpOnly cookie the API sets and clears (#650); nothing here can read it.
 import { defineStore } from 'pinia'
-import { hasCapability } from '@knowledge/contracts'
 import type {
   AuthMethod,
   AuthSessionResponse,
   Locale,
-  MemberCapability,
   MeResponse,
   SsoDiscoverResponse,
   SsoProvidersResponse,
@@ -55,7 +53,6 @@ export const useAuthStore = defineStore('auth', {
     authenticated: (s) => s.me !== null,
     /** AUTH_MODE=none — no login UI, full access. */
     isDev: (s) => s.me?.mode === 'dev',
-    isAdmin: (s) => s.me?.isAdmin ?? false,
     /** How the current session was opened (#75); null for an API key or the dev principal. */
     authMethod: (s): AuthMethod | null => s.me?.authMethod ?? null,
     /**
@@ -64,38 +61,15 @@ export const useAuthStore = defineStore('auth', {
      * card until the mailed link is followed (docs/features/41).
      */
     verificationPending: (s) => !!s.me && s.me.emailVerificationRequired && !s.me.emailVerified,
-    /** Caller's role in the active workspace ('admin' for dev/platform admins). */
-    role(): WorkspaceRole | null {
+    /**
+     * The caller's role in the active workspace ('admin' for dev/platform
+     * admins), to show as a label. Never a permission: those are the API's
+     * answers, read through `usePermission` (#1299).
+     */
+    roleLabel(): WorkspaceRole | null {
       if (!this.me) return null
       if (this.me.mode === 'dev' || this.me.isAdmin) return 'admin'
       return this.me.memberships.find((m) => m.workspaceId === getWorkspaceId())?.role ?? null
-    },
-    canEdit(): boolean {
-      return this.role === 'editor' || this.role === 'admin'
-    },
-    /**
-     * Commenting is a viewer action (feature 15): whoever may read a page may
-     * annotate it. Mirrors `@Access('viewer', 'document')` on the API's
-     * thread routes.
-     */
-    canComment(): boolean {
-      // A guest reads only what is granted to it (#76), so workspace-wide it
-      // can comment on nothing — the API refuses it every `viewer` route.
-      return this.role !== null && this.role !== 'guest'
-    },
-    canAdminWorkspace(): boolean {
-      return this.role === 'admin'
-    },
-    /**
-     * A member capability (#468) in the active workspace, through the same
-     * predicate the API guard reads: workspace and platform admins hold all.
-     */
-    can(): (capability: MemberCapability) => boolean {
-      const me = this.me
-      if (!me) return () => false
-      if (me.mode === 'dev') return () => true
-      const membership = me.memberships.find((m) => m.workspaceId === getWorkspaceId()) ?? null
-      return (capability) => hasCapability(membership, capability, me.isAdmin)
     },
   },
   actions: {

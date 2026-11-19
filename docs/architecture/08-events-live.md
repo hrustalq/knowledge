@@ -211,6 +211,17 @@ _addressed_, and both fan-out sites — `EventsSubscriber.stream` and
 `notification.created` published onto a workspace-wide bus would tell every peer
 who is being notified about what.
 
+`permissions.changed` (#1297) is always addressed. `AclEventsService.permissionsChanged`
+publishes it after the commit, once per person whose role, operator flag,
+capabilities or membership moved: a hand edit in `WorkspacesService`, a sign-in
+or SCIM sync in `RoleSyncService.reconcile`, or a platform-admin flip in
+`UsersService` (one frame per workspace they belong to). It carries the userId
+and nothing else. The web re-reads `/v1/me` and the grants on it, and does the
+same before every reopen of a dropped stream. That reopen is how two changes no
+frame can reach get through: a removal, which ends the stream on its next
+standing check, and an admin flip seen from a workspace the person is not a
+member of. Signup's membership publishes nothing, since no tab is open yet.
+
 **Page visibility** (#76) sits after the workspace check and before tracking.
 A frame about a page reaches only the connections whose holder can open it.
 `LiveVisibility` (`events/live-visibility.ts`) makes that call for both fan-out

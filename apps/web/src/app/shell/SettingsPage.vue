@@ -29,13 +29,13 @@ import {
   Workflow,
 } from 'lucide-vue-next'
 import { PageLayout, PageSubRail } from '@knowledge/ui/layout'
-import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/stores/permissions'
 import { useFeaturesStore } from '@/stores/features'
 
 const { t } = useI18n()
 
 const route = useRoute()
-const auth = useAuthStore()
+const isWorkspaceAdmin = usePermission('workspace:admin')
 const features = useFeaturesStore()
 
 interface SettingsLink { to: string; label: string; icon: Component; hint: string }
@@ -56,10 +56,8 @@ const links = computed<SettingsLink[]>(() => [
 
   { to: '/settings/publishing', label: t('nav.publishing'), icon: Globe, hint: t('settings.publishingHint') },
   { to: '/settings/api', label: t('nav.apiReference'), icon: Braces, hint: t('settings.apiReferenceHint') },
-  // Members, roles and — for a platform admin — the accounts themselves, all
-  // under one row. Accounts used to be a second row beside this one, which put
-  // "can this person sign in" and "what may they do here" in two places and
-  // gave a workspace admin a nav row that only ever 403'd.
+  // Members, roles, groups and requests under one row. Platform accounts are the
+  // admin console's (#1239); the page links a platform admin there.
   { to: '/settings/access', label: t('nav.access'), icon: ShieldCheck, hint: t('settings.accessHint') },
   { to: '/settings/activity', label: t('nav.activity'), icon: Activity, hint: t('settings.activityHint') },
   // Connect AI is a section in here (issue #182): open to every role, so this
@@ -77,7 +75,7 @@ const links = computed<SettingsLink[]>(() => [
     : []),
   // Admin-only, so hidden from everyone else: unlike the rows above, the page
   // has nothing to show a member who cannot manage it.
-  ...(auth.canAdminWorkspace
+  ...(isWorkspaceAdmin.value
     ? [
         { to: '/settings/chat', label: t('nav.chatBots'), icon: MessagesSquare, hint: t('settings.chatBotsHint') },
         { to: '/settings/security', label: t('nav.security'), icon: LockKeyhole, hint: t('settings.securityHint') },

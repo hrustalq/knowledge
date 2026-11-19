@@ -21,7 +21,10 @@
  *   what a reader must not learn. Page-title references resolve only against
  *   the pages the caller hands in (`resolvePage`), the share's or the site's.
  *
- * Mermaid stays a `[data-kn-mermaid]` block for the client to upgrade.
+ * Mermaid stays a `[data-kn-mermaid]` block for the client to upgrade, and a
+ * C4 model (```structurizr, #1244) its code block, which the client explores;
+ * an export, which cannot be clicked, asks for its views drawn one after
+ * another instead (`staticC4`).
  *
  * Server-only: imported by entry-public.ts and its spec, never by a component,
  * so jsdom never reaches a browser bundle.
@@ -34,6 +37,8 @@ import { markdownToHtml, SANITIZE_CONFIG, slugifyHeading, splitTitleHeading } fr
 import { parseScene, renderSceneToSvg } from './drawing'
 import { asEmbedLayout } from '@knowledge/contracts/embeds'
 import { KN, attachmentKind, carryDiagramLayout, embedCaptionOf, escapeHtml } from './nodes'
+import { C4_LANG, parseStructurizr, viewTitle, viewToMermaid, type C4ViewType } from './structurizr'
+import { positionsOf, renderC4Svg } from './c4-svg'
 
 export interface PublicHeading {
   id: string
@@ -86,6 +91,12 @@ export interface PublicRenderOptions {
    * after another in one document (an export) keep their anchors apart.
    */
   idPrefix?: string
+  /**
+   * Draw each C4 model as all of its views, one mermaid block per view under
+   * its title, named by this level label (an export: paper cannot be clicked).
+   * Absent leaves the source for the client to make explorable.
+   */
+  staticC4?: (type: C4ViewType) => string
   /** Chrome strings, already in the reader's language. */
   labels: {
     onThisPage: string
@@ -129,11 +140,50 @@ export function renderPublicMarkdown(markdown: string, options: PublicRenderOpti
   renderEmbeds(host, doc, options)
   renderFiles(host, doc, options)
   renderDrawings(host, doc)
+  if (options.staticC4) renderC4Views(host, doc, options.staticC4)
   // Mermaid is drawn in the browser; until then its block carries the width the sanitizer stripped (#1098).
   for (const node of host.querySelectorAll(`[${KN.mermaid}]`)) carryDiagramLayout(node, node)
   renderToc(host, doc, headings, options)
 
   return { html: host.innerHTML, headings, description: describe(host) }
+}
+
+/**
+ * Every view of every C4 model: one its author laid out as its SVG, one laid out
+ * automatically as a mermaid block the export's script draws. A model that
+ * does not parse stays its source.
+ */
+function renderC4Views(root: HTMLElement, doc: Document, level: (type: C4ViewType) => string) {
+  for (const code of root.querySelectorAll(`pre > code.language-${C4_LANG}`)) {
+    let model
+    try {
+      model = parseStructurizr(code.textContent ?? '')
+    } catch {
+      continue
+    }
+    const wrap = doc.createElement('div')
+    wrap.className = 'kn-c4 kn-c4-static'
+    for (const view of model.views) {
+      const caption = doc.createElement('div')
+      caption.className = 'kn-c4-bar kn-c4-trail'
+      caption.textContent = viewTitle(view, level)
+      const block = doc.createElement('div')
+      if (view.layout) {
+        // Placed by its author: drawn here, as the reader draws it, and needs no script.
+        block.className = 'kn-mermaid-figure'
+        block.innerHTML = purify.sanitize(renderC4Svg(model, view, positionsOf(model, view)).svg, {
+          USE_PROFILES: { svg: true, svgFilters: true },
+        }) as unknown as string
+      } else {
+        block.setAttribute(KN.mermaid, '1')
+        const pre = doc.createElement('pre')
+        pre.textContent = viewToMermaid(model, view).source
+        block.append(pre)
+      }
+      wrap.append(caption, block)
+    }
+    code.parentElement!.replaceWith(wrap)
+  }
 }
 
 function assignHeadingIds(root: HTMLElement, prefix: string): PublicHeading[] {

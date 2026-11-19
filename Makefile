@@ -132,7 +132,7 @@ deps-graph: ## Render dependency graphs to apps/*/dependency-graph.svg (needs gr
 verify: db-generate lint typecheck deps test ## Pre-push gate: everything in `check` except build and its bundle budget (.husky/pre-push)
 
 .PHONY: bundle-budget
-bundle-budget: ## Fail if either web entry's initial, uncompressed JS exceeds its budget
+bundle-budget: ## Fail if a web entry's initial, uncompressed JS exceeds its budget (the reader per view: share, site)
 	$(WEB) run check:bundle
 
 .PHONY: check

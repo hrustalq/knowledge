@@ -419,7 +419,7 @@ async function renderWidget(key: { slug: string } | { host: string }, ctx: Publi
       }
     : null
   const state: PublicReaderState = { locale: ctx.locale, apiBase: apiPublic, view: { kind: 'site-widget', site } }
-  const { app } = createPublicApp(state)
+  const { app } = await createPublicApp(state)
   const html = await renderToString(app)
   const messages = siteReaderMessages(ctx.locale)
   const themeCss = site ? siteThemeCss(site.theme) : ''
@@ -479,7 +479,7 @@ export async function render(url: string, ctx: PublicRenderContext): Promise<Pub
   }
   const { view, status, description } = resolved
   const state: PublicReaderState = { locale: ctx.locale, apiBase: apiPublic, view }
-  const { app } = createPublicApp(state)
+  const { app } = await createPublicApp(state)
   const html = await renderToString(app)
 
   const head = [

@@ -1,8 +1,6 @@
 // The public reader (docs/features/43, 44): a second app with its own entries
 // (public-main.ts, entry-public.ts), so nothing here is imported by the member app.
-export { default as SharePage } from './pages/SharePage.vue'
-export { default as SitePage } from './pages/SitePage.vue'
-export { default as SiteWidget } from './pages/SiteWidget.vue'
+// Its pages are lazy, one per view: routes.ts.
 export {
   shareHref,
   siteHomeId,

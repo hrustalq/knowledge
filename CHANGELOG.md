@@ -25,6 +25,13 @@ in the pull request that introduces them — see
   over 120 title queries, the vector leg's database time fell from 142 to 11 ms at the median (969 → 24 ms p95), and a
   whole search from 261 to 60 ms (1,301 → 113 ms p95). Results are unchanged: recall@1 43.3% and recall@10 77.5%
   before and after, and the workspace, live/as-of and page-permission predicates apply exactly as before.
+- **Indexing a page spends less time in graph bookkeeping (#1289).** After a page's chunks are written, marking the
+  new revision live and stamping its valid-time interval used to make ArcadeDB read every chunk in the workspace,
+  embeddings included, once per update, so the cost grew with the workspace rather than the page. A page's chunks are
+  now found through an index, and only rows whose live flag actually changes are rewritten. On the dev store's
+  6,993-chunk workspace, over the audit's ten 4 KB pages, the two steps fell from 541 to 118 ms at the median (2,012
+  → 178 ms max) and the whole pipeline from 999 to 716 ms. The same rows end up live and the same intervals are
+  stamped (doc 57).
 - **Opening the assistant downloads about 185 KiB less script (#1285).** The graph, search and activity views a
   reply can embed now load only when a reply actually contains one, and a C4 diagram's renderer loads only when a
   reply or page has a C4 block. In the lab's 390 px profile a cold `/assistant` load falls from 1,597 to 1,412 KiB of
@@ -136,6 +143,9 @@ in the pull request that introduces them — see
   `AGENT_SCHEDULE_ENABLED` or `AGENT_TRIGGERS_ENABLED` off mark schedule or trigger changes as unavailable, so
   turn those on where the configurator should set them up. The configurator uses the `review` route and records
   usage as the `configurator` operation.
+- The worker adds a `Chunk (workspaceId, documentId, revisionId)` index to ArcadeDB on boot (#1289). It is built
+  once over the existing chunks (60 ms for 7,400 locally) and is safe under a rollback: the previous image ignores
+  it. If the boot log shows `DDL skipped` for it, indexing still works, only without the speed-up.
 
 ## [0.60.0] — 2026-11-19
 

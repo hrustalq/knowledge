@@ -333,6 +333,13 @@ export class GraphService {
       'CREATE INDEX IF NOT EXISTS ON DocumentRevision (revisionId) UNIQUE',
       'CREATE INDEX IF NOT EXISTS ON Chunk (chunkId) UNIQUE',
       'CREATE INDEX IF NOT EXISTS ON Chunk (workspaceId) NOTUNIQUE',
+      // #1289: one page's chunks, which `setLiveRevision` and `stampRevisions`
+      // update after every job. Without it each UPDATE walked the whole
+      // workspace's chunks, embeddings and all. Leading with workspaceId is what
+      // makes the planner pick it over Chunk[workspaceId] for `revisionId <>`.
+      'CREATE PROPERTY Chunk.documentId IF NOT EXISTS STRING',
+      'CREATE PROPERTY Chunk.revisionId IF NOT EXISTS STRING',
+      'CREATE INDEX IF NOT EXISTS ON Chunk (workspaceId, documentId, revisionId) NOTUNIQUE',
       'CREATE INDEX IF NOT EXISTS ON Entity (workspaceId, entityKey) UNIQUE',
       'CREATE PROPERTY Community.workspaceId IF NOT EXISTS STRING',
       'CREATE INDEX IF NOT EXISTS ON Community (workspaceId) NOTUNIQUE',
@@ -1004,7 +1011,11 @@ export class GraphService {
     const params = { workspaceId, documentId, revisionId: liveRevisionId ?? '' };
     const scope = 'workspaceId = :workspaceId AND documentId = :documentId';
 
-    await this.arcade.command('sql', `UPDATE Chunk SET live = true WHERE ${scope} AND revisionId = :revisionId`, params);
+    // Chunk rows carry their embedding, so rewriting one is not free (#1289):
+    // only rows whose flag changes are touched. A legacy row with no flag
+    // reads as live, hence `ifnull` (`<>` drops nulls in ArcadeDB, and an OR
+    // makes the planner leave the index).
+    await this.arcade.command('sql', `UPDATE Chunk SET live = true WHERE ${scope} AND revisionId = :revisionId AND ifnull(live, false) = false`, params);
     for (const type of RELATION_EDGE_TYPES) {
       await this.arcade
         // An expired row (#81) is history even on the live revision.
@@ -1012,7 +1023,7 @@ export class GraphService {
         .catch(ignoreMissingType(undefined));
     }
 
-    await this.arcade.command('sql', `UPDATE Chunk SET live = false WHERE ${scope} AND revisionId <> :revisionId`, params);
+    await this.arcade.command('sql', `UPDATE Chunk SET live = false WHERE ${scope} AND revisionId <> :revisionId AND ifnull(live, true) = true`, params);
     for (const type of RELATION_EDGE_TYPES) {
       await this.arcade
         .command('sql', `UPDATE ${type} SET live = false WHERE ${scope} AND ${SCOPED_SQL} AND revisionId <> :revisionId`, params)

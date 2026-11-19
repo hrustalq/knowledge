@@ -132,6 +132,15 @@ describe('GraphService.setLiveRevision (#83)', () => {
     expect(updates.some((c) => /^UPDATE Chunk SET live = false .*revisionId <> :revisionId/.test(c.sql))).toBe(true);
   });
 
+  it('rewrites only chunks whose flag changes, counting a legacy unflagged row as live (#1289)', async () => {
+    const { graph, commands } = graphWith({});
+    await graph.setLiveRevision(WS, DOC, 'r2');
+    const chunkSql = commands.filter((c) => /^UPDATE Chunk/.test(c.sql)).map((c) => c.sql);
+    // `live <> true` would skip a null row in ArcadeDB and leave a retired revision served.
+    expect(chunkSql.find((s) => /SET live = true/.test(s))).toMatch(/ifnull\(live, false\) = false$/);
+    expect(chunkSql.find((s) => /SET live = false/.test(s))).toMatch(/ifnull\(live, true\) = true$/);
+  });
+
   it('never deletes — branch revisions are still needed for the MR diff', async () => {
     const { graph, commands } = graphWith({});
     await graph.setLiveRevision(WS, DOC, 'r2');

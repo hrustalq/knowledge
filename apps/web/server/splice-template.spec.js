@@ -19,6 +19,11 @@ describe('spliceTemplate', () => {
     )
   })
 
+  it('puts preloads last in <head>, after the entry tags (#1332)', () => {
+    const html = spliceTemplate(TEMPLATE, { lang: 'en', css: '', head: '<meta x>', html: '', preload: '<link rel="modulepreload" href="/a.js">' })
+    expect(html).toContain('<meta x><link rel="modulepreload" href="/a.js"></head>')
+  })
+
   it.each(['$`', "$'", '$&', '$$', '$1', '$<name>'])('inserts %s literally, once', (pattern) => {
     const head = `<script>window.__PINIA__={"title":"a ${pattern} b"}</script>`
     const html = spliceTemplate(TEMPLATE, { lang: 'en', css: '', title: `a ${pattern} b`, head, html: `<h1>a ${pattern} b</h1>` })

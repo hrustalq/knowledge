@@ -65,29 +65,46 @@ re-extraction or withdrawn by a person is expired, never deleted.
 
 `GraphService.searchChunks` and `searchRevisionChunks` ask ArcadeDB for the
 nearest chunks through an HNSW index, `LSM_VECTOR` on `Chunk.embedding` with
-COSINE similarity (#304). ArcadeDB returns the `k` rows, never the corpus.
+COSINE similarity (#304). ArcadeDB returns at most `k × 8` rows, never the
+corpus. `nearestChunks` asks in up to two rounds (#1288), both restricted by
+the same `<where>`: the workspace predicate, `LIVE` (or `asOfChunkClause`) and
+the ACL.
 
 ```sql
+-- 1. over-fetch the whole index, filter the rows it returns
 SELECT chunkId, documentId, revisionId, workspaceId, text, headingPath, distance
-FROM (SELECT expand(vector.neighbors('Chunk[embedding]', :queryVector, :k,
+FROM (SELECT expand(vector.neighbors('Chunk[embedding]', :queryVector, :k × 8, { efSearch: max(400, k × 8) })))
+WHERE workspaceId = :workspaceId AND <live | as-of> <acl>
+
+-- 2. only when round 1 returned fewer than k: filter inside the HNSW walk
+SELECT … FROM (SELECT expand(vector.neighbors('Chunk[embedding]', :queryVector, :k,
   { efSearch: 400, filter: (SELECT @rid FROM Chunk WHERE workspaceId = :workspaceId AND <live | as-of> <acl>) })))
 WHERE workspaceId = :workspaceId
 ```
 
-- **Every restriction is inside the search.** `filter` restricts the HNSW walk
-  to the RIDs its subquery returns, so a chunk of another workspace, a
-  non-live revision or a denied page never takes one of the `k` slots. The
-  subquery carries the workspace predicate, `LIVE` (or `asOfChunkClause`) and
-  the ACL: the id list while it fits `ACL_DENY_LIST_MAX`, and past it a
-  member's `aclNodes` stamps (the OpenSearch rule). The outer `WHERE` repeats
-  the workspace, and `aclAdmits` still runs last. PG decides after that, as
-  [§Page restrictions](#page-restrictions) says. `searchRevisionChunks` filters
-  on its revision list instead of `live`.
+- **Nothing outside `<where>` takes a slot.** When at least `k` of the index's
+  `k × 8` nearest match, they are the top-k of the matching set. When fewer
+  do (a small workspace sharing the store, a narrow allow-list, an old as-of
+  date), round 2 restricts the walk to the RIDs its subquery returns. So a
+  chunk of another workspace, a non-live revision or a denied page never
+  takes one of the `k` slots either way. The ACL is the id list while it fits
+  `ACL_DENY_LIST_MAX`, and past it a member's `aclNodes` stamps (the
+  OpenSearch rule). Both rounds apply the workspace predicate to the rows they
+  return, the result is checked against it again in Node, and `aclAdmits`
+  still runs last. PG decides after that, as
+  [§Page restrictions](#page-restrictions) says. `searchRevisionChunks`
+  filters on its revision list instead of `live`.
+- **Why two rounds.** Round 2's `filter` makes ArcadeDB collect every matching
+  RID before the walk, a cost that grows with the workspace's chunk count:
+  ~100–700 ms at 6.7k chunks against ~10 ms for round 1 (measurement below).
+  It is cheap exactly when round 1 comes back short, because the matching set
+  is then small. The factor 8 is ArcadeDB's own over-fetch for its hybrid
+  search leg.
 - **`score` is cosine.** ArcadeDB's COSINE `distance` is `1 - cosine` for any
   vectors, normalized or not (checked against a cosine computed outside it).
   So `score = 1 - distance` is the number the scan produced, and the capture
   and duplicate thresholds calibrated on it still hold.
-- **`efSearch` is 400** (`VECTOR_EF_SEARCH`, never below `k`). The index's
+- **`efSearch` is 400** (`VECTOR_EF_SEARCH`, never below the rows asked for). The index's
   adaptive default lost recall on the demo corpus. The measurement is below.
 - **One index, one dimension.** The worker builds it in `ensureSchema` for
   `EMBEDDINGS_DIM`, after declaring `Chunk.embedding` as `ARRAY_OF_FLOATS`.
@@ -120,7 +137,8 @@ WHERE workspaceId = :workspaceId
 
 ### Pre-filter: one RID subquery, not a bucket per workspace
 
-Two layouts were considered. (a) is built; (b) was not measured.
+Two layouts were considered. (a) is built, and since #1288 it is round 2 only;
+(b) was not measured.
 
 - **(a)** `filter: (SELECT @rid FROM Chunk WHERE workspaceId = …)`. No layout
   change. The subquery reads RIDs through the `workspaceId` index, without
@@ -157,6 +175,31 @@ ArcadeDB round trip from Node; embedding the query is not included.
 
 - No row from another workspace came back in any run.
 - Building the index over 6,266 vectors took 1.8 s.
+
+### Measurement: the over-fetch round (2026-11-19, #1288)
+
+The dev stack's ArcadeDB 26.11.1, 7,421 chunks, the demo workspace holding
+6,689 live ones. Filtered = the pre-#1288 single round; ×8 = round 1.
+
+| Case (k = 30 unless noted)        | filtered p50 / p95 | ×8 p50 / p95 | ×8 top-k vs filtered | ×8 short |
+| --------------------------------- | ------------------ | ------------ | -------------------- | -------- |
+| demo workspace                    | 68 / 90 ms         | 6 / 14 ms    | 1.000                | 0 / 15   |
+| demo workspace, k = 60            | 750 / 1,215 ms     | 16 / 52 ms   | 0.998                | 0 / 15   |
+| demo workspace, k = 250           | 81 / 135 ms        | 16 / 24 ms   | 0.998                | 0 / 15   |
+| demo, deny list of 20 pages       | 150 / 440 ms       | 8 / 21 ms    | 1.000                | 0 / 15   |
+| demo, allow list of 300 pages     | 394 / 770 ms       | 11 / 18 ms   | 0.802                | 3 / 15   |
+| demo, allow list of 20 pages      | 632 / 1,061 ms     | 9 / 18 ms    | 0.218                | 15 / 15  |
+| a 178-chunk workspace             | 5 / 12 ms          | 5 / 9 ms     | 0.122                | 15 / 15  |
+
+A short round 1 falls through to round 2, so the last three rows return what
+the filtered round returns. Their overlap is the reason round 1 never answers
+alone. The filtered round's times swing widely between runs; round 1's do not.
+
+End to end, `make backtest ARGS="--generate --limit 120"` on the demo
+workspace, before → after: the vector leg minus the query embedding
+142 → 11 ms p50 (969 → 24 ms p95), a whole search 261 → 60 ms p50
+(1,301 → 113 ms p95), recall@1 43.3% and recall@10 77.5% unchanged,
+MRR@10 0.5834 → 0.5820.
 - **Concurrency, same 1 GB heap.** Two loops of the old scan: 1 of 20 reads
   died with `OutOfMemoryError: Java heap space`. Four loops: 17 of 20. The
   index read (k = 50) in four loops of 50 reads: no failures, p95 91 ms.
@@ -639,9 +682,14 @@ use `knowledge_search`. `knowledge_search_chat` is the chat path's tool (see
 
 Each search is measured twice, for two readers. `emitBacktest` writes a
 `search.executed` line to the per-service JSONL stream at every exit: the
-query, the timings of each leg and the ranked chunk ids. That is what `make
-backtest` replays to measure recall, and it records every search, the backtest's
-own replays included.
+query, the timings of each leg and the ranked chunk ids. `@TimingScope` opens
+an async-local timing scope for the search and `@Timed` attributes each
+post-join method: the PG join and trust read, fusion, community scoring,
+methodology levels and re-ranking, page grouping and snippets, placement and
+validity, and analytics enqueueing. Community scoring overlaps the PG join,
+just as the BM25 and vector legs overlap. That is what `make backtest` replays
+to measure recall, and it records every search, the backtest's own replays
+included.
 
 When the caller passes an analytics context (REST, MCP, the assistant's tools,
 agent and workflow runs), `AnalyticsRecorder.search` also writes one

@@ -5,14 +5,18 @@ import type {
   AssistantSource,
   AssistantToolCall,
   AssistantWebSource,
+  Locale,
+  ScopedSetting,
   SourceVerificationState,
 } from '@knowledge/contracts/core';
 import type { RelationInput } from '@knowledge/contracts/documents';
 import type { AiActionId } from '@knowledge/contracts/content';
-import type { ApiDriftSpec } from '@knowledge/contracts/api';
+import type { ApiBreakingChangePolicy, ApiDriftSpec } from '@knowledge/contracts/api';
+import type { WorkItemConflictRule, WorkItemIssueRule, WorkItemVerificationRule } from '@knowledge/contracts/connectors';
 import type { FlowAnswer, FlowKey } from '@knowledge/contracts/flows';
 import type { WorkspaceFeature, WorkspaceUse } from '@knowledge/contracts/identity';
-import type { ReviewThreadAnchor } from '@knowledge/contracts/reviews';
+import type { LintPolicy, ReviewThreadAnchor } from '@knowledge/contracts/reviews';
+import type { WorkflowGraph, WorkflowTrigger } from '@knowledge/contracts/workflows';
 
 // (docs/features/09 follow-up). The chat is an append-only intent log; the
 // sidebar materializes from each assistant message's toolCalls trace rather
@@ -1434,7 +1438,9 @@ export type AiUsageOperation =
   /** One round of the Describe it interview: the `scaffolder` asking what the brief left open (#731). The draft that ends it is `blueprint-generate`. */
   | 'blueprint-interview'
   /** One call of the workspace purpose interview (#934): a round of questions or the picked uses, on the scaffolder's model. */
-  | 'purpose-interview';
+  | 'purpose-interview'
+  /** The `configurator` drafting a configuration proposal from a goal, with read tools (#1250). One row per model round. */
+  | 'configurator';
 
 export type AiUsageGroupBy = 'user' | 'model' | 'day' | 'project';
 /** The `project` breakdown's bucket for calls made for no single project (#927). */
@@ -1617,6 +1623,8 @@ export const BUILT_IN_AGENT_KEYS = [
   'reflector',
   /** Folds a memory bank's new facts into observations with their evidence (#993). Called only by consolidation, never from the Run button. */
   'consolidator',
+  /** Proposes schedules, triggers and settings for a goal (#1250). Writes only proposals; a person applies them. Never from the Run button. */
+  'configurator',
 ] as const;
 export type BuiltInAgentKey = (typeof BUILT_IN_AGENT_KEYS)[number];
 
@@ -2578,6 +2586,250 @@ export interface ApplyAgentRecipeResponse {
   triggers: AgentTriggerSummary[];
   /** What this press wrote. A re-apply writes nothing that is already there. */
   created: { schedule: boolean; triggers: number };
+}
+
+// ---------------------------------------------------------------------------
+// The configurator (#1250): a goal in, a proposal of concrete configuration
+// changes out. The model only proposes; a person applies, change by change,
+// through the same services the settings screens write with.
+// ---------------------------------------------------------------------------
+
+/**
+ * What a proposal may change. Closed: the model's output, the apply route's
+ * dispatch and the review screen all read this list, so a kind cannot be
+ * proposed without something to apply it (#1311; later phases add kinds).
+ */
+export const CONFIGURATION_CHANGE_KINDS = [
+  'agent-schedule',
+  'agent-trigger',
+  'connector-drift-check',
+  'workflow-draft',
+  'page-template',
+  'project-setting',
+  'methodology-link',
+  'custom-agent',
+] as const;
+export type ConfigurationChangeKind = (typeof CONFIGURATION_CHANGE_KINDS)[number];
+
+/** Give an agent a schedule, or reshape the one it has. Never switches it on or off. */
+export interface AgentScheduleChangeSpec {
+  kind: 'agent-schedule';
+  agentKey: string;
+  scheduleKind: AgentScheduleKind;
+  /** `interval` only. */
+  scheduleMinutes: number | null;
+  /** `daily` / `weekly`: `HH:MM`. */
+  scheduleTime: string | null;
+  /** `weekly`: 0 (Sunday) – 6. */
+  scheduleWeekdays: number[] | null;
+  /** IANA zone; null reads as UTC. */
+  scheduleTimezone: string | null;
+  scheduleNote: string | null;
+}
+
+/** Add a trigger to an agent, disabled. */
+export interface AgentTriggerChangeSpec {
+  kind: 'agent-trigger';
+  agentKey: string;
+  event: AgentTriggerEvent;
+  /** Null hears every project. */
+  projectId: string | null;
+  filter: AgentTriggerFilter;
+  note: string | null;
+}
+
+/** Set a repository connector's drift check (docs/features/35) — what runs the sentinel on its pull requests. */
+export interface ConnectorDriftCheckChangeSpec {
+  kind: 'connector-drift-check';
+  connectorId: string;
+  mode: 'off' | 'report' | 'propose';
+}
+
+/** A new workflow definition, created disabled (#1312). Its graph compiled before it was offered. */
+export interface WorkflowDraftChangeSpec {
+  kind: 'workflow-draft';
+  name: string;
+  description: string | null;
+  /** Null = every project. */
+  projectId: string | null;
+  graph: WorkflowGraph;
+  trigger: WorkflowTrigger;
+}
+
+/** A new page template (#1312): a project's needs editor, a workspace-wide one admin. */
+export interface PageTemplateChangeSpec {
+  kind: 'page-template';
+  name: string;
+  description: string | null;
+  /** Null = workspace-wide. */
+  projectId: string | null;
+  /** Markdown with frontmatter, as `POST /v1/templates` takes it. */
+  source: string;
+}
+
+/**
+ * The project settings (docs/features/76) a proposal may set (#1313), a subset
+ * of `PROJECT_SETTING_KEYS`. Not the capture parent: the configurator reads no
+ * pages, so it has no page id to name. Not the methodology: switching one has
+ * its own preview of what moves.
+ */
+export const CONFIGURABLE_PROJECT_SETTINGS = ['verification', 'workItems', 'breakingChanges', 'lintPolicy'] as const;
+export type ConfigurableProjectSetting = (typeof CONFIGURABLE_PROJECT_SETTINGS)[number];
+
+/**
+ * Override one project setting through its own writer (#1313). `values` names
+ * only the keys the change sets; a key set to null goes back to inheriting.
+ */
+export type ProjectSettingChangeSpec = { kind: 'project-setting'; projectId: string } & (
+  | {
+      setting: 'verification';
+      values: Partial<{ reviewIntervalDays: number | null; remindBeforeDays: number | null; inactiveAfterDays: number | null; emptyMaxChars: number | null }>;
+    }
+  | {
+      setting: 'workItems';
+      values: Partial<{ issues: WorkItemIssueRule | null; conflicts: WorkItemConflictRule | null; verification: WorkItemVerificationRule | null }>;
+    }
+  | { setting: 'breakingChanges'; values: { policy: ApiBreakingChangePolicy | null } }
+  | { setting: 'lintPolicy'; values: { policy: LintPolicy | null } }
+);
+
+/**
+ * Link a project to a methodology (#1314) through its own route's service,
+ * creating the sections the project settings screen would tick: every missing
+ * one on a first link, none on a switch. `locale` is the drafter's: sections are
+ * matched and titled in it.
+ */
+export interface MethodologyLinkChangeSpec {
+  kind: 'methodology-link';
+  projectId: string;
+  /** As `GET /v1/blueprints` lists it: a built-in key or a saved blueprint's id. */
+  blueprintKey: string;
+  locale: Locale;
+}
+
+/**
+ * A workspace custom agent copied from a methodology's declaration (#1314).
+ * Only references: the instructions are trusted prompt text, so they are read
+ * from the blueprint, never from the model.
+ */
+export interface CustomAgentChangeSpec {
+  kind: 'custom-agent';
+  blueprintKey: string;
+  /** The declared key, which the copy keeps. */
+  agentKey: string;
+}
+
+export type ConfigurationChangeSpec =
+  | AgentScheduleChangeSpec
+  | AgentTriggerChangeSpec
+  | ConnectorDriftCheckChangeSpec
+  | WorkflowDraftChangeSpec
+  | PageTemplateChangeSpec
+  | ProjectSettingChangeSpec
+  | MethodologyLinkChangeSpec
+  | CustomAgentChangeSpec;
+
+/**
+ * `unavailable` is decided when the proposal is written and never offered for
+ * apply: the change is already in place, its target does not exist or cannot
+ * take it, or the server's env switches it off.
+ */
+export const CONFIGURATION_CHANGE_STATES = ['pending', 'applied', 'dismissed', 'unavailable'] as const;
+export type ConfigurationChangeState = (typeof CONFIGURATION_CHANGE_STATES)[number];
+
+export const CONFIGURATION_UNAVAILABLE_REASONS = [
+  /** Today's configuration already says this. */
+  'already-configured',
+  /** The agent cannot be scheduled or triggered, or not by this event. */
+  'agent-unsupported',
+  /** The agent, project or connector is not in this workspace. */
+  'not-found',
+  /** The connector's kind has no drift check. */
+  'connector-unsupported',
+  /** `AGENT_SCHEDULE_ENABLED` is off: no schedule would ever run. */
+  'schedules-off',
+  /** `AGENT_TRIGGERS_ENABLED` is off: no trigger would ever fire. */
+  'triggers-off',
+  /** The workspace has the `workflows` section switched off (workflow drafts, templates). */
+  'section-off',
+  /** A workflow or template of that name already exists where it would land. */
+  'name-taken',
+  /** A workflow draft no longer compiles: a template its graph names went away. */
+  'invalid',
+  /** What applying would write is no longer what was reviewed: the blueprint or the project changed since (#1314). */
+  'stale',
+] as const;
+export type ConfigurationUnavailableReason = (typeof CONFIGURATION_UNAVAILABLE_REASONS)[number];
+
+/**
+ * What applies at one side of a project-setting change (#1313): the value, the
+ * level that decides it, and what holds it below the levels' ask. `held` is
+ * `ceiling` when the deployment's env clamps it (`STYLE_LINT_POLICY`,
+ * `WORK_ITEM_AUTOCREATE_MAX_PER_TICK`), `agent-off` when the style linter is
+ * switched off — never a silent clamp.
+ */
+export interface ConfigurationAppliedValue {
+  value: unknown;
+  source: ScopedSetting<unknown>['source'];
+  held: 'ceiling' | 'agent-off' | null;
+}
+
+/** One field of a change: what it is today and what applying makes it. */
+export interface ConfigurationDiffRow {
+  /** The spec's field name (`scheduleTime`, `event`, `mode`, …). */
+  field: string;
+  /** Null when nothing is set today (a new trigger has no before). A project setting: the project's own value, null = inherits. */
+  before: unknown;
+  after: unknown;
+  /** A project setting only: what applies today and once applied, beside the project's own value. */
+  applies?: { before: ConfigurationAppliedValue; after: ConfigurationAppliedValue };
+}
+
+export interface ConfigurationChange {
+  /** Stable within its proposal (`c1`, `c2`, …). */
+  id: string;
+  spec: ConfigurationChangeSpec;
+  /** The model's one-line why. Untrusted text. */
+  reason: string;
+  /** Display name of the target (agent, connector), resolved when written. */
+  target: string;
+  diff: ConfigurationDiffRow[];
+  state: ConfigurationChangeState;
+  unavailable: ConfigurationUnavailableReason | null;
+  /**
+   * The role apply requires on execution: `editor` for a project's page
+   * template, `maintainer` (`requireProjectManage`) for a project setting that
+   * is not a merge gate or a methodology link, else workspace `admin`.
+   */
+  requires: 'admin' | 'editor' | 'maintainer';
+  appliedAt: string | null;
+  appliedBy: string | null;
+  /** What applying created or changed: the trigger, agent, connector, workflow, template or project id. */
+  resultId: string | null;
+}
+
+export interface ConfigurationProposal {
+  id: string;
+  workspaceId: string;
+  goal: string;
+  /** The model's closing message. Untrusted text. */
+  summary: string;
+  changes: ConfigurationChange[];
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// POST /v1/ai/configurator/proposals
+export interface ProposeConfigurationResponse {
+  /** Null when the model proposed nothing; `reply` then says why or asks. */
+  proposal: ConfigurationProposal | null;
+  reply: string;
+}
+
+// GET /v1/ai/configurator/proposals
+export interface ListConfigurationProposalsResponse {
+  proposals: ConfigurationProposal[];
 }
 
 /**

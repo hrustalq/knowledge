@@ -174,28 +174,221 @@
         "operationId": "AuthController_auditLogs",
         "parameters": [
           {
-            "name": "workspaceId",
-            "required": true,
+            "name": "action",
+            "required": false,
             "in": "query",
+            "description": "One AUDIT_ACTIONS value",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "graph.query",
+                "acl.bypass",
+                "acl.update",
+                "acl.request",
+                "acl.request.approve",
+                "acl.request.deny",
+                "ai-readable.llms-full",
+                "api.try",
+                "feedback.export",
+                "analytics.export",
+                "merge-request.lint-override",
+                "auth.login",
+                "auth.login_failed",
+                "auth.logout",
+                "auth.session_revoked",
+                "sso.provider_created",
+                "sso.provider_updated",
+                "sso.provider_deleted",
+                "sso.jit_user_created",
+                "sso.identity_linked",
+                "auth.account_claimed",
+                "sso.group_mapping_created",
+                "sso.group_mapping_deleted",
+                "role_sync.applied",
+                "role_sync.blocked_last_admin",
+                "sso.domain_claimed",
+                "sso.domain_verified",
+                "sso.domain_enforced",
+                "sso.domain_updated",
+                "sso.domain_removed",
+                "sso.policy_updated",
+                "auth.sso_bypassed",
+                "scim.user_created",
+                "scim.user_updated",
+                "scim.user_deactivated",
+                "scim.user_deleted",
+                "scim.group_created",
+                "scim.group_updated",
+                "scim.group_deleted",
+                "scim.token_created",
+                "scim.token_revoked",
+                "scim.settings_updated",
+                "chat.search_enabled",
+                "chat.search_disabled",
+                "chat.listen_enabled",
+                "chat.listen_disabled",
+                "chat.auto_harvest_enabled",
+                "chat.auto_harvest_disabled",
+                "member.capabilities_changed",
+                "workspace.deleted",
+                "workspace.renamed",
+                "workspace.editing_policy_updated",
+                "memory.bank_created",
+                "memory.bank_deleted",
+                "memory.bank_updated",
+                "memory.retained",
+                "memory.files_uploaded",
+                "memory.file_changed",
+                "memory.graph_changed",
+                "memory.memories_deleted",
+                "memory.document_updated",
+                "memory.document_deleted",
+                "memory.observations_cleared",
+                "memory.consolidation_requested",
+                "memory.alias_changed",
+                "memory.template_imported",
+                "memory.exported",
+                "memory.imported",
+                "memory.cloned",
+                "memory.mental_model_changed",
+                "memory.directive_changed",
+                "memory.operation_cancelled",
+                "memory.promoted",
+                "user.created",
+                "user.renamed",
+                "user.admin_granted",
+                "user.admin_revoked",
+                "user.disabled",
+                "user.enabled",
+                "user.password_set",
+                "member.added",
+                "member.updated",
+                "member.removed",
+                "workspace.created",
+                "workspace.features_updated",
+                "workspace.purpose_updated",
+                "publishing.settings_updated",
+                "api-key.created",
+                "api-key.revoked",
+                "audit.exported",
+                "ai.settings.updated",
+                "ai.provider.created",
+                "ai.provider.updated",
+                "ai.provider.deleted",
+                "ai.agent.created",
+                "ai.agent.updated",
+                "ai.agent.deleted",
+                "ai.agent.reset",
+                "ai.agent.trigger.created",
+                "ai.agent.trigger.updated",
+                "ai.agent.trigger.deleted",
+                "ai.agent.recipe.applied",
+                "ai.plugin.created",
+                "ai.plugin.updated",
+                "ai.plugin.deleted",
+                "ai.skill.created",
+                "ai.skill.updated",
+                "ai.skill.deleted",
+                "ai.skill.imported",
+                "ai.styleguide.updated",
+                "ai.styleguide.deleted",
+                "ai.lint-policy.updated",
+                "connector.created",
+                "connector.updated",
+                "connector.deleted",
+                "connector.link.removed",
+                "workflow.created",
+                "workflow.updated",
+                "workflow.deleted",
+                "template.created",
+                "template.updated",
+                "template.archived",
+                "template.unarchived",
+                "template.reset",
+                "glossary.term.created",
+                "glossary.term.updated",
+                "glossary.term.deleted"
+              ]
+            }
+          },
+          {
+            "name": "category",
+            "required": false,
+            "in": "query",
+            "description": "Derived from the action (auditCategoryOf)",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "sign-in",
+                "people",
+                "access",
+                "workspace",
+                "ai",
+                "integrations",
+                "content",
+                "memory",
+                "data"
+              ]
+            }
+          },
+          {
+            "name": "actor",
+            "required": false,
+            "in": "query",
+            "description": "users.id, or a synthetic actor such as \"dev\" or \"anonymous\"",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "target",
+            "required": false,
+            "in": "query",
+            "description": "Who or what the action was done to: a user id, a provider id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "description": "Inclusive lower bound on createdAt, ISO 8601",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "description": "Inclusive upper bound on createdAt, ISO 8601",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "ok",
+            "required": false,
+            "in": "query",
+            "description": "Only succeeded (true) or failed (false) entries",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
             }
           },
           {
             "name": "limit",
             "required": false,
             "in": "query",
+            "description": "Omitted: 50",
             "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "action",
-            "required": false,
-            "in": "query",
-            "description": "One AUDIT_ACTIONS value",
-            "schema": {
-              "type": "string"
+              "minimum": 1,
+              "maximum": 200,
+              "type": "number"
             }
           },
           {
@@ -204,6 +397,16 @@
             "in": "query",
             "description": "nextCursor from the previous page",
             "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
               "type": "string"
             }
           },
@@ -253,7 +456,284 @@
             }
           }
         },
-        "summary": "Workspace audit trail, newest first (admin) — graph queries, ACL changes, the workspace's sign-in config",
+        "summary": "Workspace audit trail, newest first (admin), filtered by action, category, actor, target, dates and outcome",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/audit-logs/export": {
+      "get": {
+        "operationId": "AuthController_exportAuditLogs",
+        "parameters": [
+          {
+            "name": "action",
+            "required": false,
+            "in": "query",
+            "description": "One AUDIT_ACTIONS value",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "graph.query",
+                "acl.bypass",
+                "acl.update",
+                "acl.request",
+                "acl.request.approve",
+                "acl.request.deny",
+                "ai-readable.llms-full",
+                "api.try",
+                "feedback.export",
+                "analytics.export",
+                "merge-request.lint-override",
+                "auth.login",
+                "auth.login_failed",
+                "auth.logout",
+                "auth.session_revoked",
+                "sso.provider_created",
+                "sso.provider_updated",
+                "sso.provider_deleted",
+                "sso.jit_user_created",
+                "sso.identity_linked",
+                "auth.account_claimed",
+                "sso.group_mapping_created",
+                "sso.group_mapping_deleted",
+                "role_sync.applied",
+                "role_sync.blocked_last_admin",
+                "sso.domain_claimed",
+                "sso.domain_verified",
+                "sso.domain_enforced",
+                "sso.domain_updated",
+                "sso.domain_removed",
+                "sso.policy_updated",
+                "auth.sso_bypassed",
+                "scim.user_created",
+                "scim.user_updated",
+                "scim.user_deactivated",
+                "scim.user_deleted",
+                "scim.group_created",
+                "scim.group_updated",
+                "scim.group_deleted",
+                "scim.token_created",
+                "scim.token_revoked",
+                "scim.settings_updated",
+                "chat.search_enabled",
+                "chat.search_disabled",
+                "chat.listen_enabled",
+                "chat.listen_disabled",
+                "chat.auto_harvest_enabled",
+                "chat.auto_harvest_disabled",
+                "member.capabilities_changed",
+                "workspace.deleted",
+                "workspace.renamed",
+                "workspace.editing_policy_updated",
+                "memory.bank_created",
+                "memory.bank_deleted",
+                "memory.bank_updated",
+                "memory.retained",
+                "memory.files_uploaded",
+                "memory.file_changed",
+                "memory.graph_changed",
+                "memory.memories_deleted",
+                "memory.document_updated",
+                "memory.document_deleted",
+                "memory.observations_cleared",
+                "memory.consolidation_requested",
+                "memory.alias_changed",
+                "memory.template_imported",
+                "memory.exported",
+                "memory.imported",
+                "memory.cloned",
+                "memory.mental_model_changed",
+                "memory.directive_changed",
+                "memory.operation_cancelled",
+                "memory.promoted",
+                "user.created",
+                "user.renamed",
+                "user.admin_granted",
+                "user.admin_revoked",
+                "user.disabled",
+                "user.enabled",
+                "user.password_set",
+                "member.added",
+                "member.updated",
+                "member.removed",
+                "workspace.created",
+                "workspace.features_updated",
+                "workspace.purpose_updated",
+                "publishing.settings_updated",
+                "api-key.created",
+                "api-key.revoked",
+                "audit.exported",
+                "ai.settings.updated",
+                "ai.provider.created",
+                "ai.provider.updated",
+                "ai.provider.deleted",
+                "ai.agent.created",
+                "ai.agent.updated",
+                "ai.agent.deleted",
+                "ai.agent.reset",
+                "ai.agent.trigger.created",
+                "ai.agent.trigger.updated",
+                "ai.agent.trigger.deleted",
+                "ai.agent.recipe.applied",
+                "ai.plugin.created",
+                "ai.plugin.updated",
+                "ai.plugin.deleted",
+                "ai.skill.created",
+                "ai.skill.updated",
+                "ai.skill.deleted",
+                "ai.skill.imported",
+                "ai.styleguide.updated",
+                "ai.styleguide.deleted",
+                "ai.lint-policy.updated",
+                "connector.created",
+                "connector.updated",
+                "connector.deleted",
+                "connector.link.removed",
+                "workflow.created",
+                "workflow.updated",
+                "workflow.deleted",
+                "template.created",
+                "template.updated",
+                "template.archived",
+                "template.unarchived",
+                "template.reset",
+                "glossary.term.created",
+                "glossary.term.updated",
+                "glossary.term.deleted"
+              ]
+            }
+          },
+          {
+            "name": "category",
+            "required": false,
+            "in": "query",
+            "description": "Derived from the action (auditCategoryOf)",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "sign-in",
+                "people",
+                "access",
+                "workspace",
+                "ai",
+                "integrations",
+                "content",
+                "memory",
+                "data"
+              ]
+            }
+          },
+          {
+            "name": "actor",
+            "required": false,
+            "in": "query",
+            "description": "users.id, or a synthetic actor such as \"dev\" or \"anonymous\"",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "target",
+            "required": false,
+            "in": "query",
+            "description": "Who or what the action was done to: a user id, a provider id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "description": "Inclusive lower bound on createdAt, ISO 8601",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "description": "Inclusive upper bound on createdAt, ISO 8601",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "ok",
+            "required": false,
+            "in": "query",
+            "description": "Only succeeded (true) or failed (false) entries",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "format",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "csv",
+                "json"
+              ]
+            }
+          },
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The filtered workspace trail as CSV or JSON (admin, capped); the export is itself audited",
         "tags": [
           "auth"
         ]
@@ -264,20 +744,221 @@
         "operationId": "AuthController_platformAuditLogs",
         "parameters": [
           {
-            "name": "limit",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
             "name": "action",
             "required": false,
             "in": "query",
             "description": "One AUDIT_ACTIONS value",
             "schema": {
+              "type": "string",
+              "enum": [
+                "graph.query",
+                "acl.bypass",
+                "acl.update",
+                "acl.request",
+                "acl.request.approve",
+                "acl.request.deny",
+                "ai-readable.llms-full",
+                "api.try",
+                "feedback.export",
+                "analytics.export",
+                "merge-request.lint-override",
+                "auth.login",
+                "auth.login_failed",
+                "auth.logout",
+                "auth.session_revoked",
+                "sso.provider_created",
+                "sso.provider_updated",
+                "sso.provider_deleted",
+                "sso.jit_user_created",
+                "sso.identity_linked",
+                "auth.account_claimed",
+                "sso.group_mapping_created",
+                "sso.group_mapping_deleted",
+                "role_sync.applied",
+                "role_sync.blocked_last_admin",
+                "sso.domain_claimed",
+                "sso.domain_verified",
+                "sso.domain_enforced",
+                "sso.domain_updated",
+                "sso.domain_removed",
+                "sso.policy_updated",
+                "auth.sso_bypassed",
+                "scim.user_created",
+                "scim.user_updated",
+                "scim.user_deactivated",
+                "scim.user_deleted",
+                "scim.group_created",
+                "scim.group_updated",
+                "scim.group_deleted",
+                "scim.token_created",
+                "scim.token_revoked",
+                "scim.settings_updated",
+                "chat.search_enabled",
+                "chat.search_disabled",
+                "chat.listen_enabled",
+                "chat.listen_disabled",
+                "chat.auto_harvest_enabled",
+                "chat.auto_harvest_disabled",
+                "member.capabilities_changed",
+                "workspace.deleted",
+                "workspace.renamed",
+                "workspace.editing_policy_updated",
+                "memory.bank_created",
+                "memory.bank_deleted",
+                "memory.bank_updated",
+                "memory.retained",
+                "memory.files_uploaded",
+                "memory.file_changed",
+                "memory.graph_changed",
+                "memory.memories_deleted",
+                "memory.document_updated",
+                "memory.document_deleted",
+                "memory.observations_cleared",
+                "memory.consolidation_requested",
+                "memory.alias_changed",
+                "memory.template_imported",
+                "memory.exported",
+                "memory.imported",
+                "memory.cloned",
+                "memory.mental_model_changed",
+                "memory.directive_changed",
+                "memory.operation_cancelled",
+                "memory.promoted",
+                "user.created",
+                "user.renamed",
+                "user.admin_granted",
+                "user.admin_revoked",
+                "user.disabled",
+                "user.enabled",
+                "user.password_set",
+                "member.added",
+                "member.updated",
+                "member.removed",
+                "workspace.created",
+                "workspace.features_updated",
+                "workspace.purpose_updated",
+                "publishing.settings_updated",
+                "api-key.created",
+                "api-key.revoked",
+                "audit.exported",
+                "ai.settings.updated",
+                "ai.provider.created",
+                "ai.provider.updated",
+                "ai.provider.deleted",
+                "ai.agent.created",
+                "ai.agent.updated",
+                "ai.agent.deleted",
+                "ai.agent.reset",
+                "ai.agent.trigger.created",
+                "ai.agent.trigger.updated",
+                "ai.agent.trigger.deleted",
+                "ai.agent.recipe.applied",
+                "ai.plugin.created",
+                "ai.plugin.updated",
+                "ai.plugin.deleted",
+                "ai.skill.created",
+                "ai.skill.updated",
+                "ai.skill.deleted",
+                "ai.skill.imported",
+                "ai.styleguide.updated",
+                "ai.styleguide.deleted",
+                "ai.lint-policy.updated",
+                "connector.created",
+                "connector.updated",
+                "connector.deleted",
+                "connector.link.removed",
+                "workflow.created",
+                "workflow.updated",
+                "workflow.deleted",
+                "template.created",
+                "template.updated",
+                "template.archived",
+                "template.unarchived",
+                "template.reset",
+                "glossary.term.created",
+                "glossary.term.updated",
+                "glossary.term.deleted"
+              ]
+            }
+          },
+          {
+            "name": "category",
+            "required": false,
+            "in": "query",
+            "description": "Derived from the action (auditCategoryOf)",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "sign-in",
+                "people",
+                "access",
+                "workspace",
+                "ai",
+                "integrations",
+                "content",
+                "memory",
+                "data"
+              ]
+            }
+          },
+          {
+            "name": "actor",
+            "required": false,
+            "in": "query",
+            "description": "users.id, or a synthetic actor such as \"dev\" or \"anonymous\"",
+            "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "target",
+            "required": false,
+            "in": "query",
+            "description": "Who or what the action was done to: a user id, a provider id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "description": "Inclusive lower bound on createdAt, ISO 8601",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "description": "Inclusive upper bound on createdAt, ISO 8601",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "ok",
+            "required": false,
+            "in": "query",
+            "description": "Only succeeded (true) or failed (false) entries",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Omitted: 50",
+            "schema": {
+              "minimum": 1,
+              "maximum": 200,
+              "type": "number"
             }
           },
           {
@@ -286,6 +967,7 @@
             "in": "query",
             "description": "nextCursor from the previous page",
             "schema": {
+              "format": "uuid",
               "type": "string"
             }
           },
@@ -336,6 +1018,274 @@
           }
         },
         "summary": "Platform audit trail incl. sign-ins and other workspace-less events (platform admin)",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/admin/audit-logs/export": {
+      "get": {
+        "operationId": "AuthController_exportPlatformAuditLogs",
+        "parameters": [
+          {
+            "name": "action",
+            "required": false,
+            "in": "query",
+            "description": "One AUDIT_ACTIONS value",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "graph.query",
+                "acl.bypass",
+                "acl.update",
+                "acl.request",
+                "acl.request.approve",
+                "acl.request.deny",
+                "ai-readable.llms-full",
+                "api.try",
+                "feedback.export",
+                "analytics.export",
+                "merge-request.lint-override",
+                "auth.login",
+                "auth.login_failed",
+                "auth.logout",
+                "auth.session_revoked",
+                "sso.provider_created",
+                "sso.provider_updated",
+                "sso.provider_deleted",
+                "sso.jit_user_created",
+                "sso.identity_linked",
+                "auth.account_claimed",
+                "sso.group_mapping_created",
+                "sso.group_mapping_deleted",
+                "role_sync.applied",
+                "role_sync.blocked_last_admin",
+                "sso.domain_claimed",
+                "sso.domain_verified",
+                "sso.domain_enforced",
+                "sso.domain_updated",
+                "sso.domain_removed",
+                "sso.policy_updated",
+                "auth.sso_bypassed",
+                "scim.user_created",
+                "scim.user_updated",
+                "scim.user_deactivated",
+                "scim.user_deleted",
+                "scim.group_created",
+                "scim.group_updated",
+                "scim.group_deleted",
+                "scim.token_created",
+                "scim.token_revoked",
+                "scim.settings_updated",
+                "chat.search_enabled",
+                "chat.search_disabled",
+                "chat.listen_enabled",
+                "chat.listen_disabled",
+                "chat.auto_harvest_enabled",
+                "chat.auto_harvest_disabled",
+                "member.capabilities_changed",
+                "workspace.deleted",
+                "workspace.renamed",
+                "workspace.editing_policy_updated",
+                "memory.bank_created",
+                "memory.bank_deleted",
+                "memory.bank_updated",
+                "memory.retained",
+                "memory.files_uploaded",
+                "memory.file_changed",
+                "memory.graph_changed",
+                "memory.memories_deleted",
+                "memory.document_updated",
+                "memory.document_deleted",
+                "memory.observations_cleared",
+                "memory.consolidation_requested",
+                "memory.alias_changed",
+                "memory.template_imported",
+                "memory.exported",
+                "memory.imported",
+                "memory.cloned",
+                "memory.mental_model_changed",
+                "memory.directive_changed",
+                "memory.operation_cancelled",
+                "memory.promoted",
+                "user.created",
+                "user.renamed",
+                "user.admin_granted",
+                "user.admin_revoked",
+                "user.disabled",
+                "user.enabled",
+                "user.password_set",
+                "member.added",
+                "member.updated",
+                "member.removed",
+                "workspace.created",
+                "workspace.features_updated",
+                "workspace.purpose_updated",
+                "publishing.settings_updated",
+                "api-key.created",
+                "api-key.revoked",
+                "audit.exported",
+                "ai.settings.updated",
+                "ai.provider.created",
+                "ai.provider.updated",
+                "ai.provider.deleted",
+                "ai.agent.created",
+                "ai.agent.updated",
+                "ai.agent.deleted",
+                "ai.agent.reset",
+                "ai.agent.trigger.created",
+                "ai.agent.trigger.updated",
+                "ai.agent.trigger.deleted",
+                "ai.agent.recipe.applied",
+                "ai.plugin.created",
+                "ai.plugin.updated",
+                "ai.plugin.deleted",
+                "ai.skill.created",
+                "ai.skill.updated",
+                "ai.skill.deleted",
+                "ai.skill.imported",
+                "ai.styleguide.updated",
+                "ai.styleguide.deleted",
+                "ai.lint-policy.updated",
+                "connector.created",
+                "connector.updated",
+                "connector.deleted",
+                "connector.link.removed",
+                "workflow.created",
+                "workflow.updated",
+                "workflow.deleted",
+                "template.created",
+                "template.updated",
+                "template.archived",
+                "template.unarchived",
+                "template.reset",
+                "glossary.term.created",
+                "glossary.term.updated",
+                "glossary.term.deleted"
+              ]
+            }
+          },
+          {
+            "name": "category",
+            "required": false,
+            "in": "query",
+            "description": "Derived from the action (auditCategoryOf)",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "sign-in",
+                "people",
+                "access",
+                "workspace",
+                "ai",
+                "integrations",
+                "content",
+                "memory",
+                "data"
+              ]
+            }
+          },
+          {
+            "name": "actor",
+            "required": false,
+            "in": "query",
+            "description": "users.id, or a synthetic actor such as \"dev\" or \"anonymous\"",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "target",
+            "required": false,
+            "in": "query",
+            "description": "Who or what the action was done to: a user id, a provider id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "description": "Inclusive lower bound on createdAt, ISO 8601",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "description": "Inclusive upper bound on createdAt, ISO 8601",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "ok",
+            "required": false,
+            "in": "query",
+            "description": "Only succeeded (true) or failed (false) entries",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "format",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "csv",
+                "json"
+              ]
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The filtered platform trail as CSV or JSON (platform admin, capped); audited",
         "tags": [
           "auth"
         ]
@@ -21989,6 +22939,285 @@
           }
         },
         "summary": "Per agent, how many findings were accepted, dismissed or are pending, and how answers were voted; optionally split by prompt hash or model. Derived on read from runs, merge requests and votes",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/v1/ai/configurator/proposals": {
+      "post": {
+        "description": "The configurator reads the workspace's agents, schedules, triggers, projects and repository connectors and writes a proposal. Nothing is applied: every change waits for a person to apply it. `proposal` is null when it proposed nothing, and `reply` says why.",
+        "operationId": "ConfiguratorController_propose",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProposeConfigurationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProposeConfigurationResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Turn a goal into a configuration proposal",
+        "tags": [
+          "ai"
+        ]
+      },
+      "get": {
+        "operationId": "ConfiguratorController_list",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListConfigurationProposalsResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Recent proposals, newest first: all of them for an admin, your own otherwise",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/v1/ai/configurator/proposals/{id}/apply": {
+      "post": {
+        "description": "Each change needs its own role, checked now (every current kind: workspace admin); 403 and nothing written otherwise. A change that is already in place by now lands as `unavailable`. Schedules and triggers are written switched off.",
+        "operationId": "ConfiguratorController_apply",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplyConfigurationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigurationProposal"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Apply some of a proposal's pending changes, all or nothing",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/v1/ai/configurator/proposals/{id}/dismiss": {
+      "post": {
+        "operationId": "ConfiguratorController_dismiss",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfiguratorWorkspaceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigurationProposal"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Set every pending change aside",
         "tags": [
           "ai"
         ]
@@ -45790,7 +47019,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.59.0",
+    "version": "0.60.0",
     "contact": {}
   },
   "tags": [],
@@ -50293,6 +51522,62 @@
             "type": "number",
             "nullable": true,
             "description": "Monthly token budget; null = unlimited"
+          }
+        },
+        "required": [
+          "workspaceId"
+        ]
+      },
+      "ProposeConfigurationDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "goal": {
+            "type": "string",
+            "minLength": 5,
+            "maxLength": 2000,
+            "description": "What should happen, in the person's words."
+          },
+          "timezone": {
+            "type": "string",
+            "example": "Europe/Moscow",
+            "description": "IANA zone a proposed time-of-day schedule is read in when the model names none. Absent reads as UTC."
+          }
+        },
+        "required": [
+          "workspaceId",
+          "goal"
+        ]
+      },
+      "ApplyConfigurationDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "changeIds": {
+            "description": "The pending changes to apply, by id (`c1`, …). All or nothing.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "workspaceId",
+          "changeIds"
+        ]
+      },
+      "ConfiguratorWorkspaceDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
           }
         },
         "required": [
@@ -56424,6 +57709,60 @@
           "source"
         ]
       },
+      "AgentScheduleChangeSpec": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "agent-schedule"
+            ]
+          },
+          "agentKey": {
+            "type": "string"
+          },
+          "scheduleKind": {
+            "$ref": "#/components/schemas/AgentScheduleKind"
+          },
+          "scheduleMinutes": {
+            "type": "number",
+            "nullable": true
+          },
+          "scheduleTime": {
+            "type": "string",
+            "nullable": true
+          },
+          "scheduleWeekdays": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              }
+            ],
+            "nullable": true
+          },
+          "scheduleTimezone": {
+            "type": "string",
+            "nullable": true
+          },
+          "scheduleNote": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "kind",
+          "agentKey",
+          "scheduleKind",
+          "scheduleMinutes",
+          "scheduleTime",
+          "scheduleWeekdays",
+          "scheduleTimezone",
+          "scheduleNote"
+        ]
+      },
       "AgentScheduleKind": {
         "type": "string",
         "enum": [
@@ -56438,6 +57777,42 @@
           "interactive",
           "background",
           "workflow"
+        ]
+      },
+      "AgentTriggerChangeSpec": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "agent-trigger"
+            ]
+          },
+          "agentKey": {
+            "type": "string"
+          },
+          "event": {
+            "$ref": "#/components/schemas/AgentTriggerEvent"
+          },
+          "projectId": {
+            "type": "string",
+            "nullable": true
+          },
+          "filter": {
+            "$ref": "#/components/schemas/AgentTriggerFilter"
+          },
+          "note": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "kind",
+          "agentKey",
+          "event",
+          "projectId",
+          "filter",
+          "note"
         ]
       },
       "AgentTriggerEvent": {
@@ -57764,7 +59139,8 @@
           "blueprint-derive",
           "blueprint-generate",
           "blueprint-interview",
-          "purpose-interview"
+          "purpose-interview",
+          "configurator"
         ]
       },
       "AiUsageResponse": {
@@ -63235,6 +64611,225 @@
           "to"
         ]
       },
+      "ConfigurationAppliedValue": {
+        "type": "object",
+        "properties": {
+          "value": {},
+          "source": {
+            "type": "string",
+            "enum": [
+              "project",
+              "workspace",
+              "default"
+            ]
+          },
+          "held": {
+            "type": "string",
+            "enum": [
+              "ceiling",
+              "agent-off",
+              null
+            ],
+            "nullable": true
+          }
+        },
+        "required": [
+          "value",
+          "source",
+          "held"
+        ]
+      },
+      "ConfigurationChange": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "spec": {
+            "$ref": "#/components/schemas/ConfigurationChangeSpec"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          },
+          "diff": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConfigurationDiffRow"
+            }
+          },
+          "state": {
+            "$ref": "#/components/schemas/ConfigurationChangeState"
+          },
+          "unavailable": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConfigurationUnavailableReason"
+              }
+            ],
+            "nullable": true
+          },
+          "requires": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "editor",
+              "maintainer"
+            ]
+          },
+          "appliedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "appliedBy": {
+            "type": "string",
+            "nullable": true
+          },
+          "resultId": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "spec",
+          "reason",
+          "target",
+          "diff",
+          "state",
+          "unavailable",
+          "requires",
+          "appliedAt",
+          "appliedBy",
+          "resultId"
+        ]
+      },
+      "ConfigurationChangeSpec": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/AgentScheduleChangeSpec"
+          },
+          {
+            "$ref": "#/components/schemas/AgentTriggerChangeSpec"
+          },
+          {
+            "$ref": "#/components/schemas/ConnectorDriftCheckChangeSpec"
+          },
+          {
+            "$ref": "#/components/schemas/WorkflowDraftChangeSpec"
+          },
+          {
+            "$ref": "#/components/schemas/PageTemplateChangeSpec"
+          },
+          {
+            "$ref": "#/components/schemas/ProjectSettingChangeSpec"
+          },
+          {
+            "$ref": "#/components/schemas/MethodologyLinkChangeSpec"
+          },
+          {
+            "$ref": "#/components/schemas/CustomAgentChangeSpec"
+          }
+        ]
+      },
+      "ConfigurationChangeState": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "applied",
+          "dismissed",
+          "unavailable"
+        ]
+      },
+      "ConfigurationDiffRow": {
+        "type": "object",
+        "properties": {
+          "field": {
+            "type": "string"
+          },
+          "before": {},
+          "after": {},
+          "applies": {
+            "type": "object",
+            "properties": {
+              "before": {
+                "$ref": "#/components/schemas/ConfigurationAppliedValue"
+              },
+              "after": {
+                "$ref": "#/components/schemas/ConfigurationAppliedValue"
+              }
+            },
+            "required": [
+              "before",
+              "after"
+            ]
+          }
+        },
+        "required": [
+          "field",
+          "before",
+          "after"
+        ]
+      },
+      "ConfigurationProposal": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "workspaceId": {
+            "type": "string"
+          },
+          "goal": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConfigurationChange"
+            }
+          },
+          "createdBy": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "workspaceId",
+          "goal",
+          "summary",
+          "changes",
+          "createdBy",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "ConfigurationUnavailableReason": {
+        "type": "string",
+        "enum": [
+          "already-configured",
+          "agent-unsupported",
+          "not-found",
+          "connector-unsupported",
+          "schedules-off",
+          "triggers-off",
+          "section-off",
+          "name-taken",
+          "invalid",
+          "stale"
+        ]
+      },
       "ConflictCodeRef": {
         "type": "object",
         "properties": {
@@ -63728,6 +65323,33 @@
           "pull",
           "push",
           "both"
+        ]
+      },
+      "ConnectorDriftCheckChangeSpec": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "connector-drift-check"
+            ]
+          },
+          "connectorId": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "off",
+              "report",
+              "propose"
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "connectorId",
+          "mode"
         ]
       },
       "ConnectorGithubAccessResponse": {
@@ -65311,6 +66933,28 @@
         },
         "required": [
           "credentials"
+        ]
+      },
+      "CustomAgentChangeSpec": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "custom-agent"
+            ]
+          },
+          "blueprintKey": {
+            "type": "string"
+          },
+          "agentKey": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "blueprintKey",
+          "agentKey"
         ]
       },
       "DecisionCapturePayload": {
@@ -71247,6 +72891,20 @@
           "communities"
         ]
       },
+      "ListConfigurationProposalsResponse": {
+        "type": "object",
+        "properties": {
+          "proposals": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConfigurationProposal"
+            }
+          }
+        },
+        "required": [
+          "proposals"
+        ]
+      },
       "ListConflictsResponse": {
         "type": "object",
         "properties": {
@@ -74154,6 +75812,32 @@
           "squash"
         ]
       },
+      "MethodologyLinkChangeSpec": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "methodology-link"
+            ]
+          },
+          "projectId": {
+            "type": "string"
+          },
+          "blueprintKey": {
+            "type": "string"
+          },
+          "locale": {
+            "$ref": "#/components/schemas/Locale"
+          }
+        },
+        "required": [
+          "kind",
+          "projectId",
+          "blueprintKey",
+          "locale"
+        ]
+      },
       "MethodologyPreviewResponse": {
         "type": "object",
         "properties": {
@@ -74660,6 +76344,38 @@
         "required": [
           "key",
           "name"
+        ]
+      },
+      "PageTemplateChangeSpec": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "page-template"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "projectId": {
+            "type": "string",
+            "nullable": true
+          },
+          "source": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "name",
+          "description",
+          "projectId",
+          "source"
         ]
       },
       "PlaudAuthorizeResponse": {
@@ -75578,6 +77294,196 @@
           "merge-request:override-checks"
         ]
       },
+      "ProjectSettingChangeSpec": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "setting": {
+                "type": "string",
+                "enum": [
+                  "verification"
+                ]
+              },
+              "values": {
+                "type": "object",
+                "properties": {
+                  "reviewIntervalDays": {
+                    "type": "number",
+                    "nullable": true
+                  },
+                  "remindBeforeDays": {
+                    "type": "number",
+                    "nullable": true
+                  },
+                  "inactiveAfterDays": {
+                    "type": "number",
+                    "nullable": true
+                  },
+                  "emptyMaxChars": {
+                    "type": "number",
+                    "nullable": true
+                  }
+                }
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "project-setting"
+                ]
+              },
+              "projectId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "projectId",
+              "setting",
+              "values"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "setting": {
+                "type": "string",
+                "enum": [
+                  "workItems"
+                ]
+              },
+              "values": {
+                "type": "object",
+                "properties": {
+                  "issues": {
+                    "anyOf": [
+                      {
+                        "$ref": "#/components/schemas/WorkItemIssueRule"
+                      }
+                    ],
+                    "nullable": true
+                  },
+                  "conflicts": {
+                    "anyOf": [
+                      {
+                        "$ref": "#/components/schemas/WorkItemConflictRule"
+                      }
+                    ],
+                    "nullable": true
+                  },
+                  "verification": {
+                    "anyOf": [
+                      {
+                        "$ref": "#/components/schemas/WorkItemVerificationRule"
+                      }
+                    ],
+                    "nullable": true
+                  }
+                }
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "project-setting"
+                ]
+              },
+              "projectId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "projectId",
+              "setting",
+              "values"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "setting": {
+                "type": "string",
+                "enum": [
+                  "breakingChanges"
+                ]
+              },
+              "values": {
+                "type": "object",
+                "properties": {
+                  "policy": {
+                    "anyOf": [
+                      {
+                        "$ref": "#/components/schemas/ApiBreakingChangePolicy"
+                      }
+                    ],
+                    "nullable": true
+                  }
+                },
+                "required": [
+                  "policy"
+                ]
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "project-setting"
+                ]
+              },
+              "projectId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "projectId",
+              "setting",
+              "values"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "setting": {
+                "type": "string",
+                "enum": [
+                  "lintPolicy"
+                ]
+              },
+              "values": {
+                "type": "object",
+                "properties": {
+                  "policy": {
+                    "anyOf": [
+                      {
+                        "$ref": "#/components/schemas/LintPolicy"
+                      }
+                    ],
+                    "nullable": true
+                  }
+                },
+                "required": [
+                  "policy"
+                ]
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "project-setting"
+                ]
+              },
+              "projectId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "projectId",
+              "setting",
+              "values"
+            ]
+          }
+        ]
+      },
       "ProjectSettingKey": {
         "type": "string",
         "enum": [
@@ -75826,6 +77732,26 @@
           "documentTitle",
           "branch",
           "title"
+        ]
+      },
+      "ProposeConfigurationResponse": {
+        "type": "object",
+        "properties": {
+          "proposal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConfigurationProposal"
+              }
+            ],
+            "nullable": true
+          },
+          "reply": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "proposal",
+          "reply"
         ]
       },
       "ProposeRelationsResponse": {
@@ -82102,6 +84028,42 @@
           "trigger",
           "createdAt",
           "updatedAt"
+        ]
+      },
+      "WorkflowDraftChangeSpec": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "workflow-draft"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "projectId": {
+            "type": "string",
+            "nullable": true
+          },
+          "graph": {
+            "$ref": "#/components/schemas/WorkflowGraph"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/WorkflowTrigger"
+          }
+        },
+        "required": [
+          "kind",
+          "name",
+          "description",
+          "projectId",
+          "graph",
+          "trigger"
         ]
       },
       "WorkflowGraph": {

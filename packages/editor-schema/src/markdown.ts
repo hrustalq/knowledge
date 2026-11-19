@@ -592,21 +592,35 @@ export function slugifyHeading(text: string): string {
  * that was removed or renamed.
  */
 export function headingSections(md: string): Array<{ id: string; body: string }> {
-  const out: Array<{ id: string; body: string }> = [];
+  return sections(md).map((s) => ({ id: s.id, body: s.body.trim() }));
+}
+
+/**
+ * A body's h1–h3 as an "On this page" list — what the page rail shows before
+ * the reader has drawn its headings (#1284), so the server and the hydrating
+ * render already hold the outline's place.
+ */
+export function headingOutline(md: string): Array<{ id: string; text: string; level: number }> {
+  return sections(md).map(({ id, text, level }) => ({ id, text, level }));
+}
+
+function sections(md: string): Array<{ id: string; text: string; level: number; body: string }> {
+  const out: Array<{ id: string; text: string; level: number; body: string }> = [];
   const seen = new Map<string, number>();
   // ponytail: top-level headings only; one nested in a panel or <details> shifts no id here but does in the reader.
   for (const token of markdownTokens(md)) {
     if (token.type === 'heading' && (token as Tokens.Heading).depth <= 3) {
-      let id = slugifyHeading(inlineText((token as Tokens.Heading).tokens)) || 'section';
+      const text = inlineText((token as Tokens.Heading).tokens).trim();
+      let id = slugifyHeading(text) || 'section';
       const count = seen.get(id) ?? 0;
       seen.set(id, count + 1);
       if (count > 0) id = `${id}-${count}`;
-      out.push({ id, body: '' });
+      out.push({ id, text, level: (token as Tokens.Heading).depth, body: '' });
     } else if (out.length > 0) {
       out[out.length - 1]!.body += token.raw;
     }
   }
-  return out.map((s) => ({ id: s.id, body: s.body.trim() }));
+  return out;
 }
 
 /** A heading's text as the DOM's `textContent` reads it: marks dropped, entities decoded. */

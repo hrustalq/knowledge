@@ -808,7 +808,7 @@ describe('#816 one commit, effects after it', () => {
 
   it('rotate: the old keys stay live when the new one is not minted', async () => {
     const { prisma, committed } = fakePrisma({ 'apiKey.updateMany': { count: 2 }, 'apiKey.count': 0, 'apiKey.create': boom });
-    const svc = new ApiKeysService(prisma);
+    const svc = new ApiKeysService(prisma, { record: async () => {} } as never);
     await expect(svc.rotate({ mode: 'session', userId: U } as never)).rejects.toThrow('boom');
     expect(committed).toEqual([]);
   });
@@ -936,7 +936,7 @@ describe('#816 one commit, effects after it', () => {
         activityLog: { create: async () => rows.push('activityLog') },
       };
       const events = { publish: async () => rows.push('publish') };
-      return { rows, audit: new AuditService(prisma as never), activity: new ActivityService(prisma as never, events as never) };
+      return { rows, audit: new AuditService(prisma as never), activity: new ActivityService(prisma as never, events as never, new AuditService(prisma as never)) };
     };
     const tx = {} as never;
 

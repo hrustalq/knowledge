@@ -2192,6 +2192,60 @@
       "source"
     ]
   },
+  "AgentScheduleChangeSpec": {
+    "type": "object",
+    "properties": {
+      "kind": {
+        "type": "string",
+        "enum": [
+          "agent-schedule"
+        ]
+      },
+      "agentKey": {
+        "type": "string"
+      },
+      "scheduleKind": {
+        "$ref": "#/components/schemas/AgentScheduleKind"
+      },
+      "scheduleMinutes": {
+        "type": "number",
+        "nullable": true
+      },
+      "scheduleTime": {
+        "type": "string",
+        "nullable": true
+      },
+      "scheduleWeekdays": {
+        "anyOf": [
+          {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        ],
+        "nullable": true
+      },
+      "scheduleTimezone": {
+        "type": "string",
+        "nullable": true
+      },
+      "scheduleNote": {
+        "type": "string",
+        "nullable": true
+      }
+    },
+    "required": [
+      "kind",
+      "agentKey",
+      "scheduleKind",
+      "scheduleMinutes",
+      "scheduleTime",
+      "scheduleWeekdays",
+      "scheduleTimezone",
+      "scheduleNote"
+    ]
+  },
   "AgentScheduleKind": {
     "type": "string",
     "enum": [
@@ -2206,6 +2260,42 @@
       "interactive",
       "background",
       "workflow"
+    ]
+  },
+  "AgentTriggerChangeSpec": {
+    "type": "object",
+    "properties": {
+      "kind": {
+        "type": "string",
+        "enum": [
+          "agent-trigger"
+        ]
+      },
+      "agentKey": {
+        "type": "string"
+      },
+      "event": {
+        "$ref": "#/components/schemas/AgentTriggerEvent"
+      },
+      "projectId": {
+        "type": "string",
+        "nullable": true
+      },
+      "filter": {
+        "$ref": "#/components/schemas/AgentTriggerFilter"
+      },
+      "note": {
+        "type": "string",
+        "nullable": true
+      }
+    },
+    "required": [
+      "kind",
+      "agentKey",
+      "event",
+      "projectId",
+      "filter",
+      "note"
     ]
   },
   "AgentTriggerEvent": {
@@ -3532,7 +3622,8 @@
       "blueprint-derive",
       "blueprint-generate",
       "blueprint-interview",
-      "purpose-interview"
+      "purpose-interview",
+      "configurator"
     ]
   },
   "AiUsageResponse": {
@@ -9003,6 +9094,225 @@
       "to"
     ]
   },
+  "ConfigurationAppliedValue": {
+    "type": "object",
+    "properties": {
+      "value": {},
+      "source": {
+        "type": "string",
+        "enum": [
+          "project",
+          "workspace",
+          "default"
+        ]
+      },
+      "held": {
+        "type": "string",
+        "enum": [
+          "ceiling",
+          "agent-off",
+          null
+        ],
+        "nullable": true
+      }
+    },
+    "required": [
+      "value",
+      "source",
+      "held"
+    ]
+  },
+  "ConfigurationChange": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "spec": {
+        "$ref": "#/components/schemas/ConfigurationChangeSpec"
+      },
+      "reason": {
+        "type": "string"
+      },
+      "target": {
+        "type": "string"
+      },
+      "diff": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/ConfigurationDiffRow"
+        }
+      },
+      "state": {
+        "$ref": "#/components/schemas/ConfigurationChangeState"
+      },
+      "unavailable": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/ConfigurationUnavailableReason"
+          }
+        ],
+        "nullable": true
+      },
+      "requires": {
+        "type": "string",
+        "enum": [
+          "admin",
+          "editor",
+          "maintainer"
+        ]
+      },
+      "appliedAt": {
+        "type": "string",
+        "nullable": true
+      },
+      "appliedBy": {
+        "type": "string",
+        "nullable": true
+      },
+      "resultId": {
+        "type": "string",
+        "nullable": true
+      }
+    },
+    "required": [
+      "id",
+      "spec",
+      "reason",
+      "target",
+      "diff",
+      "state",
+      "unavailable",
+      "requires",
+      "appliedAt",
+      "appliedBy",
+      "resultId"
+    ]
+  },
+  "ConfigurationChangeSpec": {
+    "anyOf": [
+      {
+        "$ref": "#/components/schemas/AgentScheduleChangeSpec"
+      },
+      {
+        "$ref": "#/components/schemas/AgentTriggerChangeSpec"
+      },
+      {
+        "$ref": "#/components/schemas/ConnectorDriftCheckChangeSpec"
+      },
+      {
+        "$ref": "#/components/schemas/WorkflowDraftChangeSpec"
+      },
+      {
+        "$ref": "#/components/schemas/PageTemplateChangeSpec"
+      },
+      {
+        "$ref": "#/components/schemas/ProjectSettingChangeSpec"
+      },
+      {
+        "$ref": "#/components/schemas/MethodologyLinkChangeSpec"
+      },
+      {
+        "$ref": "#/components/schemas/CustomAgentChangeSpec"
+      }
+    ]
+  },
+  "ConfigurationChangeState": {
+    "type": "string",
+    "enum": [
+      "pending",
+      "applied",
+      "dismissed",
+      "unavailable"
+    ]
+  },
+  "ConfigurationDiffRow": {
+    "type": "object",
+    "properties": {
+      "field": {
+        "type": "string"
+      },
+      "before": {},
+      "after": {},
+      "applies": {
+        "type": "object",
+        "properties": {
+          "before": {
+            "$ref": "#/components/schemas/ConfigurationAppliedValue"
+          },
+          "after": {
+            "$ref": "#/components/schemas/ConfigurationAppliedValue"
+          }
+        },
+        "required": [
+          "before",
+          "after"
+        ]
+      }
+    },
+    "required": [
+      "field",
+      "before",
+      "after"
+    ]
+  },
+  "ConfigurationProposal": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "workspaceId": {
+        "type": "string"
+      },
+      "goal": {
+        "type": "string"
+      },
+      "summary": {
+        "type": "string"
+      },
+      "changes": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/ConfigurationChange"
+        }
+      },
+      "createdBy": {
+        "type": "string"
+      },
+      "createdAt": {
+        "type": "string"
+      },
+      "updatedAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id",
+      "workspaceId",
+      "goal",
+      "summary",
+      "changes",
+      "createdBy",
+      "createdAt",
+      "updatedAt"
+    ]
+  },
+  "ConfigurationUnavailableReason": {
+    "type": "string",
+    "enum": [
+      "already-configured",
+      "agent-unsupported",
+      "not-found",
+      "connector-unsupported",
+      "schedules-off",
+      "triggers-off",
+      "section-off",
+      "name-taken",
+      "invalid",
+      "stale"
+    ]
+  },
   "ConflictCodeRef": {
     "type": "object",
     "properties": {
@@ -9496,6 +9806,33 @@
       "pull",
       "push",
       "both"
+    ]
+  },
+  "ConnectorDriftCheckChangeSpec": {
+    "type": "object",
+    "properties": {
+      "kind": {
+        "type": "string",
+        "enum": [
+          "connector-drift-check"
+        ]
+      },
+      "connectorId": {
+        "type": "string"
+      },
+      "mode": {
+        "type": "string",
+        "enum": [
+          "off",
+          "report",
+          "propose"
+        ]
+      }
+    },
+    "required": [
+      "kind",
+      "connectorId",
+      "mode"
     ]
   },
   "ConnectorGithubAccessResponse": {
@@ -11079,6 +11416,28 @@
     },
     "required": [
       "credentials"
+    ]
+  },
+  "CustomAgentChangeSpec": {
+    "type": "object",
+    "properties": {
+      "kind": {
+        "type": "string",
+        "enum": [
+          "custom-agent"
+        ]
+      },
+      "blueprintKey": {
+        "type": "string"
+      },
+      "agentKey": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "kind",
+      "blueprintKey",
+      "agentKey"
     ]
   },
   "DecisionCapturePayload": {
@@ -17015,6 +17374,20 @@
       "communities"
     ]
   },
+  "ListConfigurationProposalsResponse": {
+    "type": "object",
+    "properties": {
+      "proposals": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/ConfigurationProposal"
+        }
+      }
+    },
+    "required": [
+      "proposals"
+    ]
+  },
   "ListConflictsResponse": {
     "type": "object",
     "properties": {
@@ -19922,6 +20295,32 @@
       "squash"
     ]
   },
+  "MethodologyLinkChangeSpec": {
+    "type": "object",
+    "properties": {
+      "kind": {
+        "type": "string",
+        "enum": [
+          "methodology-link"
+        ]
+      },
+      "projectId": {
+        "type": "string"
+      },
+      "blueprintKey": {
+        "type": "string"
+      },
+      "locale": {
+        "$ref": "#/components/schemas/Locale"
+      }
+    },
+    "required": [
+      "kind",
+      "projectId",
+      "blueprintKey",
+      "locale"
+    ]
+  },
   "MethodologyPreviewResponse": {
     "type": "object",
     "properties": {
@@ -20428,6 +20827,38 @@
     "required": [
       "key",
       "name"
+    ]
+  },
+  "PageTemplateChangeSpec": {
+    "type": "object",
+    "properties": {
+      "kind": {
+        "type": "string",
+        "enum": [
+          "page-template"
+        ]
+      },
+      "name": {
+        "type": "string"
+      },
+      "description": {
+        "type": "string",
+        "nullable": true
+      },
+      "projectId": {
+        "type": "string",
+        "nullable": true
+      },
+      "source": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "kind",
+      "name",
+      "description",
+      "projectId",
+      "source"
     ]
   },
   "PlaudAuthorizeResponse": {
@@ -21346,6 +21777,196 @@
       "merge-request:override-checks"
     ]
   },
+  "ProjectSettingChangeSpec": {
+    "anyOf": [
+      {
+        "type": "object",
+        "properties": {
+          "setting": {
+            "type": "string",
+            "enum": [
+              "verification"
+            ]
+          },
+          "values": {
+            "type": "object",
+            "properties": {
+              "reviewIntervalDays": {
+                "type": "number",
+                "nullable": true
+              },
+              "remindBeforeDays": {
+                "type": "number",
+                "nullable": true
+              },
+              "inactiveAfterDays": {
+                "type": "number",
+                "nullable": true
+              },
+              "emptyMaxChars": {
+                "type": "number",
+                "nullable": true
+              }
+            }
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "project-setting"
+            ]
+          },
+          "projectId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "projectId",
+          "setting",
+          "values"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "setting": {
+            "type": "string",
+            "enum": [
+              "workItems"
+            ]
+          },
+          "values": {
+            "type": "object",
+            "properties": {
+              "issues": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/WorkItemIssueRule"
+                  }
+                ],
+                "nullable": true
+              },
+              "conflicts": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/WorkItemConflictRule"
+                  }
+                ],
+                "nullable": true
+              },
+              "verification": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/WorkItemVerificationRule"
+                  }
+                ],
+                "nullable": true
+              }
+            }
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "project-setting"
+            ]
+          },
+          "projectId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "projectId",
+          "setting",
+          "values"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "setting": {
+            "type": "string",
+            "enum": [
+              "breakingChanges"
+            ]
+          },
+          "values": {
+            "type": "object",
+            "properties": {
+              "policy": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ApiBreakingChangePolicy"
+                  }
+                ],
+                "nullable": true
+              }
+            },
+            "required": [
+              "policy"
+            ]
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "project-setting"
+            ]
+          },
+          "projectId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "projectId",
+          "setting",
+          "values"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "setting": {
+            "type": "string",
+            "enum": [
+              "lintPolicy"
+            ]
+          },
+          "values": {
+            "type": "object",
+            "properties": {
+              "policy": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/LintPolicy"
+                  }
+                ],
+                "nullable": true
+              }
+            },
+            "required": [
+              "policy"
+            ]
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "project-setting"
+            ]
+          },
+          "projectId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "projectId",
+          "setting",
+          "values"
+        ]
+      }
+    ]
+  },
   "ProjectSettingKey": {
     "type": "string",
     "enum": [
@@ -21594,6 +22215,26 @@
       "documentTitle",
       "branch",
       "title"
+    ]
+  },
+  "ProposeConfigurationResponse": {
+    "type": "object",
+    "properties": {
+      "proposal": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/ConfigurationProposal"
+          }
+        ],
+        "nullable": true
+      },
+      "reply": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "proposal",
+      "reply"
     ]
   },
   "ProposeRelationsResponse": {
@@ -27870,6 +28511,42 @@
       "trigger",
       "createdAt",
       "updatedAt"
+    ]
+  },
+  "WorkflowDraftChangeSpec": {
+    "type": "object",
+    "properties": {
+      "kind": {
+        "type": "string",
+        "enum": [
+          "workflow-draft"
+        ]
+      },
+      "name": {
+        "type": "string"
+      },
+      "description": {
+        "type": "string",
+        "nullable": true
+      },
+      "projectId": {
+        "type": "string",
+        "nullable": true
+      },
+      "graph": {
+        "$ref": "#/components/schemas/WorkflowGraph"
+      },
+      "trigger": {
+        "$ref": "#/components/schemas/WorkflowTrigger"
+      }
+    },
+    "required": [
+      "kind",
+      "name",
+      "description",
+      "projectId",
+      "graph",
+      "trigger"
     ]
   },
   "WorkflowGraph": {

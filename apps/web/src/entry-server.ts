@@ -31,6 +31,7 @@ interface SsrRequestContext {
   measure: string | null
   pageRail: string | null
   docSort: string | null
+  docsView: string | null
   treeOpen: string | null
   locale: Locale | null
   /** The server's trace id for this page request, so API calls made during the render join it. */
@@ -158,6 +159,7 @@ export async function render(url: string, ctx: Partial<SsrRequestContext> = {}) 
     measure: ctx.measure ?? null,
     pageRail: ctx.pageRail ?? null,
     docSort: ctx.docSort ?? null,
+    docsView: ctx.docsView ?? null,
     treeOpen: ctx.treeOpen ?? null,
     locale: ctx.locale ?? null,
     traceId: ctx.traceId ?? null,

@@ -7,11 +7,13 @@ import { AdminErrorsController } from './admin-errors.controller.js';
 import { AdminErrorsService } from './admin-errors.service.js';
 import { AdminHealthController } from './admin-health.controller.js';
 import { AdminHealthService } from './admin-health.service.js';
+import { AuditRetentionSweeper } from './audit-retention.sweeper.js';
 
 /** The platform admin console's routes (#1235): API-only, every one @PlatformAdmin(). */
 @Module({
   imports: [RedisModule, StorageModule, GraphModule],
   controllers: [AdminConfigController, AdminHealthController, AdminErrorsController],
-  providers: [AdminHealthService, AdminErrorsService],
+  // AuditRetentionSweeper (#1251): here because this module is API-only and loaded once, never by MCP.
+  providers: [AdminHealthService, AdminErrorsService, AuditRetentionSweeper],
 })
 export class AdminModule {}

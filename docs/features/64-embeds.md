@@ -257,7 +257,7 @@ refused.
 
 | Surface | Shows |
 | --- | --- |
-| Reader (read-only `RichEditor`) and `MarkdownView` | The snapshot, the captions, and "Open live" for members only. "Open live" mounts Figma's embed iframe inside the node view, never through sanitized HTML. |
+| Reader (`RichReader`) and `MarkdownView` | The snapshot, the captions, and "Open live" for members only. "Open live" mounts Figma's embed iframe inside the node view, never through sanitized HTML. |
 | Editor | Same, plus caption editing, reorder, layout, remove, Update. |
 | Share links ([43](43-share-links.md)) and published sites ([44](44-docs-portal.md)) | Snapshots only when **Publishing → Show embedded designs publicly** (`publishing_settings.allow_public_embeds`) is on, default off. The page's markup is rewritten **on the server** (`EmbedsService.publicMarkdown` over `rewriteEmbedGroups`), so no Figma link reaches the reader's browser at all: off, each item is its caption; on, a ready allowlisted item carries an opaque `data-kn-item` (its `revision_embeds` id), which `…/public/shares/:token/embeds/:itemId` or `…/public/sites/:siteId/versions/:versionId/embeds/:itemId` resolve after the link's scope or the site's pinned revision and audience. Never the live iframe. |
 | A published site's `.md` and `llms-full.txt` | Captions only, whatever the switch. |

@@ -11,24 +11,27 @@
  * So the shape is drawn, the chain is read out in sentences beneath it, and the
  * facts that decide whether to open the editor at all — is it available to run,
  * does it start on its own, what does it publish, does it still compile — are
- * on the page. `Edit` is one button away, and it is the only thing that loads
- * Vue Flow.
+ * on the page. `Edit` is one button away.
  *
- * The reading is not decoration: `WorkflowMap` is a canvas, so it says nothing
- * to a screen reader. `describeChain` is the same fact in text, and the wizard's
- * review step reads from it too — the promise made while designing is the
- * promise shown afterwards.
+ * The canvas is the builder's own, read-only (#1246), so the arrangement an
+ * admin left is the one shown here. The reading is not decoration:
+ * `describeChain` is the chain in order, in sentences, and the wizard's review
+ * step reads from it too — the promise made while designing is the promise
+ * shown afterwards.
+ *
+ * Export is offered to every member: the definition is readable by all of
+ * them, and a file is a copy of what they can already see.
  */
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
-import { CircleAlert, MoreHorizontal, Pencil, Play, Plus, Trash2, Workflow, Zap } from 'lucide-vue-next'
+import { CircleAlert, Download, MoreHorizontal, Pencil, Play, Plus, Trash2, Workflow, Zap } from 'lucide-vue-next'
 import type { WorkflowDefinitionInfo, WorkflowValidationIssue } from '@knowledge/contracts'
 import { validateGraph } from '@knowledge/workflow'
 import { apiQueryOptions, useApiMutation } from '@/shared/api/queries'
-import { relativeTime } from '@/shared/api/api'
+import { relativeTime, saveFile } from '@/shared/api/api'
 import { labelFor } from '@/shared/i18n/labels'
 import { usePermission } from '@/stores/permissions'
 import { useWorkflowsStore } from '@/entities/workflow'
@@ -52,8 +55,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@knowledge/ui/alert-dialog'
-import WorkflowMap from '@/modules/workflows/components/WorkflowMap.vue'
+import WorkflowCanvas from '@/modules/workflows/components/WorkflowCanvas.vue'
 import { describeChain } from '@/entities/workflow'
+import { graphFileName, graphToJson } from '@/modules/workflows/model/workflow-json'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -82,9 +86,14 @@ const issues = computed<WorkflowValidationIssue[]>(() =>
 const errors = computed(() => issues.value.filter((i) => i.severity === 'error'))
 const reading = computed(() => (workflow.value ? describeChain(workflow.value.graph, t) : []))
 
-/** Selecting a step in the map scrolls its sentence into view — the map has no
- *  words, and the reading is where they are. */
+/** Selecting a step on the canvas lights its sentence, and hovering a sentence
+ *  lights its step — the two are one fact in two forms. */
 const focused = ref<string | null>(null)
+
+function exportGraph() {
+  if (!workflow.value) return
+  saveFile(new Blob([graphToJson(workflow.value.graph)], { type: 'application/json' }), graphFileName(workflow.value.name))
+}
 
 const deleteWorkflow = useApiMutation('delete', '/v1/workflows/{id}', {
   invalidates: () => [['/v1/workflows']],
@@ -154,6 +163,16 @@ async function remove() {
         </div>
 
         <div class="flex shrink-0 items-center gap-1.5">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            class="text-muted-foreground"
+            :aria-label="t('workflow.file.export')"
+            :title="t('workflow.file.export')"
+            @click="exportGraph"
+          >
+            <Download class="size-3.5" />
+          </Button>
           <RouterLink v-if="workflow.enabled" to="/workflows">
             <Button variant="ghost" size="sm" class="text-muted-foreground">
               <Play class="mr-1.5 size-3.5" />
@@ -207,14 +226,14 @@ async function remove() {
         </span>
       </p>
 
-      <!-- The shape, at a size worth reading. Interactive, but only as a query:
-           hovering a step lights what it feeds, and nothing here can be moved. -->
-      <div class="bg-muted/20 h-72 overflow-hidden rounded-xl border">
-        <WorkflowMap
+      <!-- The shape, at a size worth reading: pan and zoom, select a step to
+           find its sentence, and nothing here can be moved. -->
+      <div class="flex h-72 overflow-hidden rounded-xl border lg:h-80">
+        <WorkflowCanvas
           :graph="workflow.graph"
+          :issues="issues"
           :selected-id="focused"
-          :invalid="errors.map((i) => i.stepId).filter((s): s is string => !!s)"
-          @select="(stepId) => (focused = stepId)"
+          @update:selected-id="(stepId) => (focused = stepId)"
         />
       </div>
 

@@ -13,11 +13,11 @@
  *
  * What made the viewport necessary was the column count: a palette rail, the
  * canvas, and an inspector rail, which left nothing for the canvas once a
- * settings nav and a roster stood to their left. Both side rails were already
- * built to collapse — the palette into a strip, the inspector into a drawer —
- * for narrow screens. Here they simply always are: the palette is the strip
- * above the canvas and the inspector the drawer behind Configure, so the canvas
- * keeps the whole pane rather than a third of it.
+ * settings nav and a roster stood to their left. Since #1246 neither rail
+ * exists: the palette is a toolbar floating on the canvas beside undo, redo,
+ * export and import; a step's choices are a popover on the step itself; and the
+ * drawer is left with the long fields (a step's prompt, or the workflow's
+ * description and triggers behind Configure). The canvas keeps the whole pane.
  *
  * Reading a chain is `/settings/workflows/:id`, a different page; this route is
  * only reached by pressing Edit. That split is what lets the canvas keep a
@@ -40,13 +40,16 @@ import { toast } from 'vue-sonner'
 import {
   Check,
   CircleAlert,
+  Download,
   MoreHorizontal,
   PanelRight,
   Play,
+  Redo2,
   Sparkles,
   Trash2,
   TriangleAlert,
   Undo2,
+  Upload,
   X,
 } from 'lucide-vue-next'
 import type {
@@ -59,6 +62,7 @@ import type {
 } from '@knowledge/contracts'
 import { validateGraph } from '@knowledge/workflow'
 import { api } from '@/shared/api/client'
+import { saveFile } from '@/shared/api/api'
 import { apiQueryOptions, useApiMutation } from '@/shared/api/queries'
 import { usePermission } from '@/stores/permissions'
 import { useWorkflowsStore } from '@/entities/workflow'
@@ -85,12 +89,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@knowledge/ui/alert-dialog'
-import WorkflowGraphEditor from '@/modules/workflows/components/WorkflowGraphEditor.vue'
+import WorkflowCanvas from '@/modules/workflows/components/WorkflowCanvas.vue'
 import WorkflowStepForm from '@/modules/workflows/components/WorkflowStepForm.vue'
+import WorkflowStepQuickEdit from '@/modules/workflows/components/WorkflowStepQuickEdit.vue'
 import WorkflowStepPalette from '@/modules/workflows/components/WorkflowStepPalette.vue'
 import WorkflowSettingsForm from '@/modules/workflows/components/WorkflowSettingsForm.vue'
 import WorkflowArchitectChat from '@/modules/workflows/components/WorkflowArchitectChat.vue'
 import type { WizardTurn } from '@/modules/workflows/model/wizard-machine'
+import { graphHistory } from '@/modules/workflows/model/graph-history'
+import { graphFileName, graphToJson, parseGraphJson } from '@/modules/workflows/model/workflow-json'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -133,8 +140,23 @@ const draftOf = (w: WorkflowDefinitionInfo): Draft => ({
 
 const draft = ref<Draft | null>(null)
 const selectedStepId = ref<string | null>(null)
-const inspectorOpen = ref(false)
-const canvas = ref<InstanceType<typeof WorkflowGraphEditor> | null>(null)
+/** What the drawer holds: a step's long fields, or the workflow's settings. */
+const drawer = ref<'step' | 'settings' | null>(null)
+const canvas = ref<InstanceType<typeof WorkflowCanvas> | null>(null)
+
+/**
+ * Every change to the graph goes through here, so undo covers all of them —
+ * the canvas, the popover, the drawer, an import and the architect alike.
+ * The name, description and triggers are form fields with their own native
+ * undo, and stay out of it.
+ */
+const history = graphHistory(
+  () => draft.value?.graph,
+  (graph) => {
+    if (draft.value) draft.value.graph = graph
+  },
+)
+const setGraph = (graph: WorkflowGraph, key?: string) => history.apply(graph, key)
 
 watch(
   workflow,
@@ -162,27 +184,60 @@ const errors = computed(() => issues.value.filter((i) => i.severity === 'error')
 const warnings = computed(() => issues.value.filter((i) => i.severity === 'warning'))
 const step = computed(() => draft.value?.graph.steps.find((s) => s.id === selectedStepId.value) ?? null)
 
-function updateStep(next: WorkflowStep) {
+function updateStep(next: WorkflowStep, key?: string) {
   if (!draft.value) return
-  draft.value.graph = {
-    ...draft.value.graph,
-    steps: draft.value.graph.steps.map((s) => (s.id === next.id ? next : s)),
-  }
+  setGraph(
+    { ...draft.value.graph, steps: draft.value.graph.steps.map((s) => (s.id === next.id ? next : s)) },
+    key,
+  )
 }
 
 function removeStep(stepId: string) {
   if (!draft.value) return
   const layout = { ...(draft.value.graph.layout ?? {}) }
   delete layout[stepId]
-  draft.value.graph = {
+  setGraph({
     // Edges into a deleted step go with it, or the graph keeps a dangling
     // reference the compiler would reject on save.
     steps: draft.value.graph.steps
       .filter((s) => s.id !== stepId)
       .map((s) => ({ ...s, next: s.next.filter((n) => n !== stepId) })),
     layout,
-  }
+  })
   selectedStepId.value = null
+  if (drawer.value === 'step') drawer.value = null
+}
+
+/* ------------------------------------------------------------ JSON file */
+
+function exportGraph() {
+  if (!draft.value) return
+  saveFile(new Blob([graphToJson(draft.value.graph)], { type: 'application/json' }), graphFileName(draft.value.name))
+}
+
+const fileInput = ref<HTMLInputElement | null>(null)
+
+/**
+ * An import replaces the graph as one undoable, unsaved edit — the same
+ * footing as an architect proposal. A file that is not a graph is refused; one
+ * that is a graph with problems lands, and the problems list says what to fix.
+ */
+async function importGraph(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file || !draft.value) return
+  const parsed = parseGraphJson(await file.text())
+  if (!parsed.ok) {
+    toast.error(t(parsed.reason === 'json' ? 'workflow.file.notJson' : 'workflow.file.notGraph'))
+    return
+  }
+  setGraph(parsed.graph)
+  selectedStepId.value = null
+  canvas.value?.refit()
+  const problems = parsed.issues.filter((i) => i.severity === 'error').length
+  if (problems) toast.warning(t('workflow.file.importedWithProblems', { n: problems }, problems))
+  else toast.success(t('workflow.file.imported'))
 }
 
 /* --------------------------------------------------------------- mutations */
@@ -225,6 +280,9 @@ function discard() {
   if (!workflow.value) return
   draft.value = draftOf(workflow.value)
   selectedStepId.value = null
+  // Discard is the decision to drop every edit; undoing past it would bring
+  // back edits the stack no longer has a starting point for.
+  history.reset()
 }
 
 const confirmingDelete = ref(false)
@@ -270,7 +328,15 @@ function onKeydown(event: KeyboardEvent) {
     void save()
     return
   }
+  // A text field keeps its own undo; outside one, the keys undo the graph.
   if (typing || !canManage.value) return
+  const key = event.key.toLowerCase()
+  if ((event.metaKey || event.ctrlKey) && (key === 'z' || key === 'y')) {
+    event.preventDefault()
+    if (key === 'y' || event.shiftKey) history.redo()
+    else history.undo()
+    return
+  }
   if ((event.key === 'Backspace' || event.key === 'Delete') && selectedStepId.value) {
     event.preventDefault()
     removeStep(selectedStepId.value)
@@ -296,20 +362,20 @@ function addStep(kind: WorkflowStepKind) {
   canvas.value?.addStep(kind)
 }
 
-// The inspector is a drawer at every width now, so selecting a step has to open
-// it — otherwise the step is selected and its settings are nowhere. Clicking
-// the canvas clears the selection, which is what closes it again.
+// A step's drawer follows the selection: selecting another step re-points it,
+// clearing the selection closes it.
 watch(selectedStepId, (value) => {
-  if (value) inspectorOpen.value = true
+  if (!value && drawer.value === 'step') drawer.value = null
 })
 
-// Leaving a workflow drops its selection; the drawer must not survive into the
-// next one, where it would open onto a step that no longer exists.
+// Leaving a workflow drops its selection, its drawer and its undo stack — none
+// of them mean anything against the next one.
 watch(id, () => {
   selectedStepId.value = null
-  inspectorOpen.value = false
+  drawer.value = null
   chatTurns.value = []
   chatOpen.value = false
+  history.reset()
 })
 
 /* ---------------------------------------------------------------- architect */
@@ -346,7 +412,8 @@ const wideEnoughForColumn = useMediaQuery('(min-width: 1024px)')
  */
 function applyProposal(proposal: { graph: WorkflowGraph; name: string | null; description: string | null }) {
   if (!draft.value) return
-  draft.value.graph = detach(proposal.graph)
+  setGraph(detach(proposal.graph))
+  canvas.value?.refit()
   if (proposal.description && !draft.value.description.trim()) draft.value.description = proposal.description
   selectedStepId.value = null
   toast.success(t('workflow.architectApplied'))
@@ -425,7 +492,7 @@ function applyProposal(proposal: { graph: WorkflowGraph; name: string | null; de
           <!-- Configure carries a label rather than an icon alone: the drawer
                behind it is the only way to the description and the triggers,
                and an unlabelled panel glyph does not say that. -->
-          <Button variant="outline" size="sm" class="gap-1.5" @click="inspectorOpen = true">
+          <Button variant="outline" size="sm" class="gap-1.5" @click="drawer = 'settings'">
             <PanelRight class="size-3.5" />
             <span class="sr-only sm:not-sr-only">{{ t('workflow.configure') }}</span>
           </Button>
@@ -480,22 +547,90 @@ function applyProposal(proposal: { graph: WorkflowGraph; name: string | null; de
 
     <div v-else class="flex min-h-0 min-w-0 flex-1">
       <div class="flex min-h-0 min-w-0 flex-1 flex-col">
-      <!-- The palette, as a strip. The whole vocabulary is still visible at
-           once — four kinds is a list you can learn, not a menu you have to
-           search — and a row of them costs the canvas no width. Drag onto the
-           canvas or click to add, exactly as in the rail it replaces. -->
-      <div class="shrink-0 border-b px-2 py-1.5">
-        <WorkflowStepPalette orientation="strip" :can-manage="canManage" @add="addStep" />
-      </div>
-
-      <WorkflowGraphEditor
+      <WorkflowCanvas
         ref="canvas"
         v-model:selected-id="selectedStepId"
         :graph="draft.graph"
         :issues="issues"
-        :can-manage="canManage"
-        @update:graph="(g) => (draft!.graph = g)"
-      />
+        :editable="canManage"
+        @update:graph="setGraph"
+      >
+        <template v-if="canManage" #step="{ step: selected }">
+          <WorkflowStepQuickEdit
+            :step="selected"
+            :graph="draft.graph"
+            :issues="issues"
+            @update="updateStep"
+            @remove="removeStep"
+            @more="drawer = 'step'"
+          />
+        </template>
+
+        <!-- The toolbar, on the canvas it acts on: what can be added, and the
+             history of what was. The vocabulary stays visible at once — five
+             kinds is a list you learn, not a menu you search. -->
+        <div
+          v-if="canManage"
+          class="pointer-events-none absolute inset-x-3 top-3 z-10 flex flex-wrap items-start gap-2"
+        >
+          <div class="kn-scroll-strip bg-card/90 pointer-events-auto max-w-full overflow-x-auto rounded-lg border p-0.5 shadow-xs backdrop-blur-md">
+            <WorkflowStepPalette :can-manage="canManage" @add="addStep" />
+          </div>
+          <div class="bg-card/90 pointer-events-auto ml-auto flex rounded-lg border p-0.5 shadow-xs backdrop-blur-md">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              class="size-7"
+              :disabled="!history.canUndo.value"
+              :aria-label="t('workflow.history.undo')"
+              :title="t('workflow.history.undoHint')"
+              @click="history.undo()"
+            >
+              <Undo2 class="size-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              class="size-7"
+              :disabled="!history.canRedo.value"
+              :aria-label="t('workflow.history.redo')"
+              :title="t('workflow.history.redoHint')"
+              @click="history.redo()"
+            >
+              <Redo2 class="size-3.5" />
+            </Button>
+            <span class="bg-border mx-0.5 my-1 w-px" aria-hidden="true" />
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              class="size-7"
+              :aria-label="t('workflow.file.export')"
+              :title="t('workflow.file.export')"
+              @click="exportGraph"
+            >
+              <Download class="size-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              class="size-7"
+              :aria-label="t('workflow.file.import')"
+              :title="t('workflow.file.import')"
+              @click="fileInput?.click()"
+            >
+              <Upload class="size-3.5" />
+            </Button>
+            <input
+              ref="fileInput"
+              type="file"
+              accept="application/json,.json"
+              class="hidden"
+              tabindex="-1"
+              @change="importGraph"
+            />
+          </div>
+        </div>
+      </WorkflowCanvas>
 
       <!-- Problems, along the bottom where a builder puts them. Each row is a
            shortcut into the step it is about, so a message is never a hunt. -->
@@ -577,22 +712,20 @@ function applyProposal(proposal: { graph: WorkflowGraph; name: string | null; de
       </SheetContent>
     </Sheet>
 
-    <!-- The inspector: the selected step, or the workflow itself. A drawer at
-         every width — the pane it would otherwise take is the canvas. -->
-    <Sheet v-model:open="inspectorOpen">
+    <!-- The drawer: the long fields — a step's prompt and template, or the
+         workflow's description and triggers. Everything shorter is edited on
+         the canvas. -->
+    <Sheet :open="drawer !== null" @update:open="(open: boolean) => !open && (drawer = null)">
       <SheetContent side="right" class="w-full max-w-sm overflow-y-auto p-0">
         <SheetHeader class="sr-only">
-          <SheetTitle>{{ step ? t('workflow.builder.openInspector') : t('workflow.configure') }}</SheetTitle>
+          <SheetTitle>{{ drawer === 'step' ? t('workflow.builder.openInspector') : t('workflow.configure') }}</SheetTitle>
         </SheetHeader>
         <WorkflowStepForm
-          v-if="draft && step"
+          v-if="draft && step && drawer === 'step'"
           :step="step"
-          :graph="draft.graph"
           :issues="issues"
           :can-manage="canManage"
           @update="updateStep"
-          @remove="removeStep"
-          @select="(sid) => (selectedStepId = sid)"
         />
         <WorkflowSettingsForm
           v-else-if="draft"

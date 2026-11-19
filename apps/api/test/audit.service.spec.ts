@@ -4,7 +4,9 @@ import { describe, expect, it, vi } from 'vitest';
 import 'reflect-metadata';
 import { UnauthorizedException } from '@nestjs/common';
 import { AUDIT_ACTIONS } from '@knowledge/contracts';
-import { AuditService } from '../src/auth/audit.service.js';
+import { AuditService, redactParams } from '../src/auth/audit.service.js';
+import { AuditRetentionSweeper } from '../src/admin/audit-retention.sweeper.js';
+import { ActivityService } from '../src/activity/activity.service.js';
 import { AuthFlowService } from '../src/auth/auth-flow.service.js';
 import { hashPassword } from '../src/auth/password.js';
 import { noAuthPolicy } from './auth-policy-fakes.js';
@@ -74,6 +76,71 @@ describe('AuditService', () => {
     const args = prisma.auditLog.findMany.mock.calls[0][0] as never as Record<string, unknown>;
     expect(args.where).toEqual({});
     expect(page.nextCursor).toBeNull();
+  });
+});
+
+describe('audit filters, export, redaction and retention (#1251)', () => {
+  it('filters by actor and an inclusive date range, and the export reads the same set', async () => {
+    const prisma = fakePrisma([row('a')]);
+    const audit = new AuditService(prisma as never);
+    const from = new Date('2026-11-01T00:00:00Z');
+    const to = new Date('2026-11-02T23:59:59.999Z');
+    await audit.list('w1', { actor: 'u1', from, to, ok: false });
+    await audit.exportRows('w1', { actor: 'u1', from, to, ok: false });
+    const [listed, exported] = prisma.auditLog.findMany.mock.calls.map((c) => (c as never as [{ where: unknown }])[0].where);
+    expect(listed).toEqual({ workspaceId: 'w1', actor: 'u1', ok: false, createdAt: { gte: from, lte: to } });
+    expect(exported).toEqual(listed);
+  });
+
+  it('a category is an action list, and an action outside it matches nothing', async () => {
+    const prisma = fakePrisma();
+    const audit = new AuditService(prisma as never);
+    await audit.listPlatform({ category: 'people' });
+    await audit.listPlatform({ category: 'people', action: 'auth.login' });
+    const [people, mismatch] = prisma.auditLog.findMany.mock.calls.map((c) => (c as never as [{ where: { action: unknown } }])[0].where.action);
+    expect((people as { in: string[] }).in).toEqual(expect.arrayContaining(['member.updated', 'user.created', 'api-key.revoked']));
+    expect((people as { in: string[] }).in).not.toContain('auth.login');
+    expect(mismatch).toEqual({ in: [] });
+  });
+
+  it('never stores a secret, by key or by shape, and keeps flags', async () => {
+    expect(
+      redactParams({
+        name: 'GitHub',
+        webhookSecret: 'hunter2',
+        nested: { apiKey: 'abc', note: 'pasted sk-ant-0123456789abcdefghijklmn' },
+        hasToken: true,
+        fields: ['credential', 'name'],
+      }),
+    ).toEqual({
+      name: 'GitHub',
+      webhookSecret: '[redacted]',
+      nested: { apiKey: '[redacted]', note: '[redacted]' },
+      hasToken: true,
+      fields: ['credential', 'name'],
+    });
+  });
+
+  it('with AUDIT_RETENTION_DAYS unset (0), the sweeper deletes nothing', async () => {
+    const prisma = { $executeRaw: vi.fn(async () => 0) };
+    const sweeper = new AuditRetentionSweeper(prisma as never, { get: () => 0 } as never);
+    sweeper.onModuleInit();
+    await sweeper.sweep();
+    sweeper.onModuleDestroy();
+    expect(prisma.$executeRaw).not.toHaveBeenCalled();
+  });
+
+  it('copies an audited feed row into the trail, and only those', async () => {
+    const prisma = { activityLog: { create: vi.fn(async () => ({})) } };
+    const audit = { record: vi.fn(async () => undefined) };
+    const activity = new ActivityService(prisma as never, { publish: async () => undefined } as never, audit as never);
+    await activity.record({ workspaceId: 'w1', actor: 'u1', action: 'connector.updated', projectId: 'p1', subjectId: 'c1', metadata: { title: 'Repo', fields: ['name'] } });
+    await activity.record({ workspaceId: 'w1', actor: 'u1', action: 'document.updated', projectId: 'p1', documentId: 'd1' });
+    expect(audit.record).toHaveBeenCalledTimes(1);
+    expect(audit.record).toHaveBeenCalledWith({
+      workspaceId: 'w1', actor: 'u1', action: 'connector.updated', target: 'c1', ok: true,
+      params: { title: 'Repo', fields: ['name'], projectId: 'p1' },
+    });
   });
 });
 

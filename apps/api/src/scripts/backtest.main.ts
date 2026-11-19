@@ -305,6 +305,12 @@ function report(): void {
   const searchVector: number[] = [];
   const searchEmbed: number[] = [];
   const searchJoin: number[] = [];
+  const searchFuse: number[] = [];
+  const searchCommunity: number[] = [];
+  const searchRerank: number[] = [];
+  const searchResults: number[] = [];
+  const searchPlacement: number[] = [];
+  const searchAnalytics: number[] = [];
   const searchFulltext: number[] = [];
   const emptySearches: number[] = [];
   const aiCalls: number[] = [];
@@ -348,6 +354,12 @@ function report(): void {
           if (typeof e.vectorMs === 'number') searchVector.push(e.vectorMs);
           if (typeof e.embedMs === 'number') searchEmbed.push(e.embedMs);
           if (typeof e.joinMs === 'number') searchJoin.push(e.joinMs);
+          if (typeof e.fuseMs === 'number') searchFuse.push(e.fuseMs);
+          if (typeof e.communityMs === 'number') searchCommunity.push(e.communityMs);
+          if (typeof e.rerankMs === 'number') searchRerank.push(e.rerankMs);
+          if (typeof e.resultsMs === 'number') searchResults.push(e.resultsMs);
+          if (typeof e.placementMs === 'number') searchPlacement.push(e.placementMs);
+          if (typeof e.analyticsMs === 'number') searchAnalytics.push(e.analyticsMs);
           if (typeof e.fulltextMs === 'number') searchFulltext.push(e.fulltextMs);
           if (Array.isArray(e.results) && e.results.length === 0) emptySearches.push(ms);
           break;
@@ -393,6 +405,12 @@ function report(): void {
     if (searchEmbed.length) console.log(summarize('    query embedding', searchEmbed));
     if (searchFulltext.length) console.log(summarize('  fulltext leg', searchFulltext));
     if (searchJoin.length) console.log(summarize('  PG join', searchJoin));
+    if (searchFuse.length) console.log(summarize('  fusion', searchFuse));
+    if (searchCommunity.length) console.log(summarize('  communities (overlaps join)', searchCommunity));
+    if (searchRerank.length) console.log(summarize('  levels + re-rank', searchRerank));
+    if (searchResults.length) console.log(summarize('  grouping + snippets', searchResults));
+    if (searchPlacement.length) console.log(summarize('  placement + validity', searchPlacement));
+    if (searchAnalytics.length) console.log(summarize('  analytics enqueue', searchAnalytics));
     // An empty result set is a retrieval failure that returns 200, which is why
     // it needs counting separately — no error rate will ever show it.
     console.log(`  returned nothing     ${emptySearches.length}/${searchTotal.length}`);

@@ -188,8 +188,98 @@ export const AUDIT_ACTIONS = [
   'user.disabled',
   'user.enabled',
   'user.password_set',
+  /**
+   * Workspace administration (#1251), written by the service that does it. `member.updated` carries a
+   * `{ from, to }` pair per field that moved (role, trustedOperator, source); a no-op writes nothing.
+   */
+  'member.added',
+  'member.updated',
+  'member.removed',
+  'workspace.created',
+  /** `params.disabled` / `params.enabled`: the sections switched off and on by this write. */
+  'workspace.features_updated',
+  'workspace.purpose_updated',
+  /** `params` per key that moved, `{ from, to }`; null = back to the default. */
+  'publishing.settings_updated',
+  /** A personal key, filed under the workspace it is pinned to (else a platform event). `params` never holds the secret. */
+  'api-key.created',
+  'api-key.revoked',
+  /** An admin downloaded the audit trail itself: `params` is the filter, `rowCount` what left. */
+  'audit.exported',
+  /**
+   * Admin writes that already record a feed row (#1251): `ActivityService` copies an activity whose action is in
+   * this list into the trail, so the call site writes one `action:` and the two cannot drift. `params` is the
+   * feed's metadata (names and which fields moved, never values of a secret), `target` its subject.
+   */
+  'ai.settings.updated',
+  'ai.provider.created',
+  'ai.provider.updated',
+  'ai.provider.deleted',
+  'ai.agent.created',
+  'ai.agent.updated',
+  'ai.agent.deleted',
+  'ai.agent.reset',
+  'ai.agent.trigger.created',
+  'ai.agent.trigger.updated',
+  'ai.agent.trigger.deleted',
+  'ai.agent.recipe.applied',
+  'ai.plugin.created',
+  'ai.plugin.updated',
+  'ai.plugin.deleted',
+  'ai.skill.created',
+  'ai.skill.updated',
+  'ai.skill.deleted',
+  'ai.skill.imported',
+  'ai.styleguide.updated',
+  'ai.styleguide.deleted',
+  'ai.lint-policy.updated',
+  'connector.created',
+  'connector.updated',
+  'connector.deleted',
+  'connector.link.removed',
+  'workflow.created',
+  'workflow.updated',
+  'workflow.deleted',
+  'template.created',
+  'template.updated',
+  'template.archived',
+  'template.unarchived',
+  'template.reset',
+  'glossary.term.created',
+  'glossary.term.updated',
+  'glossary.term.deleted',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
+
+const AUDIT_ACTION_SET: ReadonlySet<string> = new Set(AUDIT_ACTIONS);
+export function isAuditAction(action: string): action is AuditAction {
+  return AUDIT_ACTION_SET.has(action);
+}
+
+/**
+ * The audit view's coarse filter (#1251). Derived from the action, never stored: the inverse is
+ * `auditActionsIn`, an `action IN (…)` list, so filtering stays in SQL. First matching rule wins.
+ */
+export const AUDIT_CATEGORIES = ['sign-in', 'people', 'access', 'workspace', 'ai', 'integrations', 'content', 'memory', 'data'] as const;
+export type AuditCategory = (typeof AUDIT_CATEGORIES)[number];
+
+export function auditCategoryOf(action: string): AuditCategory {
+  const prefix = action.slice(0, action.indexOf('.'));
+  if (prefix === 'auth' || prefix === 'sso' || prefix === 'scim' || prefix === 'role_sync') return 'sign-in';
+  if (prefix === 'user' || prefix === 'member' || prefix === 'api-key') return 'people';
+  if (prefix === 'acl') return 'access';
+  if (prefix === 'workspace' || prefix === 'publishing' || prefix === 'chat') return 'workspace';
+  if (prefix === 'ai') return 'ai';
+  if (prefix === 'connector') return 'integrations';
+  if (prefix === 'workflow' || prefix === 'template' || prefix === 'glossary' || prefix === 'merge-request') return 'content';
+  if (prefix === 'memory') return 'memory';
+  // Trusted-operator graph reads, the try-it proxy and every export: data leaving through a side door.
+  return 'data';
+}
+
+export function auditActionsIn(category: AuditCategory): AuditAction[] {
+  return AUDIT_ACTIONS.filter((a) => auditCategoryOf(a) === category);
+}
 
 // ---------------------------------------------------------------------------
 // Identity providers (#75 phase 2). Owned by a workspace; a platform admin may
@@ -655,7 +745,8 @@ export interface AuditLogEntry {
   createdAt: string;
 }
 
-// GET /v1/audit-logs?workspaceId=&action=&cursor=
+// GET /v1/audit-logs?workspaceId=&action=&category=&actor=&target=&from=&to=&ok=&cursor=
+// (the same filter exports at /v1/audit-logs/export, and /v1/admin/audit-logs[/export] for the platform)
 export interface ListAuditLogsResponse {
   workspaceId: string;
   entries: AuditLogEntry[];

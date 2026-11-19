@@ -45,8 +45,25 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Workspace audit trail, newest first (admin) — graph queries, ACL changes, the workspace's sign-in config */
+        /** Workspace audit trail, newest first (admin), filtered by action, category, actor, target, dates and outcome */
         get: operations["AuthController_auditLogs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/audit-logs/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The filtered workspace trail as CSV or JSON (admin, capped); the export is itself audited */
+        get: operations["AuthController_exportAuditLogs"];
         put?: never;
         post?: never;
         delete?: never;
@@ -64,6 +81,23 @@ export interface paths {
         };
         /** Platform audit trail incl. sign-ins and other workspace-less events (platform admin) */
         get: operations["AuthController_platformAuditLogs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/audit-logs/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The filtered platform trail as CSV or JSON (platform admin, capped); audited */
+        get: operations["AuthController_exportPlatformAuditLogs"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4075,6 +4109,64 @@ export interface paths {
         get: operations["AgentOutcomesController_list"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/ai/configurator/proposals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Recent proposals, newest first: all of them for an admin, your own otherwise */
+        get: operations["ConfiguratorController_list"];
+        put?: never;
+        /**
+         * Turn a goal into a configuration proposal
+         * @description The configurator reads the workspace's agents, schedules, triggers, projects and repository connectors and writes a proposal. Nothing is applied: every change waits for a person to apply it. `proposal` is null when it proposed nothing, and `reply` says why.
+         */
+        post: operations["ConfiguratorController_propose"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/ai/configurator/proposals/{id}/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply some of a proposal's pending changes, all or nothing
+         * @description Each change needs its own role, checked now (every current kind: workspace admin); 403 and nothing written otherwise. A change that is already in place by now lands as `unavailable`. Schedules and triggers are written switched off.
+         */
+        post: operations["ConfiguratorController_apply"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/ai/configurator/proposals/{id}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Set every pending change aside */
+        post: operations["ConfiguratorController_dismiss"];
         delete?: never;
         options?: never;
         head?: never;
@@ -10303,6 +10395,27 @@ export interface components {
             /** @description Monthly token budget; null = unlimited */
             monthlyTokenBudget?: number | null;
         };
+        ProposeConfigurationDto: {
+            /** Format: uuid */
+            workspaceId: string;
+            /** @description What should happen, in the person's words. */
+            goal: string;
+            /**
+             * @description IANA zone a proposed time-of-day schedule is read in when the model names none. Absent reads as UTC.
+             * @example Europe/Moscow
+             */
+            timezone?: string;
+        };
+        ApplyConfigurationDto: {
+            /** Format: uuid */
+            workspaceId: string;
+            /** @description The pending changes to apply, by id (`c1`, …). All or nothing. */
+            changeIds: string[];
+        };
+        ConfiguratorWorkspaceDto: {
+            /** Format: uuid */
+            workspaceId: string;
+        };
         UpdateHomeLayoutDto: {
             /** @description The widgets to show, in order; one left out is hidden. Null (or omitted) goes back to the built-in layout. */
             widgets?: ("metrics" | "actions" | "needs-you" | "recent" | "activity" | "agents")[] | null;
@@ -12351,10 +12464,30 @@ export interface components {
         };
         /** @enum {string} */
         AgentRunTrigger: "manual" | "schedule" | "event" | "webhook" | "report" | "merge-request" | "source";
+        AgentScheduleChangeSpec: {
+            /** @enum {string} */
+            kind: "agent-schedule";
+            agentKey: string;
+            scheduleKind: components["schemas"]["AgentScheduleKind"];
+            scheduleMinutes: number | null;
+            scheduleTime: string | null;
+            scheduleWeekdays: number[] | null;
+            scheduleTimezone: string | null;
+            scheduleNote: string | null;
+        };
         /** @enum {string} */
         AgentScheduleKind: "interval" | "daily" | "weekly";
         /** @enum {string} */
         AgentSurface: "interactive" | "background" | "workflow";
+        AgentTriggerChangeSpec: {
+            /** @enum {string} */
+            kind: "agent-trigger";
+            agentKey: string;
+            event: components["schemas"]["AgentTriggerEvent"];
+            projectId: string | null;
+            filter: components["schemas"]["AgentTriggerFilter"];
+            note: string | null;
+        };
         /** @enum {string} */
         AgentTriggerEvent: "page.merged" | "page.indexed" | "merge-request.opened" | "connector.synced" | "webhook" | "comment.mention" | "work-item.updated";
         AgentTriggerFilter: {
@@ -12647,7 +12780,7 @@ export interface components {
             createdAt: string;
         };
         /** @enum {string} */
-        AiUsageOperation: "ask" | "chat" | "chat-stream" | "review" | "suggest" | "glossary" | "import" | "workflow" | "route" | "agent" | "connector" | "codebase" | "wiki" | "changelog" | "chat-capture" | "component-draft" | "lint" | "audit" | "contradiction" | "community" | "harvest" | "citation_check" | "coach" | "memory-extract" | "memory-recall" | "memory-reflect" | "memory-mental-model" | "memory-consolidate" | "memory-consolidate-screen" | "extraction" | "public_ask" | "test-suite" | "test-fixture-ranking" | "transcription" | "memo" | "memo-triage" | "source-recipe" | "source-judge" | "blueprint-derive" | "blueprint-generate" | "blueprint-interview" | "purpose-interview";
+        AiUsageOperation: "ask" | "chat" | "chat-stream" | "review" | "suggest" | "glossary" | "import" | "workflow" | "route" | "agent" | "connector" | "codebase" | "wiki" | "changelog" | "chat-capture" | "component-draft" | "lint" | "audit" | "contradiction" | "community" | "harvest" | "citation_check" | "coach" | "memory-extract" | "memory-recall" | "memory-reflect" | "memory-mental-model" | "memory-consolidate" | "memory-consolidate-screen" | "extraction" | "public_ask" | "test-suite" | "test-fixture-ranking" | "transcription" | "memo" | "memo-triage" | "source-recipe" | "source-judge" | "blueprint-derive" | "blueprint-generate" | "blueprint-interview" | "purpose-interview" | "configurator";
         AiUsageResponse: {
             from: string;
             to: string;
@@ -13905,6 +14038,51 @@ export interface components {
             from: string;
             to: string | null;
         };
+        ConfigurationAppliedValue: {
+            value: unknown;
+            /** @enum {string} */
+            source: "project" | "workspace" | "default";
+            /** @enum {string|null} */
+            held: "ceiling" | "agent-off" | null;
+        };
+        ConfigurationChange: {
+            id: string;
+            spec: components["schemas"]["ConfigurationChangeSpec"];
+            reason: string;
+            target: string;
+            diff: components["schemas"]["ConfigurationDiffRow"][];
+            state: components["schemas"]["ConfigurationChangeState"];
+            unavailable: components["schemas"]["ConfigurationUnavailableReason"] | null;
+            /** @enum {string} */
+            requires: "admin" | "editor" | "maintainer";
+            appliedAt: string | null;
+            appliedBy: string | null;
+            resultId: string | null;
+        };
+        ConfigurationChangeSpec: components["schemas"]["AgentScheduleChangeSpec"] | components["schemas"]["AgentTriggerChangeSpec"] | components["schemas"]["ConnectorDriftCheckChangeSpec"] | components["schemas"]["WorkflowDraftChangeSpec"] | components["schemas"]["PageTemplateChangeSpec"] | components["schemas"]["ProjectSettingChangeSpec"] | components["schemas"]["MethodologyLinkChangeSpec"] | components["schemas"]["CustomAgentChangeSpec"];
+        /** @enum {string} */
+        ConfigurationChangeState: "pending" | "applied" | "dismissed" | "unavailable";
+        ConfigurationDiffRow: {
+            field: string;
+            before: unknown;
+            after: unknown;
+            applies?: {
+                before: components["schemas"]["ConfigurationAppliedValue"];
+                after: components["schemas"]["ConfigurationAppliedValue"];
+            };
+        };
+        ConfigurationProposal: {
+            id: string;
+            workspaceId: string;
+            goal: string;
+            summary: string;
+            changes: components["schemas"]["ConfigurationChange"][];
+            createdBy: string;
+            createdAt: string;
+            updatedAt: string;
+        };
+        /** @enum {string} */
+        ConfigurationUnavailableReason: "already-configured" | "agent-unsupported" | "not-found" | "connector-unsupported" | "schedules-off" | "triggers-off" | "section-off" | "name-taken" | "invalid" | "stale";
         ConflictCodeRef: {
             connectorId: string;
             repository: string;
@@ -14022,6 +14200,13 @@ export interface components {
         ConnectorConflictPolicy: "manual" | "external-wins" | "local-wins";
         /** @enum {string} */
         ConnectorDirection: "pull" | "push" | "both";
+        ConnectorDriftCheckChangeSpec: {
+            /** @enum {string} */
+            kind: "connector-drift-check";
+            connectorId: string;
+            /** @enum {string} */
+            mode: "off" | "report" | "propose";
+        };
         ConnectorGithubAccessResponse: {
             configured: boolean;
             /** @enum {string} */
@@ -14393,6 +14578,12 @@ export interface components {
         };
         CredentialsResponse: {
             credentials: components["schemas"]["CredentialSummary"][];
+        };
+        CustomAgentChangeSpec: {
+            /** @enum {string} */
+            kind: "custom-agent";
+            blueprintKey: string;
+            agentKey: string;
         };
         DecisionCapturePayload: {
             context: string;
@@ -15738,6 +15929,9 @@ export interface components {
         ListCommunitiesResponse: {
             communities: components["schemas"]["CommunitySummaryDto"][];
         };
+        ListConfigurationProposalsResponse: {
+            proposals: components["schemas"]["ConfigurationProposal"][];
+        };
         ListConflictsResponse: {
             conflicts: components["schemas"]["KnowledgeConflictDto"][];
         };
@@ -16396,6 +16590,13 @@ export interface components {
         };
         /** @enum {string} */
         MergeStrategy: "merge-commit" | "squash";
+        MethodologyLinkChangeSpec: {
+            /** @enum {string} */
+            kind: "methodology-link";
+            projectId: string;
+            blueprintKey: string;
+            locale: components["schemas"]["Locale"];
+        };
         MethodologyPreviewResponse: {
             blueprintKey: string;
             sections: components["schemas"]["MethodologyPreviewSection"][];
@@ -16510,6 +16711,14 @@ export interface components {
         PageLevel: {
             key: string;
             name: string;
+        };
+        PageTemplateChangeSpec: {
+            /** @enum {string} */
+            kind: "page-template";
+            name: string;
+            description: string | null;
+            projectId: string | null;
+            source: string;
         };
         PlaudAuthorizeResponse: {
             url: string;
@@ -16733,6 +16942,48 @@ export interface components {
             "merge-request:contribute": boolean;
             "merge-request:override-checks": boolean;
         };
+        ProjectSettingChangeSpec: {
+            /** @enum {string} */
+            setting: "verification";
+            values: {
+                reviewIntervalDays?: number | null;
+                remindBeforeDays?: number | null;
+                inactiveAfterDays?: number | null;
+                emptyMaxChars?: number | null;
+            };
+            /** @enum {string} */
+            kind: "project-setting";
+            projectId: string;
+        } | {
+            /** @enum {string} */
+            setting: "workItems";
+            values: {
+                issues?: components["schemas"]["WorkItemIssueRule"] | null;
+                conflicts?: components["schemas"]["WorkItemConflictRule"] | null;
+                verification?: components["schemas"]["WorkItemVerificationRule"] | null;
+            };
+            /** @enum {string} */
+            kind: "project-setting";
+            projectId: string;
+        } | {
+            /** @enum {string} */
+            setting: "breakingChanges";
+            values: {
+                policy: components["schemas"]["ApiBreakingChangePolicy"] | null;
+            };
+            /** @enum {string} */
+            kind: "project-setting";
+            projectId: string;
+        } | {
+            /** @enum {string} */
+            setting: "lintPolicy";
+            values: {
+                policy: components["schemas"]["LintPolicy"] | null;
+            };
+            /** @enum {string} */
+            kind: "project-setting";
+            projectId: string;
+        };
         /** @enum {string} */
         ProjectSettingKey: "verification" | "breakingChanges" | "lintPolicy" | "workItems" | "captureParent";
         ProjectSettingOverridesResponse: {
@@ -16792,6 +17043,10 @@ export interface components {
             documentTitle: string;
             branch: string;
             title: string;
+        };
+        ProposeConfigurationResponse: {
+            proposal: components["schemas"]["ConfigurationProposal"] | null;
+            reply: string;
         };
         ProposeRelationsResponse: {
             documentId: string;
@@ -18252,6 +18507,15 @@ export interface components {
             createdAt: string;
             updatedAt: string;
         };
+        WorkflowDraftChangeSpec: {
+            /** @enum {string} */
+            kind: "workflow-draft";
+            name: string;
+            description: string | null;
+            projectId: string | null;
+            graph: components["schemas"]["WorkflowGraph"];
+            trigger: components["schemas"]["WorkflowTrigger"];
+        };
         WorkflowGraph: {
             steps: components["schemas"]["WorkflowStep"][];
             layout?: {
@@ -18628,12 +18892,25 @@ export interface operations {
     AuthController_auditLogs: {
         parameters: {
             query: {
-                workspaceId: string;
-                limit?: string;
                 /** @description One AUDIT_ACTIONS value */
-                action?: string;
+                action?: "graph.query" | "acl.bypass" | "acl.update" | "acl.request" | "acl.request.approve" | "acl.request.deny" | "ai-readable.llms-full" | "api.try" | "feedback.export" | "analytics.export" | "merge-request.lint-override" | "auth.login" | "auth.login_failed" | "auth.logout" | "auth.session_revoked" | "sso.provider_created" | "sso.provider_updated" | "sso.provider_deleted" | "sso.jit_user_created" | "sso.identity_linked" | "auth.account_claimed" | "sso.group_mapping_created" | "sso.group_mapping_deleted" | "role_sync.applied" | "role_sync.blocked_last_admin" | "sso.domain_claimed" | "sso.domain_verified" | "sso.domain_enforced" | "sso.domain_updated" | "sso.domain_removed" | "sso.policy_updated" | "auth.sso_bypassed" | "scim.user_created" | "scim.user_updated" | "scim.user_deactivated" | "scim.user_deleted" | "scim.group_created" | "scim.group_updated" | "scim.group_deleted" | "scim.token_created" | "scim.token_revoked" | "scim.settings_updated" | "chat.search_enabled" | "chat.search_disabled" | "chat.listen_enabled" | "chat.listen_disabled" | "chat.auto_harvest_enabled" | "chat.auto_harvest_disabled" | "member.capabilities_changed" | "workspace.deleted" | "workspace.renamed" | "workspace.editing_policy_updated" | "memory.bank_created" | "memory.bank_deleted" | "memory.bank_updated" | "memory.retained" | "memory.files_uploaded" | "memory.file_changed" | "memory.graph_changed" | "memory.memories_deleted" | "memory.document_updated" | "memory.document_deleted" | "memory.observations_cleared" | "memory.consolidation_requested" | "memory.alias_changed" | "memory.template_imported" | "memory.exported" | "memory.imported" | "memory.cloned" | "memory.mental_model_changed" | "memory.directive_changed" | "memory.operation_cancelled" | "memory.promoted" | "user.created" | "user.renamed" | "user.admin_granted" | "user.admin_revoked" | "user.disabled" | "user.enabled" | "user.password_set" | "member.added" | "member.updated" | "member.removed" | "workspace.created" | "workspace.features_updated" | "workspace.purpose_updated" | "publishing.settings_updated" | "api-key.created" | "api-key.revoked" | "audit.exported" | "ai.settings.updated" | "ai.provider.created" | "ai.provider.updated" | "ai.provider.deleted" | "ai.agent.created" | "ai.agent.updated" | "ai.agent.deleted" | "ai.agent.reset" | "ai.agent.trigger.created" | "ai.agent.trigger.updated" | "ai.agent.trigger.deleted" | "ai.agent.recipe.applied" | "ai.plugin.created" | "ai.plugin.updated" | "ai.plugin.deleted" | "ai.skill.created" | "ai.skill.updated" | "ai.skill.deleted" | "ai.skill.imported" | "ai.styleguide.updated" | "ai.styleguide.deleted" | "ai.lint-policy.updated" | "connector.created" | "connector.updated" | "connector.deleted" | "connector.link.removed" | "workflow.created" | "workflow.updated" | "workflow.deleted" | "template.created" | "template.updated" | "template.archived" | "template.unarchived" | "template.reset" | "glossary.term.created" | "glossary.term.updated" | "glossary.term.deleted";
+                /** @description Derived from the action (auditCategoryOf) */
+                category?: "sign-in" | "people" | "access" | "workspace" | "ai" | "integrations" | "content" | "memory" | "data";
+                /** @description users.id, or a synthetic actor such as "dev" or "anonymous" */
+                actor?: string;
+                /** @description Who or what the action was done to: a user id, a provider id */
+                target?: string;
+                /** @description Inclusive lower bound on createdAt, ISO 8601 */
+                from?: string;
+                /** @description Inclusive upper bound on createdAt, ISO 8601 */
+                to?: string;
+                /** @description Only succeeded (true) or failed (false) entries */
+                ok?: "true" | "false";
+                /** @description Omitted: 50 */
+                limit?: number;
                 /** @description nextCursor from the previous page */
                 cursor?: string;
+                workspaceId: string;
             };
             header?: {
                 /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
@@ -18672,12 +18949,80 @@ export interface operations {
             };
         };
     };
+    AuthController_exportAuditLogs: {
+        parameters: {
+            query: {
+                /** @description One AUDIT_ACTIONS value */
+                action?: "graph.query" | "acl.bypass" | "acl.update" | "acl.request" | "acl.request.approve" | "acl.request.deny" | "ai-readable.llms-full" | "api.try" | "feedback.export" | "analytics.export" | "merge-request.lint-override" | "auth.login" | "auth.login_failed" | "auth.logout" | "auth.session_revoked" | "sso.provider_created" | "sso.provider_updated" | "sso.provider_deleted" | "sso.jit_user_created" | "sso.identity_linked" | "auth.account_claimed" | "sso.group_mapping_created" | "sso.group_mapping_deleted" | "role_sync.applied" | "role_sync.blocked_last_admin" | "sso.domain_claimed" | "sso.domain_verified" | "sso.domain_enforced" | "sso.domain_updated" | "sso.domain_removed" | "sso.policy_updated" | "auth.sso_bypassed" | "scim.user_created" | "scim.user_updated" | "scim.user_deactivated" | "scim.user_deleted" | "scim.group_created" | "scim.group_updated" | "scim.group_deleted" | "scim.token_created" | "scim.token_revoked" | "scim.settings_updated" | "chat.search_enabled" | "chat.search_disabled" | "chat.listen_enabled" | "chat.listen_disabled" | "chat.auto_harvest_enabled" | "chat.auto_harvest_disabled" | "member.capabilities_changed" | "workspace.deleted" | "workspace.renamed" | "workspace.editing_policy_updated" | "memory.bank_created" | "memory.bank_deleted" | "memory.bank_updated" | "memory.retained" | "memory.files_uploaded" | "memory.file_changed" | "memory.graph_changed" | "memory.memories_deleted" | "memory.document_updated" | "memory.document_deleted" | "memory.observations_cleared" | "memory.consolidation_requested" | "memory.alias_changed" | "memory.template_imported" | "memory.exported" | "memory.imported" | "memory.cloned" | "memory.mental_model_changed" | "memory.directive_changed" | "memory.operation_cancelled" | "memory.promoted" | "user.created" | "user.renamed" | "user.admin_granted" | "user.admin_revoked" | "user.disabled" | "user.enabled" | "user.password_set" | "member.added" | "member.updated" | "member.removed" | "workspace.created" | "workspace.features_updated" | "workspace.purpose_updated" | "publishing.settings_updated" | "api-key.created" | "api-key.revoked" | "audit.exported" | "ai.settings.updated" | "ai.provider.created" | "ai.provider.updated" | "ai.provider.deleted" | "ai.agent.created" | "ai.agent.updated" | "ai.agent.deleted" | "ai.agent.reset" | "ai.agent.trigger.created" | "ai.agent.trigger.updated" | "ai.agent.trigger.deleted" | "ai.agent.recipe.applied" | "ai.plugin.created" | "ai.plugin.updated" | "ai.plugin.deleted" | "ai.skill.created" | "ai.skill.updated" | "ai.skill.deleted" | "ai.skill.imported" | "ai.styleguide.updated" | "ai.styleguide.deleted" | "ai.lint-policy.updated" | "connector.created" | "connector.updated" | "connector.deleted" | "connector.link.removed" | "workflow.created" | "workflow.updated" | "workflow.deleted" | "template.created" | "template.updated" | "template.archived" | "template.unarchived" | "template.reset" | "glossary.term.created" | "glossary.term.updated" | "glossary.term.deleted";
+                /** @description Derived from the action (auditCategoryOf) */
+                category?: "sign-in" | "people" | "access" | "workspace" | "ai" | "integrations" | "content" | "memory" | "data";
+                /** @description users.id, or a synthetic actor such as "dev" or "anonymous" */
+                actor?: string;
+                /** @description Who or what the action was done to: a user id, a provider id */
+                target?: string;
+                /** @description Inclusive lower bound on createdAt, ISO 8601 */
+                from?: string;
+                /** @description Inclusive upper bound on createdAt, ISO 8601 */
+                to?: string;
+                /** @description Only succeeded (true) or failed (false) entries */
+                ok?: "true" | "false";
+                format: "csv" | "json";
+                workspaceId: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
     AuthController_platformAuditLogs: {
         parameters: {
             query?: {
-                limit?: string;
                 /** @description One AUDIT_ACTIONS value */
-                action?: string;
+                action?: "graph.query" | "acl.bypass" | "acl.update" | "acl.request" | "acl.request.approve" | "acl.request.deny" | "ai-readable.llms-full" | "api.try" | "feedback.export" | "analytics.export" | "merge-request.lint-override" | "auth.login" | "auth.login_failed" | "auth.logout" | "auth.session_revoked" | "sso.provider_created" | "sso.provider_updated" | "sso.provider_deleted" | "sso.jit_user_created" | "sso.identity_linked" | "auth.account_claimed" | "sso.group_mapping_created" | "sso.group_mapping_deleted" | "role_sync.applied" | "role_sync.blocked_last_admin" | "sso.domain_claimed" | "sso.domain_verified" | "sso.domain_enforced" | "sso.domain_updated" | "sso.domain_removed" | "sso.policy_updated" | "auth.sso_bypassed" | "scim.user_created" | "scim.user_updated" | "scim.user_deactivated" | "scim.user_deleted" | "scim.group_created" | "scim.group_updated" | "scim.group_deleted" | "scim.token_created" | "scim.token_revoked" | "scim.settings_updated" | "chat.search_enabled" | "chat.search_disabled" | "chat.listen_enabled" | "chat.listen_disabled" | "chat.auto_harvest_enabled" | "chat.auto_harvest_disabled" | "member.capabilities_changed" | "workspace.deleted" | "workspace.renamed" | "workspace.editing_policy_updated" | "memory.bank_created" | "memory.bank_deleted" | "memory.bank_updated" | "memory.retained" | "memory.files_uploaded" | "memory.file_changed" | "memory.graph_changed" | "memory.memories_deleted" | "memory.document_updated" | "memory.document_deleted" | "memory.observations_cleared" | "memory.consolidation_requested" | "memory.alias_changed" | "memory.template_imported" | "memory.exported" | "memory.imported" | "memory.cloned" | "memory.mental_model_changed" | "memory.directive_changed" | "memory.operation_cancelled" | "memory.promoted" | "user.created" | "user.renamed" | "user.admin_granted" | "user.admin_revoked" | "user.disabled" | "user.enabled" | "user.password_set" | "member.added" | "member.updated" | "member.removed" | "workspace.created" | "workspace.features_updated" | "workspace.purpose_updated" | "publishing.settings_updated" | "api-key.created" | "api-key.revoked" | "audit.exported" | "ai.settings.updated" | "ai.provider.created" | "ai.provider.updated" | "ai.provider.deleted" | "ai.agent.created" | "ai.agent.updated" | "ai.agent.deleted" | "ai.agent.reset" | "ai.agent.trigger.created" | "ai.agent.trigger.updated" | "ai.agent.trigger.deleted" | "ai.agent.recipe.applied" | "ai.plugin.created" | "ai.plugin.updated" | "ai.plugin.deleted" | "ai.skill.created" | "ai.skill.updated" | "ai.skill.deleted" | "ai.skill.imported" | "ai.styleguide.updated" | "ai.styleguide.deleted" | "ai.lint-policy.updated" | "connector.created" | "connector.updated" | "connector.deleted" | "connector.link.removed" | "workflow.created" | "workflow.updated" | "workflow.deleted" | "template.created" | "template.updated" | "template.archived" | "template.unarchived" | "template.reset" | "glossary.term.created" | "glossary.term.updated" | "glossary.term.deleted";
+                /** @description Derived from the action (auditCategoryOf) */
+                category?: "sign-in" | "people" | "access" | "workspace" | "ai" | "integrations" | "content" | "memory" | "data";
+                /** @description users.id, or a synthetic actor such as "dev" or "anonymous" */
+                actor?: string;
+                /** @description Who or what the action was done to: a user id, a provider id */
+                target?: string;
+                /** @description Inclusive lower bound on createdAt, ISO 8601 */
+                from?: string;
+                /** @description Inclusive upper bound on createdAt, ISO 8601 */
+                to?: string;
+                /** @description Only succeeded (true) or failed (false) entries */
+                ok?: "true" | "false";
+                /** @description Omitted: 50 */
+                limit?: number;
                 /** @description nextCursor from the previous page */
                 cursor?: string;
             };
@@ -18697,6 +19042,60 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ListPlatformAuditLogsResponse"];
                 };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AuthController_exportPlatformAuditLogs: {
+        parameters: {
+            query: {
+                /** @description One AUDIT_ACTIONS value */
+                action?: "graph.query" | "acl.bypass" | "acl.update" | "acl.request" | "acl.request.approve" | "acl.request.deny" | "ai-readable.llms-full" | "api.try" | "feedback.export" | "analytics.export" | "merge-request.lint-override" | "auth.login" | "auth.login_failed" | "auth.logout" | "auth.session_revoked" | "sso.provider_created" | "sso.provider_updated" | "sso.provider_deleted" | "sso.jit_user_created" | "sso.identity_linked" | "auth.account_claimed" | "sso.group_mapping_created" | "sso.group_mapping_deleted" | "role_sync.applied" | "role_sync.blocked_last_admin" | "sso.domain_claimed" | "sso.domain_verified" | "sso.domain_enforced" | "sso.domain_updated" | "sso.domain_removed" | "sso.policy_updated" | "auth.sso_bypassed" | "scim.user_created" | "scim.user_updated" | "scim.user_deactivated" | "scim.user_deleted" | "scim.group_created" | "scim.group_updated" | "scim.group_deleted" | "scim.token_created" | "scim.token_revoked" | "scim.settings_updated" | "chat.search_enabled" | "chat.search_disabled" | "chat.listen_enabled" | "chat.listen_disabled" | "chat.auto_harvest_enabled" | "chat.auto_harvest_disabled" | "member.capabilities_changed" | "workspace.deleted" | "workspace.renamed" | "workspace.editing_policy_updated" | "memory.bank_created" | "memory.bank_deleted" | "memory.bank_updated" | "memory.retained" | "memory.files_uploaded" | "memory.file_changed" | "memory.graph_changed" | "memory.memories_deleted" | "memory.document_updated" | "memory.document_deleted" | "memory.observations_cleared" | "memory.consolidation_requested" | "memory.alias_changed" | "memory.template_imported" | "memory.exported" | "memory.imported" | "memory.cloned" | "memory.mental_model_changed" | "memory.directive_changed" | "memory.operation_cancelled" | "memory.promoted" | "user.created" | "user.renamed" | "user.admin_granted" | "user.admin_revoked" | "user.disabled" | "user.enabled" | "user.password_set" | "member.added" | "member.updated" | "member.removed" | "workspace.created" | "workspace.features_updated" | "workspace.purpose_updated" | "publishing.settings_updated" | "api-key.created" | "api-key.revoked" | "audit.exported" | "ai.settings.updated" | "ai.provider.created" | "ai.provider.updated" | "ai.provider.deleted" | "ai.agent.created" | "ai.agent.updated" | "ai.agent.deleted" | "ai.agent.reset" | "ai.agent.trigger.created" | "ai.agent.trigger.updated" | "ai.agent.trigger.deleted" | "ai.agent.recipe.applied" | "ai.plugin.created" | "ai.plugin.updated" | "ai.plugin.deleted" | "ai.skill.created" | "ai.skill.updated" | "ai.skill.deleted" | "ai.skill.imported" | "ai.styleguide.updated" | "ai.styleguide.deleted" | "ai.lint-policy.updated" | "connector.created" | "connector.updated" | "connector.deleted" | "connector.link.removed" | "workflow.created" | "workflow.updated" | "workflow.deleted" | "template.created" | "template.updated" | "template.archived" | "template.unarchived" | "template.reset" | "glossary.term.created" | "glossary.term.updated" | "glossary.term.deleted";
+                /** @description Derived from the action (auditCategoryOf) */
+                category?: "sign-in" | "people" | "access" | "workspace" | "ai" | "integrations" | "content" | "memory" | "data";
+                /** @description users.id, or a synthetic actor such as "dev" or "anonymous" */
+                actor?: string;
+                /** @description Who or what the action was done to: a user id, a provider id */
+                target?: string;
+                /** @description Inclusive lower bound on createdAt, ISO 8601 */
+                from?: string;
+                /** @description Inclusive upper bound on createdAt, ISO 8601 */
+                to?: string;
+                /** @description Only succeeded (true) or failed (false) entries */
+                ok?: "true" | "false";
+                format: "csv" | "json";
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -32146,6 +32545,184 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentOutcomesResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ConfiguratorController_list: {
+        parameters: {
+            query: {
+                workspaceId: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListConfigurationProposalsResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ConfiguratorController_propose: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProposeConfigurationDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProposeConfigurationResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ConfiguratorController_apply: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApplyConfigurationDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigurationProposal"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ConfiguratorController_dismiss: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfiguratorWorkspaceDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigurationProposal"];
                 };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */

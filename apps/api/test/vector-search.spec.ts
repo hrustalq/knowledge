@@ -7,10 +7,12 @@ import { UNFILTERED, type DocumentAclFilter } from '../src/common/document-acl.j
 
 /**
  * #304: the vector leg is answered by ArcadeDB's HNSW index, with every
- * restriction applied INSIDE the nearest-neighbour search.
+ * restriction applied before the top-k is cut. #1288: first over an
+ * over-fetched unfiltered list, then inside the walk when that comes back short.
  *
  * The fake below plays ArcadeDB faithfully on one point: `vector.neighbors`
- * only honours the predicates in its `filter` subquery. It ranks exactly (so
+ * honours the predicates in its `filter` subquery before cutting at `k`, and
+ * the outer WHERE only after. It ranks exactly (so
  * recall is not what is under test) and throws on a predicate it does not
  * know, so a clause that drifts cannot be silently ignored. A read that left
  * the workspace, live or ACL predicate out of the filter would get the
@@ -46,7 +48,7 @@ function matcher(where: string): (r: Row, p: Record<string, unknown>) => boolean
 }
 
 function fakeArcade(rows: Row[], opts: { indexDim: number | null; rejectIndex?: boolean }) {
-  const state = { indexDim: opts.indexDim, ddl: [] as string[], efSearch: [] as number[], scans: 0 };
+  const state = { indexDim: opts.indexDim, ddl: [] as string[], efSearch: [] as number[], rounds: [] as string[], scans: 0 };
   rows.forEach((r, i) => (r['@rid'] = `#1:${i}`));
   const query = vi.fn(async (_lang: string, sql: string, params: Record<string, unknown> = {}) => {
     if (sql === "SELECT indexes FROM schema:types WHERE name = 'Chunk'") {
@@ -55,18 +57,25 @@ function fakeArcade(rows: Row[], opts: { indexDim: number | null; rejectIndex?: 
     if (sql === 'select from schema:types') {
       return ['Document', 'DocumentRevision', 'Chunk', 'Entity', 'HAS_REVISION', 'HAS_CHUNK'].map((name) => ({ name }));
     }
-    const ann = /vector\.neighbors\('Chunk\[embedding\]', :queryVector, :k, \{ efSearch: (\d+), filter: \(SELECT @rid FROM Chunk WHERE (.+)\) \}\)\)\) WHERE workspaceId = :workspaceId$/.exec(sql);
+    // Filtered: the predicate restricts the candidates BEFORE the top-k cut.
+    // Unfiltered (#1288): the top-k of the whole index, THEN the outer WHERE.
+    const ann =
+      /vector\.neighbors\('Chunk\[embedding\]', :queryVector, :k, \{ efSearch: (\d+), filter: \(SELECT @rid FROM Chunk WHERE (.+)\) \}\)\)\) WHERE workspaceId = :workspaceId$/.exec(sql) ??
+      /vector\.neighbors\('Chunk\[embedding\]', :queryVector, :k, \{ efSearch: (\d+) \}\)\)\)() WHERE (.+)$/.exec(sql);
     if (ann) {
       state.efSearch.push(Number(ann[1]));
+      state.rounds.push(ann[2] ? 'filtered' : 'overfetch');
       const q = params.queryVector as number[];
       if (q.length !== state.indexDim) throw new Error(`Query vector dimension ${q.length} does not match index dimension ${state.indexDim}`);
-      const keep = matcher(ann[2]);
+      const inside = ann[2] ? matcher(ann[2]) : () => true;
+      const outer = ann[3] ? matcher(ann[3]) : (r: Row, p: Record<string, unknown>) => r.workspaceId === p.workspaceId;
       // The index holds only vectors of its own dimension.
       return rows
-        .filter((r) => r.embedding?.length === state.indexDim && keep(r, params))
+        .filter((r) => r.embedding?.length === state.indexDim && inside(r, params))
         .map((r) => ({ ...r, distance: 1 - cosine(q, r.embedding!) }))
         .sort((a, b) => a.distance - b.distance)
-        .slice(0, params.k as number);
+        .slice(0, params.k as number)
+        .filter((r) => outer(r, params));
     }
     const rid = /^SELECT @rid AS rid FROM Chunk WHERE (.+)$/.exec(sql);
     if (rid) {
@@ -142,9 +151,20 @@ describe('searchChunks through the vector index (#304)', () => {
     expect(hits[0].score).toBeCloseTo(cosine(query, [0.99, 0.1, 0]), 6);
     expect(state.scans).toBe(0);
     expect(error).not.toHaveBeenCalled();
-    // The beam is the measured 400, and never narrower than k.
+    // The beam is the measured 400, and never narrower than what it reads.
     await graph.searchChunks(WS, query, 1000, deny(true));
-    expect(state.efSearch).toEqual([400, 1000]);
+    expect(state.efSearch).toEqual([400, 8000]);
+    // #1288: the matching set is most of the index, so the over-fetch alone answers.
+    expect(state.rounds).toEqual(['overfetch', 'overfetch']);
+  });
+
+  it('a small workspace in a shared index falls back to the filtered walk and still gets its top-k (#1288)', async () => {
+    const small = [0, 1, 2].map((i) => chunk(`small${i}`, { workspaceId: 'ws-small', embedding: [-1, 0.1 * i, 0] }));
+    const { graph, state } = fakeArcade([...corpus(), ...small], { indexDim: 3 });
+    const hits = await graph.searchChunks('ws-small', query, 3, UNFILTERED);
+    expect(hits.map((h) => h.chunkId).sort()).toEqual(['small0', 'small1', 'small2']);
+    // The 24 nearest of the index are all ws-1's: the first round is short, the second answers.
+    expect(state.rounds).toEqual(['overfetch', 'filtered']);
   });
 
   it('the scan it replaced misses that match: it ranks the first 5,000 rows', async () => {

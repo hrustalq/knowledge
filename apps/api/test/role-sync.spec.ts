@@ -252,6 +252,23 @@ describe('editing an IdP-managed member by hand', () => {
     expect(db.members[0]).toMatchObject({ role: 'viewer', source: 'manual' });
   });
 
+  it('a role change is audited with the old and the new role, and a no-op writes nothing (#1251)', async () => {
+    const { workspaces, audit } = service('group');
+    await workspaces.updateMember(HOME, ADA, { role: 'viewer', convertToManual: true }, BOB);
+    expect(audit.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: HOME,
+        actor: BOB,
+        action: 'member.updated',
+        target: ADA,
+        params: { role: { from: 'editor', to: 'viewer' }, source: { from: 'group', to: 'manual' } },
+      }),
+    );
+    audit.record.mockClear();
+    await workspaces.updateMember(HOME, ADA, { role: 'viewer' }, BOB);
+    expect(audit.record).not.toHaveBeenCalled();
+  });
+
   it('re-adding an existing member goes through the same guards', async () => {
     const { db, workspaces } = service('jit');
     await expect(workspaces.addMember(HOME, { email: 'ada@corp.example', role: 'admin' }, BOB)).rejects.toBeInstanceOf(ConflictException);

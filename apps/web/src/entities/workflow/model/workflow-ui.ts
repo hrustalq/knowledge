@@ -174,8 +174,7 @@ export function blankStep(kind: WorkflowStepKind, index: number, title: string):
  * A chain read as sentences.
  *
  * The canvas shows the shape; this says what the shape *does*, in the order it
- * happens. It is the text equivalent of `WorkflowMap` — which is a canvas, and
- * therefore says nothing at all to a screen reader on its own — and it is also
+ * happens — the reading a canvas of cards cannot give in order — and it is also
  * the only honest way to answer "what will this actually publish" before
  * anyone presses Run. Both the wizard's last step and the roster read from
  * here, so the promise made while designing is the promise shown afterwards.

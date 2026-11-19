@@ -16,7 +16,7 @@ import type { AssistantFlowAnswer, AssistantMessageInfo, AssistantUiBlock } from
 import { assistantSourceHref, assistantSourceKey, isChatSource, isPageSource, isWebSource } from '@knowledge/contracts'
 import { Button } from '@knowledge/ui/button'
 import { MarkdownView } from '@/entities/document'
-import GenerativeUiBlock from '@/entities/assistant/components/GenerativeUiBlock.vue'
+import { LazyGenerativeUiBlock as GenerativeUiBlock } from './lazy'
 import AssistantPrompt from './AssistantPrompt.vue'
 import AnswerConfidence from './AnswerConfidence.vue'
 import AnswerFeedback from './AnswerFeedback.vue'

@@ -203,6 +203,38 @@ MCP gained `knowledge_list_workflows`, `knowledge_start_workflow` and
 and stdio has no principal to attribute that to. An agent can start a chain and
 watch it; a person still decides what gets published.
 
+## The canvas
+
+One component, `WorkflowCanvas.vue` (Vue Flow), draws a workflow everywhere it
+appears — the builder, the read-only detail page, a run and the wizard's
+preview (#1246). Every mode positions steps from `graph.layout` and falls back
+to `workflow-layout` (the layered layout Tidy up writes) for a step with none,
+so the arrangement an admin leaves is the one every reader sees. A separate
+drawn renderer used to serve the read-only views and laid the graph out afresh
+each time; it is gone.
+
+- **Building.** The step palette, undo/redo and JSON export/import float on the
+  canvas. A step's title is renamed on the card (double-click or F2); its kind,
+  output, category and next steps are a popover anchored to the card, whose
+  "Then" list is also the keyboard path to connect and disconnect; the drawer is
+  left with the long fields (prompt, template, relation, cap). Adding a step
+  while one is selected places it to the right and wires it after. Arrow keys
+  move a selected step, Delete removes it.
+- **Undo.** `graphHistory` (`model/graph-history.ts`) stores snapshots of the
+  draft graph: every graph change in the builder — canvas, popover, drawer,
+  import, architect — goes through it. A keyed burst (typing a prompt, nudging
+  with the arrows) within a second is one entry. Name, description and triggers
+  are form fields with native undo and stay out of it.
+- **JSON.** An export is `{ steps, layout }`, a valid `graph` body. An import
+  refuses a file that is not shaped like a graph, and lands anything that is as
+  an unsaved, undoable edit — problems from `validateGraph` are listed and Save
+  stays blocked — so a draft exported mid-edit round-trips. A whole definition
+  body is accepted too.
+- **A run.** Each step's dot and the edge into it take the run state from the
+  panel ramp (running = note, awaiting review = warning, done = tip, failed =
+  destructive). The one moving thing is the dash flowing into a running step,
+  which holds still under `prefers-reduced-motion`.
+
 ## Frontmatter and relations
 
 A draft carries `frontmatter` and `relations` as well as prose, and the

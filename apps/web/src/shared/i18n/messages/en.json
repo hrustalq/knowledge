@@ -1193,8 +1193,6 @@
     },
     "brokeIntoItems": "This step broke the source into {items}.",
     "waitingForReview": "Waiting for review",
-    "removeStep": "Remove this step",
-    "stepTitlePlaceholder": "Use cases",
     "disconnect": "Disconnect",
     "connectStep": "Connect a step…",
     "runs": "Workflow runs",
@@ -1247,7 +1245,6 @@
       "nestingHint": "New pages are nested under the page they came from and linked back to it.",
       "maxItemsHint": "items, so one long list cannot open hundreds of cards.",
       "nothingAfter": "Nothing runs after this step.",
-      "dragHint": "Or drag between the dots on the canvas.",
       "template": "Written into template",
       "noTemplate": "No template",
       "templateHint": "Drafts keep the template's headings and carry its tags and relations. Picking one files pages under its category."
@@ -1345,13 +1342,12 @@
     "runStarted": "Run started",
     "draftSaved": "Draft saved",
     "map": {
-      "many": "many",
       "empty": "This workflow has no steps yet.",
       "summary": "A chain of {steps}: {chain}"
     },
     "palette": {
       "title": "Steps",
-      "hint": "Drag one onto the canvas, or click to add it."
+      "hint": "Add a step from the toolbar: drag it onto the canvas, or click it."
     },
     "reading": {
       "search": "Searches the knowledge base and hands what it finds to the next step.",
@@ -1468,7 +1464,26 @@
     "cancelRunAction": "Cancel run",
     "keepRunning": "Keep running",
     "promptPlaceholderGenerate": "List the use cases this entity takes part in.",
-    "promptPlaceholderDraft": "Write the API endpoint specification for this use case."
+    "promptPlaceholderDraft": "Write the API endpoint specification for this use case.",
+    "quick": {
+      "renameKey": "F2 renames",
+      "more": "Prompt & details",
+      "remove": "Remove"
+    },
+    "history": {
+      "undo": "Undo",
+      "undoHint": "Undo (Ctrl+Z / ⌘Z)",
+      "redo": "Redo",
+      "redoHint": "Redo (Ctrl+Y / ⇧⌘Z)"
+    },
+    "file": {
+      "export": "Export as JSON",
+      "import": "Import JSON",
+      "notJson": "That file is not JSON.",
+      "notGraph": "That file is not a workflow graph.",
+      "imported": "Graph imported. Save to keep it.",
+      "importedWithProblems": "Imported with {n} problem to fix | Imported with {n} problems to fix"
+    }
   },
   "activity": {
     "action": {
@@ -2362,6 +2377,116 @@
     }
   },
   "ai": {
+    "configurator": {
+      "someUnavailable": "{count} change could no longer be applied — see why below. | {count} changes could no longer be applied — see why below.",
+      "examplesLabel": "For example",
+      "example1": "Every weekday at 08:30, run the curator to look for stale pages.",
+      "example2": "When a tracker ticket is labelled docs, have the scribe draft the pages.",
+      "assistantOff": "The assistant is switched off in this workspace, and the configurator with it.",
+      "hint": "Describe what should happen — when an agent runs, what starts it, which repositories are checked for drift, which workflows and templates to add, which methodology a project follows. The configurator reads today's setup and proposes the changes; nothing changes until someone allowed to applies them.",
+      "goalLabel": "Goal",
+      "goalPlaceholder": "Every Monday at 09:00 digest what changed; review every page merged in Payments; check pull requests in the api repository for drift.",
+      "propose": "Propose changes",
+      "proposing": "Proposing…",
+      "reading": "Reading the agents, triggers, projects and connectors…",
+      "proposal": "Proposal",
+      "pick": "Apply the change to {target}",
+      "today": "Today",
+      "proposed": "Proposed",
+      "applySelected": "Apply selected ({count})",
+      "applying": "Applying…",
+      "applied": "Applied {count} change | Applied {count} changes",
+      "appliedAt": "Applied {when}",
+      "dismissRest": "Dismiss the rest",
+      "adminApplies": "Some changes need a workspace admin, or the maintainer of their project.",
+      "landsOff": "Schedules, triggers and workflows are created switched off. Whoever turns one on becomes the person its runs act as. Templates, project settings, methodologies and agents take effect as soon as they are applied.",
+      "openAgents": "Turn them on in Agents",
+      "openWorkflows": "Turn them on in Workflows",
+      "openTemplates": "See them in Templates",
+      "example3": "When a use-case page is merged, draft its test cases.",
+      "history": "Earlier proposals",
+      "emptyTitle": "No proposals yet",
+      "emptyBody": "Describe a goal above and the configurator proposes the schedules, triggers and drift checks it needs.",
+      "changeCount": "{count} change | {count} changes",
+      "connectorCount": "{count} connector | {count} connectors",
+      "kinds": {
+        "agent-schedule": "Schedule",
+        "agent-trigger": "Trigger",
+        "connector-drift-check": "Drift check",
+        "workflow-draft": "Workflow",
+        "page-template": "Template",
+        "project-setting": "Project setting",
+        "methodology-link": "Methodology",
+        "custom-agent": "Agent"
+      },
+      "states": {
+        "pending": "Pending",
+        "applied": "Applied",
+        "dismissed": "Dismissed",
+        "unavailable": "Unavailable"
+      },
+      "scheduleKinds": {
+        "interval": "Every few minutes",
+        "daily": "Daily",
+        "weekly": "Weekly"
+      },
+      "unavailable": {
+        "already-configured": "Already configured this way.",
+        "agent-unsupported": "This agent cannot run on a schedule, or cannot be started by this event.",
+        "not-found": "The agent, project, connector or blueprint it names is not in this workspace.",
+        "connector-unsupported": "This connector has no drift check.",
+        "schedules-off": "Agent schedules are switched off on this server (AGENT_SCHEDULE_ENABLED).",
+        "triggers-off": "Agent triggers are switched off on this server (AGENT_TRIGGERS_ENABLED).",
+        "section-off": "Workflows are switched off in this workspace.",
+        "name-taken": "A workflow, template or agent with this name already exists.",
+        "invalid": "A template its graph names is gone or archived.",
+        "stale": "What this would write is no longer what was proposed: the blueprint or the project changed since. Ask again."
+      },
+      "settings": {
+        "verification": "Freshness thresholds",
+        "workItems": "Tracker handoff rules",
+        "breakingChanges": "Breaking-API gate",
+        "lintPolicy": "Style lint gate"
+      },
+      "inherits": "Inherits",
+      "applies": "Applies: {value}, {source}",
+      "appliesHeld": "Applies: {value}, {source} — {held}",
+      "held": {
+        "ceiling": "held at the server’s ceiling",
+        "agent-off": "the style linter is switched off"
+      },
+      "openPolicies": "See {project} policies",
+      "fields": {
+        "scheduleKind": "Repeats",
+        "scheduleMinutes": "Every (minutes)",
+        "scheduleTime": "At",
+        "scheduleWeekdays": "On",
+        "scheduleTimezone": "Timezone",
+        "scheduleNote": "Note",
+        "event": "When",
+        "projectId": "Project",
+        "categories": "Categories",
+        "connectorIds": "Connectors",
+        "branch": "Branch",
+        "labels": "Labels",
+        "note": "Note",
+        "mode": "Drift check",
+        "name": "Name",
+        "description": "Description",
+        "steps": "Steps",
+        "autoStart": "Starts on its own",
+        "events": "After",
+        "source": "Source",
+        "methodology": "Methodology",
+        "sections": "New sections",
+        "key": "Key",
+        "instructions": "Instructions",
+        "tools": "Tools",
+        "minTier": "Needs"
+      },
+      "seeAgents": "See them in Agents",
+      "openMethodology": "See {project} settings"
+    },
     "excludesCalls": "excludes {calls} with no price",
     "chartPoint": "{date}: {tokens} tokens, {calls}",
     "readOnlyBadge": "read-only — workspace admin required",
@@ -2407,6 +2532,7 @@
     "name": "Name",
     "tabConfig": "Configuration",
     "tabAgents": "Agents",
+    "tabConfigurator": "Configurator",
     "tabSkills": "Skills",
     "tabLearnings": "Learnings",
     "tabPlugins": "Plugins",
@@ -7348,7 +7474,7 @@
     "adminOnly": "Only workspace admins can see the security settings.",
     "audit": {
       "title": "Audit log",
-      "hint": "Graph queries, access-control changes and bypasses, and sign-ins. Newest first.",
+      "hint": "Admin changes, access control, sign-ins and data leaving the workspace. Newest first.",
       "scope": {
         "label": "Show",
         "workspace": "This workspace",
@@ -7356,8 +7482,16 @@
       },
       "platformHint": "Includes sign-ins and other events that belong to no workspace.",
       "filter": {
-        "label": "Action",
-        "all": "All actions"
+        "empty": "Filter the log",
+        "category": "Category",
+        "action": "Action",
+        "actor": "By",
+        "target": "Subject",
+        "targetPlaceholder": "A user or object id",
+        "result": "Result",
+        "from": "From",
+        "to": "to",
+        "clear": "Clear filters"
       },
       "columns": {
         "when": "When",
@@ -7369,7 +7503,7 @@
       },
       "anonymous": "Anonymous",
       "empty": "Nothing recorded yet.",
-      "emptyFiltered": "Nothing recorded for this action.",
+      "emptyFiltered": "Nothing matches these filters.",
       "actions": {
         "graph_query": "Graph query",
         "acl_bypass": "Admin read past a restriction",
@@ -7450,7 +7584,83 @@
         "user_admin_revoked": "Platform admin revoked",
         "user_disabled": "Account disabled",
         "user_enabled": "Account enabled",
-        "user_password_set": "Password set by an admin"
+        "user_password_set": "Password set by an admin",
+        "member_added": "Member added",
+        "member_updated": "Member role changed",
+        "member_removed": "Member removed",
+        "workspace_created": "Workspace created",
+        "workspace_features_updated": "Sections switched on or off",
+        "workspace_purpose_updated": "Workspace purpose saved",
+        "publishing_settings_updated": "Publishing switches changed",
+        "api-key_created": "API key created",
+        "api-key_revoked": "API key revoked",
+        "audit_exported": "Audit log exported",
+        "ai_settings_updated": "AI settings changed",
+        "ai_provider_created": "AI provider added",
+        "ai_provider_updated": "AI provider changed",
+        "ai_provider_deleted": "AI provider removed",
+        "ai_agent_created": "Agent created",
+        "ai_agent_updated": "Agent changed",
+        "ai_agent_deleted": "Agent deleted",
+        "ai_agent_reset": "Agent reset to defaults",
+        "ai_agent_trigger_created": "Agent trigger created",
+        "ai_agent_trigger_updated": "Agent trigger changed",
+        "ai_agent_trigger_deleted": "Agent trigger deleted",
+        "ai_agent_recipe_applied": "Agent recipe applied",
+        "ai_plugin_created": "MCP plugin added",
+        "ai_plugin_updated": "MCP plugin changed",
+        "ai_plugin_deleted": "MCP plugin removed",
+        "ai_skill_created": "Skill created",
+        "ai_skill_updated": "Skill changed",
+        "ai_skill_deleted": "Skill deleted",
+        "ai_skill_imported": "Skill imported",
+        "ai_styleguide_updated": "Styleguide changed",
+        "ai_styleguide_deleted": "Styleguide removed",
+        "ai_lint-policy_updated": "Lint policy changed",
+        "connector_created": "Connector added",
+        "connector_updated": "Connector changed",
+        "connector_deleted": "Connector removed",
+        "connector_link_removed": "Connector link removed",
+        "workflow_created": "Workflow created",
+        "workflow_updated": "Workflow changed",
+        "workflow_deleted": "Workflow deleted",
+        "template_created": "Template created",
+        "template_updated": "Template changed",
+        "template_archived": "Template archived",
+        "template_unarchived": "Template restored",
+        "template_reset": "Template reset to built-in",
+        "glossary_term_created": "Glossary term added",
+        "glossary_term_updated": "Glossary term changed",
+        "glossary_term_deleted": "Glossary term removed"
+      },
+      "categories": {
+        "sign-in": "Sign-in & SSO",
+        "people": "People & keys",
+        "access": "Page access",
+        "workspace": "Workspace",
+        "ai": "AI",
+        "integrations": "Connectors",
+        "content": "Templates, workflows & glossary",
+        "memory": "Memory",
+        "data": "Queries & exports"
+      },
+      "export": {
+        "label": "Export",
+        "csv": "CSV",
+        "json": "JSON",
+        "working": "Exporting…",
+        "hint": "Downloads what the filters show, up to 10,000 entries. The export is recorded here too."
+      },
+      "detail": {
+        "toggle": "Show details",
+        "onlyActor": "Only this actor",
+        "onlyTarget": "Only this subject",
+        "error": "Error",
+        "rows": "Rows",
+        "duration": "Duration",
+        "ms": "{n} ms",
+        "params": "Parameters",
+        "noParams": "None recorded"
       }
     },
     "tabs": {
@@ -8325,46 +8535,46 @@
       "memory": "Agent memory"
     },
     "serverOff": "Off on this server ({env}), whatever is chosen here.",
-      "sectionsTitle": "Sections",
-      "purpose": {
-        "title": "Purpose",
-        "subtitle": "Tick what this workspace is used for. The sections below follow: one no chosen use needs is suggested off, and a section you set yourself stays as you left it. Nothing changes until you apply.",
-        "descriptionLabel": "In your own words (optional)",
-        "descriptionPlaceholder": "We document our public REST API and hold a weekly design review.",
-        "askMe": "Ask me a few questions instead.",
-        "descriptionHint": "Only workspace admins see this.",
-        "apply": "Apply",
-        "switchesOn": "Will switch on.",
-        "switchesOff": "Will switch off.",
-        "suggestsOn": "Your purpose suggests this on.",
-        "suggestsOff": "Your purpose suggests this off.",
-        "uses": {
-          "team-wiki": {
-            "name": "Team wiki",
-            "description": "How the team works: processes, onboarding, decisions and how-tos."
-          },
-          "engineering-docs": {
-            "name": "Engineering docs",
-            "description": "Architecture, services and runbooks, kept next to the code they describe."
-          },
-          "api-docs": {
-            "name": "API product docs",
-            "description": "Reference for an API or SDK: specs, test suites and try-it."
-          },
-          "meeting-notes": {
-            "name": "Meeting notes",
-            "description": "Recordings and notes from meetings, turned into pages."
-          },
-          "support-kb": {
-            "name": "Support knowledge base",
-            "description": "The answers a support team and its bots give customers."
-          },
-          "public-docs": {
-            "name": "Public docs",
-            "description": "Documentation published for readers outside the team."
-          }
+    "sectionsTitle": "Sections",
+    "purpose": {
+      "title": "Purpose",
+      "subtitle": "Tick what this workspace is used for. The sections below follow: one no chosen use needs is suggested off, and a section you set yourself stays as you left it. Nothing changes until you apply.",
+      "descriptionLabel": "In your own words (optional)",
+      "descriptionPlaceholder": "We document our public REST API and hold a weekly design review.",
+      "askMe": "Ask me a few questions instead.",
+      "descriptionHint": "Only workspace admins see this.",
+      "apply": "Apply",
+      "switchesOn": "Will switch on.",
+      "switchesOff": "Will switch off.",
+      "suggestsOn": "Your purpose suggests this on.",
+      "suggestsOff": "Your purpose suggests this off.",
+      "uses": {
+        "team-wiki": {
+          "name": "Team wiki",
+          "description": "How the team works: processes, onboarding, decisions and how-tos."
+        },
+        "engineering-docs": {
+          "name": "Engineering docs",
+          "description": "Architecture, services and runbooks, kept next to the code they describe."
+        },
+        "api-docs": {
+          "name": "API product docs",
+          "description": "Reference for an API or SDK: specs, test suites and try-it."
+        },
+        "meeting-notes": {
+          "name": "Meeting notes",
+          "description": "Recordings and notes from meetings, turned into pages."
+        },
+        "support-kb": {
+          "name": "Support knowledge base",
+          "description": "The answers a support team and its bots give customers."
+        },
+        "public-docs": {
+          "name": "Public docs",
+          "description": "Documentation published for readers outside the team."
         }
       }
+    }
   },
   "git": {
     "clone": {

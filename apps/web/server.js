@@ -363,6 +363,7 @@ app.use('*all', async (req, res) => {
       measure: readCookie(req.headers.cookie, 'kn_measure'),
       pageRail: readCookie(req.headers.cookie, 'kn_pagerail'),
       docSort: readCookie(req.headers.cookie, 'kn_docsort'),
+      docsView: readCookie(req.headers.cookie, 'kn_docs_view'),
       treeOpen: readCookie(req.headers.cookie, 'kn_tree'),
       workspaceId: readCookie(req.headers.cookie, 'kn_ws'),
       locale,

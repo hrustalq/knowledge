@@ -20,7 +20,7 @@
 // "what was said, in what order" for the answer to "what hangs off what", and
 // a thread pinned to one passage is short enough that order is worth more.
 import { useI18n } from 'vue-i18n'
-import { computed, nextTick, ref, useId, watch } from 'vue'
+import { computed, defineAsyncComponent, nextTick, ref, useId, watch } from 'vue'
 import {
   Bot,
   CheckCircle2,
@@ -51,7 +51,7 @@ import {
 } from '@knowledge/ui/alert-dialog'
 import { MarkdownView } from '@/entities/document'
 import { excerpt } from '@/core/markdown/plain'
-import CommentComposer from './CommentComposer.vue'
+import type CommentComposerInstance from './CommentComposer.vue'
 import { UserAvatar, UserChip } from '@/entities/person'
 import { useMembers } from '@/entities/person'
 import { useAgentNames } from '@/entities/person'
@@ -59,6 +59,9 @@ import { fullTime, timelineTime } from '../model/mr-ui'
 import { useAuthStore } from '@/stores/auth'
 import { usePermission } from '@/stores/permissions'
 import { TeachAgentDialog } from '@/entities/assistant'
+
+// A full editor: loaded once a reply or an edit is shown, never for reading the thread (#1280).
+const CommentComposer = defineAsyncComponent(() => import('./CommentComposer.vue'))
 
 const { t } = useI18n()
 
@@ -101,7 +104,7 @@ watch(
   (resolved) => (expanded.value = !resolved),
 )
 
-const replyBox = ref<InstanceType<typeof CommentComposer> | null>(null)
+const replyBox = ref<InstanceType<typeof CommentComposerInstance> | null>(null)
 /** The comment currently being rewritten in place, if any. */
 const editing = ref<string | null>(null)
 const editingBody = computed(

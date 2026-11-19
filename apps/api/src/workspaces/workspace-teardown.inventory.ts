@@ -97,6 +97,7 @@ export const WORKSPACE_TEARDOWN = {
   AgentRunStep: 'workspace',
   AgentRun: 'workspace',
   AgentTrigger: 'workspace',
+  ConfigurationProposal: 'workspace',
   AiAgent: 'workspace',
   AiModel: 'workspace',
   AiPlugin: 'workspace',

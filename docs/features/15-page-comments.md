@@ -32,10 +32,11 @@ loses their place.
 
 Two things changed inside the main column:
 
-- **The content is the editor in read mode.** `RichEditor` with
-  `editable: false`, not the static renderer — so what you read is literally
-  what you would edit, with live node views for diagrams, whiteboards, tables
-  and expands.
+- **The content is the editor's own view, read-only.** `RichReader`, not the
+  static renderer — built from the same `contentExtensions` as `RichEditor`, so
+  what you read is literally what you would edit, with live node views for
+  diagrams, whiteboards, tables and expands. It carries none of the authoring
+  tools (#1280); a comment box loads its editor when it opens.
 - **Any passage can be commented on**, the way an annotated PDF or a Figma
   frame works. There is no discussion list under the content: comments live on
   the text. The ones with no place on it — a comment on the page as a whole,

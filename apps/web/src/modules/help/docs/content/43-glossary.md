@@ -10,6 +10,10 @@ different things in two projects — which is usually the actual situation.
 
 Each term has aliases, a markdown definition, and optionally a page it points at.
 
+The glossary is vocabulary for **prose**. It is not the graph's: an entity key's two
+spellings are joined by an entity alias, and entity and relation types are described in
+*The graph, relations and entities*.
+
 ## Two layers, same split as relations
 
 **Linking is deterministic and happens at read time.** When a page renders, terms are

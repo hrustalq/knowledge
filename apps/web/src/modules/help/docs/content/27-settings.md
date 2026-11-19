@@ -21,8 +21,12 @@ Two of these are easy to confuse:
 
 - **Activity** is the product timeline — page created, MR merged, comment resolved. It is
   what a team reads.
-- The **audit log** (under AI/governance, `GET /v1/audit-logs`) records operator graph
-  queries specifically, and is admin-only. It is what a security review reads.
+- The **audit log** (Security → Audit log, `GET /v1/audit-logs`) records administration:
+  members and roles, sections, publishing, API keys, AI settings, connectors, templates,
+  workflows and the glossary, plus sign-ins, access changes, operator graph queries and
+  exports. It is admin-only and filters by category, action, actor, subject, dates and
+  outcome. **Export** downloads the filtered set as CSV or JSON, and the download is
+  recorded too. It is what a security review reads.
 
 Sections gate themselves on the role rather than on the route, because these are workspace
 permissions and the API enforces them regardless. The one exception is **Users**, which is

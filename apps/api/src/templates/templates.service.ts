@@ -441,7 +441,7 @@ export class TemplatesService {
         });
         return created;
       });
-      this.record(row, 'template.created', userId);
+      this.record(row, { action: 'template.created' }, userId);
       return this.get(row.id);
     });
   }
@@ -500,7 +500,7 @@ export class TemplatesService {
         }
         return this.prisma.pageTemplate.update({ where: { id: row.id }, data });
       });
-      this.record(updated, 'template.updated', userId, nextVersion ? { version: nextVersion.version } : {});
+      this.record(updated, { action: 'template.updated' }, userId, nextVersion ? { version: nextVersion.version } : {});
       return this.get(id);
     });
   }
@@ -514,7 +514,7 @@ export class TemplatesService {
         where: { id },
         data: { archivedAt: archived ? new Date() : null },
       });
-      this.record(updated, archived ? 'template.archived' : 'template.unarchived', userId);
+      this.record(updated, archived ? { action: 'template.archived' } : { action: 'template.unarchived' }, userId);
     }
     return this.get(id);
   }
@@ -528,7 +528,7 @@ export class TemplatesService {
     const row = await this.requireRow(id);
     if (!row.builtInKey) throw new BadRequestException(t('error.template.notDeletable'));
     await this.prisma.pageTemplate.delete({ where: { id } });
-    this.record(row, 'template.reset', userId);
+    this.record(row, { action: 'template.reset' }, userId);
   }
 
   // ----------------------------------------------------------------- helpers
@@ -581,7 +581,7 @@ export class TemplatesService {
       }
       return created;
     });
-    this.record(row, 'template.created', userId);
+    this.record(row, { action: 'template.created' }, userId);
     return this.get(row.id);
   }
 
@@ -595,8 +595,11 @@ export class TemplatesService {
     return row.builtInKey && isBuiltInTemplateKey(row.builtInKey) ? BUILT_IN_TEMPLATES[row.builtInKey].version : 0;
   }
 
-  /** Names are unique per (workspace, project, methodology) among custom templates, archived ones included. */
-  private async assertNameFree(
+  /**
+   * Names are unique per (workspace, project, methodology) among custom templates, archived ones included.
+   * Public for the configurator (#1312), which asks before it offers a template.
+   */
+  async assertNameFree(
     workspaceId: string,
     projectId: string | null,
     name: string,
@@ -784,7 +787,8 @@ export class TemplatesService {
     };
   }
 
-  private record(row: PageTemplate, action: string, userId?: string, extra: Record<string, unknown> = {}): void {
+  /** `{ action }` keeps each name a literal `action:` for the audit spec (#1251): these rows are audited too. */
+  private record(row: PageTemplate, { action }: { action: string }, userId?: string, extra: Record<string, unknown> = {}): void {
     void this.activity.record({
       workspaceId: row.workspaceId,
       actor: userId,

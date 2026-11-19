@@ -13,6 +13,140 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.61.0] — 2026-11-19
+
+### Changed
+
+- **Search answers faster in large workspaces (#1288).** The semantic half of a search no longer makes ArcadeDB
+  collect every chunk of the workspace before it looks for the nearest ones, a cost that grew with the workspace. It
+  now reads eight times as many nearest neighbours from the whole index and keeps the ones the reader may see; only
+  when too few of them qualify (a small workspace sharing the store, a narrow page allow-list, an old as-of date) does
+  it fall back to the filtered walk, which is cheap in exactly those cases. On the dev store's 6,689-chunk workspace,
+  over 120 title queries, the vector leg's database time fell from 142 to 11 ms at the median (969 → 24 ms p95), and a
+  whole search from 261 to 60 ms (1,301 → 113 ms p95). Results are unchanged: recall@1 43.3% and recall@10 77.5%
+  before and after, and the workspace, live/as-of and page-permission predicates apply exactly as before.
+- **Indexing a page spends less time in graph bookkeeping (#1289).** After a page's chunks are written, marking the
+  new revision live and stamping its valid-time interval used to make ArcadeDB read every chunk in the workspace,
+  embeddings included, once per update, so the cost grew with the workspace rather than the page. A page's chunks are
+  now found through an index, and only rows whose live flag actually changes are rewritten. On the dev store's
+  6,993-chunk workspace, over the audit's ten 4 KB pages, the two steps fell from 541 to 118 ms at the median (2,012
+  → 178 ms max) and the whole pipeline from 999 to 716 ms. The same rows end up live and the same intervals are
+  stamped (doc 57).
+- **Opening the assistant downloads about 185 KiB less script (#1285).** The graph, search and activity views a
+  reply can embed now load only when a reply actually contains one, and a C4 diagram's renderer loads only when a
+  reply or page has a C4 block. In the lab's 390 px profile a cold `/assistant` load falls from 1,597 to 1,412 KiB of
+  script, and the time until its content appears falls from 7.1 s to 5.9 s. Most of what is left is the conversation
+  itself: it is still drawn in the browser after the app's code and two requests have finished, not on the server.
+  Chats, the composer, citations, feedback, rename and delete work as before.
+- **A share link no longer downloads published-site code (#1281).** The public reader now loads only the page for
+  what it is showing: a share link gets the share page, a published site gets the site with its search, Ask and tree,
+  and the Ask widget gets only Ask. A share's Download dialog loads only on links that offer downloads. Together with
+  dropping unused shared definitions from every bundle, a share link's start-up script falls from 534 to 363 KiB
+  (20 files instead of 35), a published site's from 534 to 459 KiB, and the member app's from 795 to 768 KiB.
+  Shares, sites, the password gate and the widget look and behave as before. `make bundle-budget` now checks the
+  reader per view (share 400 KiB, site 505 KiB) instead of the shell alone.
+- **Reading a page no longer downloads the editor (#1280).** The page view and a merge request's review canvas draw
+  the body with a read-only view built from the same blocks as the editor, so headings, the outline, links, diagrams,
+  comment highlights, glossary links and passage links look and behave as before. The toolbar, slash and `@` menus,
+  drag handle, uploads and AI suggestions now load only on the edit page, and a comment box's editor loads when one is
+  opened. On a 160 KiB test page a read downloads about 132 KiB less script, and the body's interactive view is built
+  once the browser is idle instead of during start-up (mobile hydration 491 → 313 ms in the lab). Editing is unchanged.
+- **Pages in tree or list view no longer download the graph (#1279).** The graph canvas loads the first time the
+  Graph view is shown, behind the same skeleton it already used. A cold tree or list load is about 237 KiB of
+  script lighter. The graph view itself is unchanged.
+- **The agent picker no longer resolves a provider and model for every agent.** Listing agent names now reads the
+  workspace's override rows once even on a cold cache; the offered and complete lists are unchanged. (#1290)
+- **One workflow canvas for building, reading and watching (#1246).** The detail page, a run and the wizard's
+  preview now draw a workflow with the builder's own canvas, so they show the arrangement the builder saved. Before
+  this, every read-only view re-laid the graph out and could look different from the builder. In the builder, the
+  step palette, undo/redo and export/import float on the canvas. A step is renamed on its card (double-click or F2),
+  and its kind, output, category and next steps are edited in a popover on the step. The drawer keeps only the long
+  fields: prompt, template, relation and cap. Adding a step while another is selected places it to the right and
+  connects it. A run's canvas shows progress on each step and along the edge into it: a flowing line into a step
+  that is working, a dotted warning line into one waiting for review, a solid line once the hand-off is done.
+
+### Added
+
+- **The audit log now covers administration, filters properly and exports (#1251).** Adding, removing or
+  changing a member (with old and new role), creating a workspace, switching sections or saving its purpose,
+  changing publishing switches, creating or revoking an API key, and changes to AI providers, agents, triggers,
+  plugins, skills, styleguides, connectors, workflows, templates and the glossary each leave an audit row with
+  who did it, to what, and what moved. Secrets are stripped before a row is stored. Under Security → Audit log,
+  an admin filters by category, action, actor, subject, date range and outcome, opens a row to read its
+  parameters, and downloads the filtered set as CSV or JSON (up to 10,000 entries). The download is recorded
+  too. Page edits stay in the activity feed, as before.
+
+- **Search performance attribution.** `search.executed` and `make backtest ARGS="--report"` now attribute post-join
+  time to fusion, community scoring, methodology levels and re-ranking, page grouping and snippets, placement and
+  validity, and analytics enqueueing. Timings are collected through reusable method decorators, isolated between
+  concurrent searches. (#1291)
+- **The configurator links methodologies and copies agents from blueprints (#1314).** A goal such as "set Payments
+  up for discovery work" now proposes linking the project to the Discovery methodology. Applying it links the
+  methodology exactly as the project settings screen does, including the sections the project lacks on a first
+  link, which the proposal lists. A goal that needs an agent a methodology declares can copy that agent into the
+  workspace, with its instructions exactly as the blueprint writes them; the configurator never writes an agent's
+  instructions itself. The project's maintainer applies a link, and a workspace admin applies an agent. If the
+  blueprint or the project changed after the proposal was written, the change is shown as stale and nothing is
+  written.
+- **The configurator proposes project settings (#1313).** A goal such as "review Payments pages monthly and block
+  breaking API changes there" now yields project-setting changes: a project's freshness thresholds, tracker handoff
+  rules, breaking-API gate or style lint gate. Each row shows the project's own value today and after, and beside
+  each what actually applies and where it comes from (this project, the workspace or the default). A value the
+  server's ceiling holds back (`STYLE_LINT_POLICY`, `WORK_ITEM_AUTOCREATE_MAX_PER_TICK`) or a switched-off style
+  linter is named, never applied silently. The project's maintainer applies thresholds and handoff rules; the two
+  merge gates stay a workspace admin's. An editor without the project's manage grant is refused, and nothing is
+  written. The capture parent and the methodology are not proposed.
+- **The configurator drafts workflows and page templates (#1312).** A goal such as "when a use-case page is merged,
+  draft its test cases" now yields a workflow, compiled before it is offered, and a goal that needs a new page
+  template yields one. Applying creates the workflow switched off, so it shows in Workflows waiting for someone to
+  turn it on, and creates the template ready to use. An editor may apply a template for one project; a workspace
+  admin applies workflows and workspace-wide templates. Both are unavailable while the workspace has Workflows
+  switched off, and a name already taken is shown as unavailable rather than failing on apply. A goal whose every
+  proposed change is refused no longer leaves an empty proposal in the history.
+- **The configurator: describe what should happen and get the setup proposed (#1311).** Settings → AI →
+  Configurator takes a goal such as "every Monday at 09:00 digest what changed, review every page merged in
+  Payments, check pull requests in the api repository for drift". It proposes the agent schedules, agent triggers
+  and repository drift checks that would do it, each shown against what is configured today. Editors can draft a
+  proposal. A workspace admin applies all, some or none of its changes, and each goes through the same settings it
+  would be made in by hand. Schedules and triggers are created switched off, and whoever turns one on owns its
+  runs. A change that is already configured, or that this server switches off, is shown as unavailable with the
+  reason.
+- **Undo and redo in the workflow builder.** Ctrl/Cmd-Z and Ctrl-Y / Shift-Cmd-Z (or the canvas toolbar) step
+  through every change to the graph made in the session: moves, connections, added and removed steps, popover and
+  drawer edits, imports and architect proposals. Typing a prompt or nudging a step with the arrow keys counts as one
+  edit.
+- **Workflow graphs as JSON.** Export a workflow's graph from the builder or the detail page (any member), and import
+  one in the builder. An import that is not a graph is refused. One that is a graph but has problems loads as an
+  unsaved edit with the problems listed, and Save stays blocked until they are fixed.
+
+### Fixed
+
+- **A long page's outline no longer pushes the rail down as it loads (#1284).** The "On this page" list used to
+  appear only after the page body had been drawn, so the verification, overview and other rail cards jumped down
+  under it (layout shift 0.21 on desktop), and below `xl` the folded outline pushed the body down (0.035 at 390 px).
+  The server now renders the outline from the page's markdown, so it is in place from the first paint. The lab
+  measures 0.0001 on desktop and 0 at 390 px on the 160 KiB test page. The outline's entries and where they jump
+  to are unchanged.
+- **Pages opens straight into your remembered view (#1282).** A reader who left Pages on Tree or List used to see the
+  graph's frame first, then a jump to their view once the page loaded (layout shift 0.21 on desktop). The choice is
+  now also kept in a `kn_docs_view` cookie, so the server renders that view. Cold loads in the lab show no shift on
+  desktop or at 390 px. With no saved choice, or on an `?asOf=` link, Pages still opens on the graph. A choice saved
+  before this release carries over and moves into the cookie on the first visit.
+
+### Operations
+
+- `AUDIT_RETENTION_DAYS` (default `0`) sets how many days audit rows are kept. Left unset, nothing is ever
+  deleted and existing installs behave as before. When set, the API deletes older rows once an hour, and that
+  cannot be undone, so export first if you need the history. No migration.
+- Migration `20270209100000_configuration_proposals` adds the `configuration_proposals` table. It is additive and
+  safe under a rollback: the previous image ignores the table. Proposals on a server with
+  `AGENT_SCHEDULE_ENABLED` or `AGENT_TRIGGERS_ENABLED` off mark schedule or trigger changes as unavailable, so
+  turn those on where the configurator should set them up. The configurator uses the `review` route and records
+  usage as the `configurator` operation.
+- The worker adds a `Chunk (workspaceId, documentId, revisionId)` index to ArcadeDB on boot (#1289). It is built
+  once over the existing chunks (60 ms for 7,400 locally) and is safe under a rollback: the previous image ignores
+  it. If the boot log shows `DDL skipped` for it, indexing still works, only without the speed-up.
+
 ## [0.60.0] — 2026-11-19
 
 ### Added
@@ -7907,7 +8041,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.60.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.61.0...HEAD
+[0.61.0]: https://github.com/hrustalq/knowledge/compare/v0.60.0...v0.61.0
 [0.60.0]: https://github.com/hrustalq/knowledge/compare/v0.59.0...v0.60.0
 [0.59.0]: https://github.com/hrustalq/knowledge/compare/v0.58.0...v0.59.0
 [0.58.0]: https://github.com/hrustalq/knowledge/compare/v0.57.0...v0.58.0

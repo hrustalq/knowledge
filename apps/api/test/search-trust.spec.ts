@@ -227,6 +227,24 @@ describe('SearchService analytics (#79)', () => {
     );
   });
 
+  it('records every post-join stage on the search event', async () => {
+    const { svc } = build([verified, plain], [hit('plain', 0.5), hit('verified', 0.5)]);
+    const caller = { principal: DEV_PRINCIPAL, channel: 'mcp' as const };
+    await svc.search({ workspaceId: WS, query: 'billing', mode: 'semantic' }, ADMIN, caller);
+    expect(vi.mocked(emitBacktest)).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        kind: 'search.executed',
+        joinMs: expect.any(Number),
+        fuseMs: expect.any(Number),
+        communityMs: expect.any(Number),
+        rerankMs: expect.any(Number),
+        resultsMs: expect.any(Number),
+        placementMs: expect.any(Number),
+        analyticsMs: expect.any(Number),
+      }),
+    );
+  });
+
   it('files an empty search too, and nothing for a search with no caller', async () => {
     const { svc, analytics } = build([], []);
     const caller = { principal: DEV_PRINCIPAL };

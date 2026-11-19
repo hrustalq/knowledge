@@ -17,6 +17,22 @@ addressed as `doc:<id>`. Entities are plain keys like `service:identity` or
 `queue:orders`. There is no direct document-to-document edge, which is why one "entity
 hop" is two hops in a traversal: page → entity → page.
 
+## Entity types and relation types
+
+An entity's **type** is the part of its key before the first colon: `service:identity` is
+a `service`. Any prefix works and nothing registers one; a key with no colon is a plain
+`entity`. Some prefixes also place the entity on a layer (system, component, interface,
+code); every other prefix is a `concept`. Because no prefix is checked, a typo such as
+`servce:billing` quietly starts a type of its own. Two spellings of one key are joined by
+an entity alias.
+
+**Relation types** are the opposite: a fixed list, checked on every write (see below).
+
+Knowledge does not call this an ontology: it has entity types and relation types, but no
+rules about which relation may join which types. The word appears in the product only as
+the **L1 Ontology** level of the construction methodology, where a team documents its own
+domain as one entity page per domain entity, with the words in the glossary.
+
 ## Four classes of fact
 
 Every edge records where it came from, and the source decides what may overwrite it:

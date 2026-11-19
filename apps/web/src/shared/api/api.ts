@@ -28,6 +28,8 @@ const MEASURE_KEY = 'kn_measure'
 const PAGE_RAIL_KEY = 'kn_pagerail'
 /** How the document list is sorted (#1256), as `<sort>:<order>`. */
 const DOC_SORT_KEY = 'kn_docsort'
+/** Which view the Pages index opens in (#1282): graph, tree or list. */
+const DOCS_VIEW_KEY = 'kn_docs_view'
 /** Which branches of the sidebar page tree are open. */
 const TREE_OPEN_KEY = 'kn_tree'
 /**
@@ -59,6 +61,7 @@ interface SsrRequestContext {
   measure: string | null
   pageRail: string | null
   docSort: string | null
+  docsView: string | null
   treeOpen: string | null
   locale: Locale | null
   traceId: string | null
@@ -102,6 +105,7 @@ let clientAiPanel: string | null = null
 let clientMeasure: string | null = null
 let clientPageRail: string | null = null
 let clientDocSort: string | null = null
+let clientDocsView: string | null = null
 let clientTreeOpen: string | null = null
 let clientLocale: Locale | null = null
 if (!import.meta.env.SSR) {
@@ -122,6 +126,9 @@ if (!import.meta.env.SSR) {
     clientMeasure = localStorage.getItem(MEASURE_KEY)
     clientPageRail = localStorage.getItem(PAGE_RAIL_KEY)
     clientDocSort = localStorage.getItem(DOC_SORT_KEY)
+    // The cookie, not storage: it is exactly what the server rendered with, so a
+    // reader whose storage predates the mirror still hydrates without a mismatch.
+    clientDocsView = document.cookie.match(new RegExp(`(?:^|; )${DOCS_VIEW_KEY}=([^;]*)`))?.[1] ?? null
     clientTreeOpen = localStorage.getItem(TREE_OPEN_KEY)
     const storedLocale = localStorage.getItem(LANG_KEY)
     if (isLocale(storedLocale)) {
@@ -366,6 +373,26 @@ export function setDocumentSort(sort: DocumentSort, order: SortOrder): void {
   try {
     localStorage.setItem(DOC_SORT_KEY, value)
     document.cookie = `${DOC_SORT_KEY}=${value}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * The Pages index's view (#1282), or `null` when the reader never chose (the
+ * page then opens on the graph). Server-read so a remembered tree or list is
+ * the first frame, not a swap after hydration.
+ */
+export function getDocsView(): string | null {
+  return (import.meta.env.SSR ? ssrContext()?.docsView : clientDocsView) ?? null
+}
+
+export function setDocsView(view: string): void {
+  if (import.meta.env.SSR) return
+  clientDocsView = view
+  try {
+    localStorage.setItem(DOCS_VIEW_KEY, view)
+    document.cookie = `${DOCS_VIEW_KEY}=${view}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`
   } catch {
     /* ignore */
   }

@@ -40,7 +40,7 @@ describe('workspace purpose (#934): storage', () => {
         upsert: vi.fn(async ({ update }: { update: Record<string, unknown> }) => void (stored = { ...stored, ...update })),
       },
     };
-    return { prisma, features: new FeaturesService(prisma as never, { get: () => true } as never) };
+    return { prisma, features: new FeaturesService(prisma as never, { get: () => true } as never, { record: async () => {} } as never) };
   }
 
   it('reports a workspace with no row as not asked, with nothing off', async () => {

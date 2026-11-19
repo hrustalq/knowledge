@@ -56,6 +56,8 @@ for (const profile of profiles) {
         await context.addCookies([
           { name: 'kn_ws', value: workspaceId, url: base },
           { name: 'kn_proj', value: projectId, url: base },
+          // The remembered view as the app now stores it (#1282): the server reads the cookie.
+          ...(route.view ? [{ name: 'kn_docs_view', value: route.view, url: base }] : []),
         ])
       }
       const page = await context.newPage()

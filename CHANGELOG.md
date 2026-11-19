@@ -17,6 +17,8 @@ in the pull request that introduces them — see
 
 ### Changed
 
+- **The agent picker no longer resolves a provider and model for every agent.** Listing agent names now reads the
+  workspace's override rows once even on a cold cache; the offered and complete lists are unchanged. (#1290)
 - **One workflow canvas for building, reading and watching (#1246).** The detail page, a run and the wizard's
   preview now draw a workflow with the builder's own canvas, so they show the arrangement the builder saved. Before
   this, every read-only view re-laid the graph out and could look different from the builder. In the builder, the

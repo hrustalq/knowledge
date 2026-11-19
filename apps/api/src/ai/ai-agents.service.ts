@@ -97,18 +97,7 @@ export class AiAgentsService {
    * nobody can name renders as itself.
    */
   async choices(workspaceId: string, scope: 'offered' | 'all' = 'offered'): Promise<AiAgentChoice[]> {
-    const resolved = await this.registry.list(workspaceId);
-    return resolved
-      .filter(
-        (agent) =>
-          scope === 'all' ||
-          (agent.enabled &&
-          agent.surfaces.includes('interactive') &&
-          // The router picks an agent; offering it as one to pick is a category
-          // error, and choosing it would just make the choice twice.
-          agent.key !== 'router'),
-      )
-      .map((agent) => ({ key: agent.key, name: agent.name, description: agent.description }));
+    return this.registry.choices(workspaceId, scope);
   }
 
   /**

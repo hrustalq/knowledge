@@ -6,6 +6,7 @@ import {
   type AgentCapability,
   type AgentMemoryPolicy,
   type AgentSurface,
+  type AiAgentChoice,
   type AiPurpose,
   type ModelTier,
 } from '@knowledge/contracts';
@@ -117,6 +118,31 @@ export class AgentRegistryService {
       ...builtIns.map((base) => this.merge(workspaceId, base.key, base, rows.get(base.key) ?? null)),
       ...custom.map((row) => this.merge(workspaceId, row.key, null, row)),
     ]);
+  }
+
+  /** Picker fields only: resolving a provider for every name costs one config resolution per agent. */
+  async choices(workspaceId: string, scope: 'offered' | 'all'): Promise<AiAgentChoice[]> {
+    const rows = await this.rowsFor(workspaceId);
+    const agents = [
+      ...Object.values(BUILT_IN_AGENT_DEFAULTS).map((base) => ({ key: base.key, base, row: rows.get(base.key) ?? null })),
+      ...[...rows.values()]
+        .filter((row) => !(row.key in BUILT_IN_AGENT_DEFAULTS))
+        .map((row) => ({ key: row.key, base: null, row })),
+    ];
+    return agents
+      .filter(
+        ({ key, base, row }) =>
+          scope === 'all' ||
+          ((row?.enabled ?? true) &&
+            (base?.surfaces ?? ['interactive']).includes('interactive') &&
+            // The router picks an agent; offering it as one to pick is a category error.
+            key !== 'router'),
+      )
+      .map(({ key, base, row }) => ({
+        key,
+        name: row?.name ?? (base ? t(base.name) : key),
+        description: row?.description ?? (base ? t(base.description) : ''),
+      }));
   }
 
   private async merge(

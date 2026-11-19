@@ -1,6 +1,7 @@
 import { BadRequestException, HttpException, Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { DRIFT_CHECK_CONFIG_KEY, type ConfigurationChange, type ConfigurationProposal } from '@knowledge/contracts';
+import { ReadCache, READ_CACHE_FAMILIES } from '../cache/read-cache.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AccessService } from '../auth/access.service.js';
 import type { Principal } from '../auth/principal.js';
@@ -11,6 +12,11 @@ import { AgentTriggersService } from '../ai/agent-triggers.service.js';
 import { ConnectorsService } from '../connectors/connectors.service.js';
 import { WorkflowsService } from '../workflows/workflows.service.js';
 import { TemplatesService } from '../templates/templates.service.js';
+import { PermissionService } from '../permissions/permission.service.js';
+import { VerificationPolicyService } from '../verification/verification-policy.service.js';
+import { ApiSettingsService } from '../api-specs/api-settings.service.js';
+import { LintChecksService } from '../documents/lint/lint-checks.service.js';
+import { WorkItemRulesService } from '../connectors/handoff/work-item-rules.service.js';
 import { lockSubject } from '../common/subject-lock.js';
 import { t } from '../i18n/t.js';
 import { ConfiguratorService, changesOf, requiresFor, toProposal } from './configurator.service.js';
@@ -21,12 +27,16 @@ import { ConfiguratorService, changesOf, requiresFor, toProposal } from './confi
  * Every rule here is the one the change's own settings screen already applies,
  * because the change goes through that screen's service: `AiAgentsService.update`,
  * `AgentTriggersService.create`, `ConnectorsService.update`, `WorkflowsService.create`,
- * `TemplatesService.create`, recorded with the activity action their route records
- * (the last two record their own, as their routes rely on). On top of that, two checks on execution:
+ * `TemplatesService.create`, and for a project setting its route's service
+ * (`VerificationPolicyService`, `WorkItemRulesService`, `ApiSettingsService`,
+ * `LintChecksService`), recorded with the activity action their route records
+ * (workflows and templates record their own, as their routes rely on; of the
+ * project settings only the lint route records one). On top of that, two checks on execution:
  *
  *   1. the role each picked change requires, for the caller, before anything is
  *      written — an editor who drafted a proposal cannot apply a workspace-level
- *      change from it (403, nothing written);
+ *      change from it, nor a project setting of a project they do not maintain
+ *      (403, nothing written);
  *   2. each change assessed again against the workspace as it is now, so one
  *      somebody configured by hand since the proposal was written lands as
  *      `unavailable`, not as a duplicate.
@@ -48,6 +58,12 @@ export class ConfigurationApplyService {
     private readonly workflows: WorkflowsService,
     private readonly templates: TemplatesService,
     private readonly configurator: ConfiguratorService,
+    private readonly permissions: PermissionService,
+    private readonly verification: VerificationPolicyService,
+    private readonly apiSettings: ApiSettingsService,
+    private readonly lint: LintChecksService,
+    private readonly workItems: WorkItemRulesService,
+    private readonly cache: ReadCache,
   ) {}
 
   async apply(id: string, workspaceId: string, changeIds: string[], principal: Principal): Promise<ConfigurationProposal> {
@@ -56,9 +72,16 @@ export class ConfigurationApplyService {
     const picked = changesOf(seen).filter((c) => wanted.has(c.id) && c.state === 'pending');
     if (!picked.length) throw new BadRequestException(t('error.configurator.nothingToApply'));
     // From the spec, as the change's own route would decide it, not the stored `requires`.
-    for (const role of new Set(picked.map((c) => requiresFor(c.spec)))) {
-      await this.access.requireRole(principal, workspaceId, role);
+    const asked = new Map<string, () => Promise<unknown>>();
+    for (const { spec } of picked) {
+      const role = requiresFor(spec);
+      if (role === 'maintainer' && spec.kind === 'project-setting') {
+        asked.set(`project:${spec.projectId}`, () => this.permissions.requireProjectManage(principal, spec.projectId));
+      } else if (role !== 'maintainer') {
+        asked.set(role, () => this.access.requireRole(principal, workspaceId, role));
+      }
     }
+    for (const check of asked.values()) await check();
 
     return this.prisma.withTransaction(
       async () => {
@@ -154,6 +177,33 @@ export class ConfigurationApplyService {
         const { name, description, projectId, source } = spec;
         const template = await this.templates.create({ workspaceId, projectId, name, description, source }, actor);
         return template.id ?? template.ref;
+      }
+      case 'project-setting': {
+        const { projectId } = spec;
+        switch (spec.setting) {
+          case 'verification':
+            await this.verification.updateProject(projectId, spec.values);
+            // Its own invalidation ran inside this transaction; a read before the commit may have cached the old rows.
+            this.prisma.onCommit(() => this.cache.invalidate(workspaceId, READ_CACHE_FAMILIES.projectHealthSettings.key()));
+            break;
+          case 'workItems':
+            await this.workItems.setProject(projectId, spec.values);
+            break;
+          case 'breakingChanges':
+            await this.apiSettings.setProjectBreakingChanges(projectId, spec.values.policy);
+            break;
+          case 'lintPolicy': {
+            const settings = await this.lint.setPolicy(workspaceId, projectId, spec.values.policy, actor);
+            this.afterCommit(workspaceId, actor, 'ai.lint-policy.updated', undefined, {
+              projectId,
+              policy: spec.values.policy,
+              effective: settings.effective,
+              ...via,
+            });
+            break;
+          }
+        }
+        return projectId;
       }
     }
   }

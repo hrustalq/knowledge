@@ -4,6 +4,7 @@ import type { ConfigurationChange } from '@knowledge/contracts';
 import { readChanges } from '../src/configurator/configuration-changes.js';
 import { ConfiguratorService } from '../src/configurator/configurator.service.js';
 import { ConfigurationApplyService } from '../src/configurator/configuration-apply.service.js';
+import { ProjectSettingChanges } from '../src/configurator/project-setting-changes.js';
 
 const WS = '11111111-1111-4111-8111-111111111111';
 const PROJECT = '22222222-2222-4222-8222-222222222222';
@@ -123,7 +124,7 @@ function fakePrisma() {
 function configurator(
   prisma: ReturnType<typeof fakePrisma>,
   runWithTools: unknown,
-  opts: { disabled?: string[]; taken?: boolean } = {},
+  opts: { disabled?: string[]; taken?: boolean; projectSettings?: ProjectSettingChanges } = {},
 ) {
   const agents = {
     resolve: vi.fn(async (_ws: string, key: string) => ({ key, name: key, enabled: true, config: { enabled: true }, missing: [], instructions: 'x' })),
@@ -146,6 +147,7 @@ function configurator(
       }),
       resolve: vi.fn().mockResolvedValue({ row: null }),
     } as never,
+    (opts.projectSettings ?? {}) as never,
     config as never,
   );
 }
@@ -155,7 +157,7 @@ describe('configurator tool loop (#1250)', () => {
     const prisma = fakePrisma();
     const results: string[] = [];
     const runWithTools = vi.fn(async (_ctx, _messages, tools: Array<{ function: { name: string } }>, execute) => {
-      expect(tools.map((t) => t.function.name)).toEqual(['list_agents', 'list_agent_triggers', 'list_projects', 'list_connectors', 'list_workflows', 'list_templates', 'propose_configuration']);
+      expect(tools.map((t) => t.function.name)).toEqual(['list_agents', 'list_agent_triggers', 'list_projects', 'list_connectors', 'list_workflows', 'list_templates', 'get_project_settings', 'propose_configuration']);
       // A name it was never offered is refused on execution, whatever the model asks.
       results.push((await execute('update_agent', {})).content);
       results.push(
@@ -218,6 +220,12 @@ describe('configuration apply (#1250)', () => {
       {} as never,
       {} as never,
       configuratorSvc as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
     );
 
     await expect(svc.apply('p1', WS, ['c1'], principal)).rejects.toBeInstanceOf(ForbiddenException);
@@ -260,6 +268,12 @@ describe('configuration apply, workflow drafts and templates (#1312)', () => {
       workflows as never,
       templates as never,
       configuratorSvc as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
     );
     return { svc, access, workflows, templates };
   }
@@ -284,5 +298,178 @@ describe('configuration apply, workflow drafts and templates (#1312)', () => {
     const inProject = applier(change({ ...wide, projectId: PROJECT }, 'editor'));
     await inProject.svc.apply('p1', WS, ['c1'], principal);
     expect(inProject.access.requireRole).toHaveBeenCalledWith(principal, WS, 'editor');
+  });
+});
+
+describe('configurator project settings (#1313)', () => {
+  const settingOf = (setting: string, rest: Record<string, unknown>) => ({ kind: 'project-setting', projectId: PROJECT, setting, reason: 'r', ...rest });
+
+  it('keeps only the keys the model named, so a key left out never reaches the writer as null', () => {
+    const { changes, dropped } = readChanges(
+      [
+        settingOf('verification', { reviewIntervalDays: 30 }),
+        settingOf('workItems', { workItemIssues: 'high', workItemConflicts: null }),
+        settingOf('lintPolicy', { policy: null }),
+        settingOf('verification', {}),
+        settingOf('breakingChanges', { policy: 'strict' }),
+        { kind: 'project-setting', setting: 'lintPolicy', policy: 'warn', reason: 'no project' },
+        settingOf('captureParent', { parentDocumentId: PROJECT }),
+      ],
+      null,
+    );
+    expect(changes.map((c) => c.spec)).toEqual([
+      { kind: 'project-setting', projectId: PROJECT, setting: 'verification', values: { reviewIntervalDays: 30 } },
+      { kind: 'project-setting', projectId: PROJECT, setting: 'workItems', values: { issues: 'high', conflicts: null } },
+      { kind: 'project-setting', projectId: PROJECT, setting: 'lintPolicy', values: { policy: null } },
+    ]);
+    expect(dropped.map((d) => d.index)).toEqual([3, 4, 5, 6]);
+  });
+
+  /** Today: the workspace asks `block` for lint under a `warn` ceiling, 60 days for review, nothing for the gate. */
+  function settingsReader(opts: { linterEnabled?: boolean; maxPerTick?: number; projectLint?: string | null } = {}) {
+    const scoped = <T>(project: T | null, workspace: T | null, fallback: T) => ({
+      workspace,
+      project,
+      inherited: workspace ?? fallback,
+      effective: project ?? workspace ?? fallback,
+      source: project !== null ? 'project' : workspace !== null ? 'workspace' : 'default',
+    });
+    const lintFor = (projectId: string | null) => ({
+      workspaceId: WS,
+      projectId,
+      requested: projectId ? (opts.projectLint ?? null) : 'block',
+      inherited: 'warn',
+      ceiling: 'warn',
+      effective: 'warn',
+      source: 'ceiling',
+      linterEnabled: opts.linterEnabled ?? true,
+    });
+    return new ProjectSettingChanges(
+      { project: { findFirst: vi.fn().mockResolvedValue({ name: 'Payments' }) } } as never,
+      {
+        projectSettings: vi.fn().mockResolvedValue({
+          workspaceId: WS,
+          projectId: PROJECT,
+          reviewIntervalDays: scoped<number>(null, 60, 90),
+          remindBeforeDays: scoped<number>(null, null, 7),
+          inactiveAfterDays: scoped<number>(null, null, 180),
+          emptyMaxChars: scoped<number>(null, null, 200),
+        }),
+      } as never,
+      { projectBreakingChanges: vi.fn().mockResolvedValue({ policy: scoped<string>(null, null, 'warn') }) } as never,
+      { policyFor: vi.fn(async (_ws: string, projectId: string | null) => lintFor(projectId)) } as never,
+      {
+        getProject: vi.fn().mockResolvedValue({
+          issues: scoped<string>('off', 'high', 'off'),
+          conflicts: scoped<string>(null, null, 'off'),
+          verification: scoped<string>(null, null, 'off'),
+          ceiling: { maxPerTick: opts.maxPerTick ?? 10, syncEnabled: true },
+        }),
+      } as never,
+    );
+  }
+
+  it('shows the inherited value and its level beside the proposed one, and holds a value past a ceiling', async () => {
+    const reader = settingsReader();
+    const verification = await reader.diff(WS, { kind: 'project-setting', projectId: PROJECT, setting: 'verification', values: { reviewIntervalDays: 30 } });
+    expect(verification).toEqual({
+      target: 'Payments',
+      diff: [
+        {
+          field: 'reviewIntervalDays',
+          before: null,
+          after: 30,
+          applies: { before: { value: 60, source: 'workspace', held: null }, after: { value: 30, source: 'project', held: null } },
+        },
+      ],
+    });
+
+    const lint = await reader.diff(WS, { kind: 'project-setting', projectId: PROJECT, setting: 'lintPolicy', values: { policy: 'block' } });
+    // The workspace's own `block`, held at the ceiling, never shown as if it applied.
+    expect(lint!.diff[0]!.applies).toEqual({
+      before: { value: 'warn', source: 'workspace', held: 'ceiling' },
+      after: { value: 'warn', source: 'project', held: 'ceiling' },
+    });
+
+    const off = await settingsReader({ linterEnabled: false }).diff(WS, { kind: 'project-setting', projectId: PROJECT, setting: 'lintPolicy', values: { policy: 'warn' } });
+    expect(off!.diff[0]!.applies!.after).toEqual({ value: 'off', source: 'project', held: 'agent-off' });
+
+    const zero = await settingsReader({ maxPerTick: 0 }).diff(WS, { kind: 'project-setting', projectId: PROJECT, setting: 'workItems', values: { issues: null } });
+    // Back to the workspace's `high`, which a zero ceiling stops from creating anything.
+    expect(zero!.diff[0]).toMatchObject({ before: 'off', after: null, applies: { after: { value: 'off', source: 'workspace', held: 'ceiling' } } });
+  });
+
+  it("asks the maintainer for a team's settings, an admin for the gates, and marks what the project already holds", async () => {
+    const svc = configurator(fakePrisma(), vi.fn(), { projectSettings: settingsReader({ projectLint: 'warn' }) });
+    const [thresholds, gate, held] = await svc.assess(WS, [
+      { spec: { kind: 'project-setting', projectId: PROJECT, setting: 'verification', values: { reviewIntervalDays: 30 } }, reason: '' },
+      { spec: { kind: 'project-setting', projectId: PROJECT, setting: 'breakingChanges', values: { policy: 'block' } }, reason: '' },
+      { spec: { kind: 'project-setting', projectId: PROJECT, setting: 'lintPolicy', values: { policy: 'warn' } }, reason: '' },
+    ]);
+    expect(thresholds).toMatchObject({ requires: 'maintainer', state: 'pending', target: 'Payments' });
+    expect(gate).toMatchObject({ requires: 'admin', state: 'pending' });
+    expect(held).toMatchObject({ requires: 'admin', unavailable: 'already-configured' });
+  });
+
+  function applier(spec: ConfigurationChange['spec'], requireProjectManage = vi.fn()) {
+    const pending: ConfigurationChange = { id: 'c1', spec, reason: '', target: 'Payments', diff: [], state: 'pending', unavailable: null, requires: 'admin', appliedAt: null, appliedBy: null, resultId: null };
+    const row = { id: 'p1', workspaceId: WS, goal: 'g', summary: '', createdBy: 'u1', createdAt: new Date(), updatedAt: new Date(), changes: [pending] };
+    const committed: Array<() => unknown> = [];
+    const prisma = {
+      withTransaction: vi.fn((fn: () => unknown) => fn()),
+      onCommit: vi.fn((fn: () => unknown) => committed.push(fn)),
+      $executeRaw: vi.fn(),
+      configurationProposal: { findUniqueOrThrow: vi.fn().mockResolvedValue(row), update: vi.fn(async ({ data }) => ({ ...row, ...data })) },
+    };
+    const access = { requireRole: vi.fn() };
+    const verification = { updateProject: vi.fn() };
+    const lint = { setPolicy: vi.fn().mockResolvedValue({ effective: 'warn' }) };
+    const configuratorSvc = {
+      require: vi.fn().mockResolvedValue(row),
+      assess: vi.fn(async (_ws: string, items: Array<{ spec: unknown }>) => items.map((i) => ({ spec: i.spec, diff: [], unavailable: null }))),
+    };
+    const svc = new ConfigurationApplyService(
+      prisma as never,
+      access as never,
+      { record: vi.fn() } as never,
+      { invalidate: vi.fn() } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      configuratorSvc as never,
+      { requireProjectManage } as never,
+      verification as never,
+      {} as never,
+      lint as never,
+      {} as never,
+      { invalidate: vi.fn() } as never,
+    );
+    return { svc, access, prisma, verification, lint, committed };
+  }
+
+  it("lets the project's maintainer apply a threshold, and refuses an editor without the grant before writing", async () => {
+    const spec = { kind: 'project-setting', projectId: PROJECT, setting: 'verification', values: { reviewIntervalDays: 30 } } as const;
+    const ok = applier(spec);
+    const res = await ok.svc.apply('p1', WS, ['c1'], principal);
+    expect(ok.access.requireRole).not.toHaveBeenCalled();
+    expect(ok.verification.updateProject).toHaveBeenCalledWith(PROJECT, { reviewIntervalDays: 30 });
+    expect(ok.committed).toHaveLength(1);
+    expect(res.changes[0]).toMatchObject({ state: 'applied', resultId: PROJECT });
+
+    const refused = applier(spec, vi.fn().mockRejectedValue(new ForbiddenException('manage required')));
+    await expect(refused.svc.apply('p1', WS, ['c1'], principal)).rejects.toBeInstanceOf(ForbiddenException);
+    expect(refused.prisma.withTransaction).not.toHaveBeenCalled();
+    expect(refused.verification.updateProject).not.toHaveBeenCalled();
+  });
+
+  it('keeps the lint gate an admin\'s and records its route\'s activity', async () => {
+    const manage = vi.fn();
+    const { svc, access, lint } = applier({ kind: 'project-setting', projectId: PROJECT, setting: 'lintPolicy', values: { policy: 'warn' } }, manage);
+    await svc.apply('p1', WS, ['c1'], principal);
+    expect(access.requireRole).toHaveBeenCalledWith(principal, WS, 'admin');
+    expect(manage).not.toHaveBeenCalled();
+    expect(lint.setPolicy).toHaveBeenCalledWith(WS, PROJECT, 'warn', 'u1');
   });
 });

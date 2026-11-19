@@ -33,7 +33,7 @@ import {
 import { vmsg } from '../common/validation.js';
 
 /** Ten years: long enough for "practically never" without meaning it. */
-const MAX_INTERVAL_DAYS = 3650;
+export const MAX_INTERVAL_DAYS = 3650;
 
 export class VerifyDocumentDto {
   /**

@@ -3,15 +3,17 @@
  * The configurator (#1250): describe a goal, review the changes it proposes,
  * apply some, all or none. The model only proposes — the API applies each
  * change through the same service its own settings screen writes with, checks
- * the role on execution (workspace admin, or editor for a project's template),
+ * the role on execution (workspace admin, editor for a project's template, the
+ * project's maintainer for its settings other than the merge gates),
  * and writes schedules, triggers and workflows switched off. Model text is shown as plain text only.
  */
 import { useI18n } from 'vue-i18n'
 import { computed, ref, watch } from 'vue'
-import { useQuery } from '@tanstack/vue-query'
+import { useQueries, useQuery } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
-import { ArrowRight, CalendarClock, FileText, GitPullRequest, Sparkles, Workflow, Zap } from 'lucide-vue-next'
+import { ArrowRight, CalendarClock, FileText, GitPullRequest, SlidersHorizontal, Sparkles, Workflow, Zap } from 'lucide-vue-next'
 import type {
+  ConfigurationAppliedValue,
   ConfigurationChange,
   ConfigurationChangeKind,
   ConfigurationProposal,
@@ -21,7 +23,7 @@ import type {
 import { apiQueryOptions, useApiMutation } from '@/shared/api/queries'
 import { getWorkspaceId, relativeTime } from '@/shared/api/api'
 import { errorDetails, errorMessage } from '@/shared/api/errors'
-import { formatCalendarPart, formatList } from '@/shared/utils/format'
+import { formatCalendarPart, formatList, formatNumber } from '@/shared/utils/format'
 import { usePermission } from '@/stores/permissions'
 import { useProjectsStore } from '@/stores/projects'
 import { Badge } from '@knowledge/ui/badge'
@@ -34,8 +36,6 @@ const { t, te } = useI18n()
 const workspaceId = getWorkspaceId()
 const isAdmin = usePermission('workspace:admin')
 const canContribute = usePermission('workspace:contribute')
-/** The role apply asks on execution, mirrored so a control never offers what the API refuses. */
-const canApply = (change: ConfigurationChange) => (change.requires === 'admin' ? isAdmin.value : canContribute.value)
 const projects = useProjectsStore()
 void projects.fetchList()
 
@@ -47,7 +47,19 @@ const proposals = computed<ConfigurationProposal[]>(
 
 const propose = useApiMutation('post', '/v1/ai/configurator/proposals', { invalidates: () => [KEY] })
 const apply = useApiMutation('post', '/v1/ai/configurator/proposals/{id}/apply', {
-  invalidates: () => [KEY, ['/v1/ai/agents'], ['/v1/ai/agents/triggers'], ['/v1/connectors'], ['/v1/workflows'], ['/v1/templates']],
+  invalidates: () => [
+    KEY,
+    ['/v1/ai/agents'],
+    ['/v1/ai/agents/triggers'],
+    ['/v1/connectors'],
+    ['/v1/workflows'],
+    ['/v1/templates'],
+    ['/v1/projects/{id}/settings/verification'],
+    ['/v1/projects/{id}/settings/work-items'],
+    ['/v1/projects/{id}/settings/breaking-changes'],
+    ['/v1/lint-policy'],
+    ['/v1/projects/setting-overrides'],
+  ],
 })
 const dismiss = useApiMutation('post', '/v1/ai/configurator/proposals/{id}/dismiss', { invalidates: () => [KEY] })
 
@@ -57,12 +69,36 @@ const reply = ref<string | null>(null)
 const openId = ref<string | null>(null)
 const open = computed(() => proposals.value.find((p) => p.id === openId.value) ?? null)
 
+/**
+ * Who maintains each project a pending setting names: the API's own answer
+ * (`project:manage-settings` on the project's detail), never the role.
+ */
+const maintainedIds = computed(() => [
+  ...new Set(
+    (open.value?.changes ?? []).flatMap((c) =>
+      c.state === 'pending' && c.requires === 'maintainer' && c.spec.kind === 'project-setting' ? [c.spec.projectId] : [],
+    ),
+  ),
+])
+const maintained = useQueries({
+  queries: computed(() => maintainedIds.value.map((id) => apiQueryOptions('/v1/projects/{id}', { path: { id } }))),
+  combine: (results) =>
+    results.map((r) => (r.data as { permissions?: Record<string, boolean> } | undefined)?.permissions?.['project:manage-settings'] === true),
+})
+/** The role apply asks on execution, mirrored so a control never offers what the API refuses. */
+function canApply(change: ConfigurationChange): boolean {
+  if (change.requires === 'admin') return isAdmin.value
+  if (change.requires === 'editor') return canContribute.value
+  return change.spec.kind === 'project-setting' && maintained.value[maintainedIds.value.indexOf(change.spec.projectId)] === true
+}
+
 const picked = ref(new Set<string>())
 const refused = ref<string | null>(null)
 const pending = computed(() => open.value?.changes.filter((c) => c.state === 'pending') ?? [])
 const applicable = computed(() => pending.value.filter(canApply))
 // A newly opened proposal starts with every change you may apply ticked: "apply all" is one press.
-watch(openId, () => {
+// A maintainer's answers land after it opens, so they re-tick once they do.
+watch([openId, maintained], () => {
   picked.value = new Set(applicable.value.map((c) => c.id))
   refused.value = null
 })
@@ -127,6 +163,43 @@ const KIND_ICON: Record<ConfigurationChangeKind, typeof Zap> = {
   'connector-drift-check': GitPullRequest,
   'workflow-draft': Workflow,
   'page-template': FileText,
+  'project-setting': SlidersHorizontal,
+}
+
+/** What a change is, in a few words: a project setting names which one. */
+function kindLabel(change: ConfigurationChange): string {
+  const { spec } = change
+  return spec.kind === 'project-setting' ? t(`ai.configurator.settings.${spec.setting}`) : t(`ai.configurator.kinds.${spec.kind}`)
+}
+
+/** A diff row's label: a project setting's keys read as its own settings screen names them. */
+function fieldLabel(change: ConfigurationChange, field: string): string {
+  const { spec } = change
+  if (spec.kind !== 'project-setting') return t(`ai.configurator.fields.${field}`)
+  if (spec.setting === 'verification') return t(`health.settings.key.${field}.label`)
+  if (spec.setting === 'workItems') return t(`workItems.rules.${field}.label`)
+  return t(spec.setting === 'lintPolicy' ? 'projectSettings.gates.lint' : 'apiSettings.breaking.title')
+}
+
+/** A project setting's value: its own screen's words. Null on the project's side is "inherits". */
+function settingValue(change: ConfigurationChange, field: string, value: unknown): string {
+  const { spec } = change
+  if (spec.kind !== 'project-setting') return show(field, value)
+  if (value === null || value === undefined) return t('ai.configurator.inherits')
+  if (spec.setting === 'workItems') return t(`workItems.rules.${field}.options.${value}`)
+  if (spec.setting !== 'verification') return t(`apiSettings.breaking.mode.${value}.label`)
+  const n = Number(value)
+  if (n === 0) return field === 'reviewIntervalDays' ? t('verification.interval.never') : t('health.settings.off')
+  return field === 'emptyMaxChars' ? t('health.settings.chars', { n: formatNumber(n) }, n) : t('health.settings.days', { n }, n)
+}
+
+/** What applies at one side, with the level that decides it and what holds it. */
+function appliesText(change: ConfigurationChange, field: string, side: ConfigurationAppliedValue): string {
+  const value = settingValue(change, field, side.value)
+  const source = t(`projectSettings.source.${side.source}`)
+  return side.held
+    ? t('ai.configurator.appliesHeld', { value, source, held: t(`ai.configurator.held.${side.held}`) })
+    : t('ai.configurator.applies', { value, source })
 }
 
 /** A template's source in the diff: enough to recognise it, not the whole file. */
@@ -170,6 +243,11 @@ function stateText(change: ConfigurationChange): string | null {
   return null
 }
 
+/** The projects whose settings an applied change wrote: each links to its Policies page. */
+const settledProjects = computed(() => [
+  ...new Set(open.value?.changes.flatMap((c) => (c.state === 'applied' && c.spec.kind === 'project-setting' ? [c.spec.projectId] : [])) ?? []),
+])
+
 /** Where an applied change is switched on or seen: one link per screen, only for what landed. */
 const landed = computed(() => {
   const kinds = new Set(open.value?.changes.filter((c) => c.state === 'applied').map((c) => c.spec.kind))
@@ -177,6 +255,10 @@ const landed = computed(() => {
     (kinds.has('agent-schedule') || kinds.has('agent-trigger')) && { to: '/settings/ai/agents', label: t('ai.configurator.openAgents') },
     kinds.has('workflow-draft') && { to: '/workflows', label: t('ai.configurator.openWorkflows') },
     kinds.has('page-template') && { to: '/settings/templates', label: t('ai.configurator.openTemplates') },
+    ...settledProjects.value.map((id) => ({
+      to: `/settings/projects/${id}/policies`,
+      label: t('ai.configurator.openPolicies', { project: projects.items.find((p) => p.projectId === id)?.name ?? '' }),
+    })),
   ].filter((link): link is { to: string; label: string } => !!link)
 })
 </script>
@@ -234,7 +316,7 @@ const landed = computed(() => {
           <div class="min-w-0 flex-1 space-y-2">
             <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
               <component :is="KIND_ICON[change.spec.kind]" class="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
-              <span class="text-sm font-medium">{{ t(`ai.configurator.kinds.${change.spec.kind}`) }}</span>
+              <span class="text-sm font-medium">{{ kindLabel(change) }}</span>
               <span class="text-muted-foreground text-sm">·</span>
               <span class="truncate text-sm">{{ change.target }}</span>
               <Badge v-if="change.state !== 'pending'" variant="outline" class="ml-auto">
@@ -249,13 +331,16 @@ const landed = computed(() => {
                 <span class="text-xs">{{ t('ai.configurator.proposed') }}</span>
               </div>
               <div v-for="row in change.diff" :key="row.field" class="flex flex-wrap items-baseline gap-x-3 sm:contents">
-                <dt class="text-muted-foreground basis-full pt-1.5 text-xs sm:basis-auto sm:pt-0 sm:text-sm">{{ t(`ai.configurator.fields.${row.field}`) }}</dt>
+                <dt class="text-muted-foreground basis-full pt-1.5 text-xs sm:basis-auto sm:pt-0 sm:text-sm">{{ fieldLabel(change, row.field) }}</dt>
                 <!-- Below sm the column headings are gone, so each value names its side. -->
                 <dd class="text-muted-foreground break-words">
-                  <span class="text-xs sm:sr-only">{{ t('ai.configurator.today') }}: </span>{{ show(row.field, row.before) }}
+                  <span class="text-xs sm:sr-only">{{ t('ai.configurator.today') }}: </span>{{ settingValue(change, row.field, row.before) }}
+                  <!-- A project setting: what applies and which level decides it, beside the project's own value. -->
+                  <span v-if="row.applies" class="block text-xs">{{ appliesText(change, row.field, row.applies.before) }}</span>
                 </dd>
                 <dd class="font-medium break-words" :class="{ 'font-mono text-xs font-normal whitespace-pre-wrap': row.field === 'source' }">
-                  <span class="text-muted-foreground text-xs font-normal sm:sr-only">{{ t('ai.configurator.proposed') }}: </span>{{ show(row.field, row.after) }}
+                  <span class="text-muted-foreground text-xs font-normal sm:sr-only">{{ t('ai.configurator.proposed') }}: </span>{{ settingValue(change, row.field, row.after) }}
+                  <span v-if="row.applies" class="text-muted-foreground block text-xs font-normal">{{ appliesText(change, row.field, row.applies.after) }}</span>
                 </dd>
               </div>
             </dl>

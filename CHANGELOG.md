@@ -28,6 +28,10 @@ in the pull request that introduces them — see
 
 ### Added
 
+- **Search performance attribution.** `search.executed` and `make backtest ARGS="--report"` now attribute post-join
+  time to fusion, community scoring, methodology levels and re-ranking, page grouping and snippets, placement and
+  validity, and analytics enqueueing. Timings are collected through reusable method decorators, isolated between
+  concurrent searches. (#1291)
 - **The configurator drafts workflows and page templates (#1312).** A goal such as "when a use-case page is merged,
   draft its test cases" now yields a workflow, compiled before it is offered, and a goal that needs a new page
   template yields one. Applying creates the workflow switched off, so it shows in Workflows waiting for someone to

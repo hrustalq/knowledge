@@ -639,9 +639,14 @@ use `knowledge_search`. `knowledge_search_chat` is the chat path's tool (see
 
 Each search is measured twice, for two readers. `emitBacktest` writes a
 `search.executed` line to the per-service JSONL stream at every exit: the
-query, the timings of each leg and the ranked chunk ids. That is what `make
-backtest` replays to measure recall, and it records every search, the backtest's
-own replays included.
+query, the timings of each leg and the ranked chunk ids. `@TimingScope` opens
+an async-local timing scope for the search and `@Timed` attributes each
+post-join method: the PG join and trust read, fusion, community scoring,
+methodology levels and re-ranking, page grouping and snippets, placement and
+validity, and analytics enqueueing. Community scoring overlaps the PG join,
+just as the BM25 and vector legs overlap. That is what `make backtest` replays
+to measure recall, and it records every search, the backtest's own replays
+included.
 
 When the caller passes an analytics context (REST, MCP, the assistant's tools,
 agent and workflow runs), `AnalyticsRecorder.search` also writes one

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { headingSections } from '@knowledge/editor-schema/markdown';
+import { headingOutline, headingSections } from '@knowledge/editor-schema/markdown';
 import { operationAnchor, sourceSyncHealthy, verificationStateFor } from '@knowledge/contracts';
 import { anchorChanges, SourceDependentsService } from '../src/connectors/source-dependents.service.js';
 
@@ -46,6 +46,11 @@ describe('anchors', () => {
       { id: 'setup', body: 'Intro.' },
       { id: 'install-run', body: 'Steps.' },
       { id: 'setup-1', body: 'Again.\n\n#### Deep\n\nkept in body' },
+    ]);
+    // The page rail's outline before the reader draws (#1284): the same walk, with text and level.
+    expect(headingOutline('# Setup\n\n### **Bold** `code`\n\n```sh\n# not a heading\n```\n\n#### Deep\n')).toEqual([
+      { id: 'setup', text: 'Setup', level: 1 },
+      { id: 'bold-code', text: 'Bold code', level: 3 },
     ]);
   });
 

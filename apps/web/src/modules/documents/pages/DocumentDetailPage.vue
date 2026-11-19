@@ -18,7 +18,7 @@ import { errorMessage, isRestrictedRefusal } from '@/shared/api/errors'
 import { labelFor } from '@/shared/i18n/labels'
 import { hasWorkingCopy } from '@/entities/rich-editor'
 import { type ContentAt, documentContentQuery, documentDetailQuery, readFrontmatter } from '@/entities/document'
-import { parsePageRef, type LineSpan } from '@knowledge/editor-schema/markdown'
+import { headingOutline, parsePageRef, splitTitleHeading, type LineSpan } from '@knowledge/editor-schema/markdown'
 import { relocateLines } from '@/core/anchor-match'
 import { usePageView } from '@/entities/insight'
 import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue'
@@ -344,7 +344,21 @@ const saveAsPage = computed<SaveAsTemplatePage | null>(() => {
     projectId: detail.value.document.projectId,
   }
 })
-const headings = ref<{ id: string; text: string; level: number }[]>([])
+/**
+ * "On this page". The canvas reads it back off the rendered reader after mount,
+ * which is the authoritative list (it sees nested headings and assigns the ids).
+ * Until it reports, the outline comes from the markdown, so the server and the
+ * hydrating render already give it its place and the rail cards below it do not
+ * move when it lands (#1284).
+ */
+const renderedHeadings = ref<{ id: string; text: string; level: number }[] | null>(null)
+const headings = computed(
+  () =>
+    renderedHeadings.value ??
+    (content.value && detail.value
+      ? headingOutline(splitTitleHeading(content.value.markdown, detail.value.document.title).body)
+      : []),
+)
 const outdatedThreads = ref<string[]>([])
 /**
  * A well-connected page can carry fifty inferred relations, and showing them
@@ -901,7 +915,7 @@ watch(documentId, () => {
   relations.value = null
   error.value = null
   restrictedRefusal.value = false
-  headings.value = []
+  renderedHeadings.value = null
   outdatedThreads.value = []
   follow()
   armInsightsLater()
@@ -1429,7 +1443,7 @@ watch(
           @edit="onEditComment"
           @delete="onDeleteComment"
           @outdated="outdatedThreads = $event"
-          @headings="headings = $event"
+          @headings="renderedHeadings = $event"
         />
       </section>
     </PageLayout>

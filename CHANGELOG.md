@@ -100,6 +100,12 @@ in the pull request that introduces them — see
 
 ### Fixed
 
+- **A long page's outline no longer pushes the rail down as it loads (#1284).** The "On this page" list used to
+  appear only after the page body had been drawn, so the verification, overview and other rail cards jumped down
+  under it (layout shift 0.21 on desktop), and below `xl` the folded outline pushed the body down (0.035 at 390 px).
+  The server now renders the outline from the page's markdown, so it is in place from the first paint. The lab
+  measures 0.0001 on desktop and 0 at 390 px on the 160 KiB test page. The outline's entries and where they jump
+  to are unchanged.
 - **Pages opens straight into your remembered view (#1282).** A reader who left Pages on Tree or List used to see the
   graph's frame first, then a jump to their view once the page loaded (layout shift 0.21 on desktop). The choice is
   now also kept in a `kn_docs_view` cookie, so the server renders that view. Cold loads in the lab show no shift on

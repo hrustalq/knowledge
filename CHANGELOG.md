@@ -17,6 +17,9 @@ in the pull request that introduces them — see
 
 ### Changed
 
+- **Pages in tree or list view no longer download the graph (#1279).** The graph canvas loads the first time the
+  Graph view is shown, behind the same skeleton it already used. A cold tree or list load is about 237 KiB of
+  script lighter. The graph view itself is unchanged.
 - **The agent picker no longer resolves a provider and model for every agent.** Listing agent names now reads the
   workspace's override rows once even on a cold cache; the offered and complete lists are unchanged. (#1290)
 - **One workflow canvas for building, reading and watching (#1246).** The detail page, a run and the wizard's

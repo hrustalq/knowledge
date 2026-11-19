@@ -13,6 +13,7 @@ import type { ApiDriftSpec } from '@knowledge/contracts/api';
 import type { FlowAnswer, FlowKey } from '@knowledge/contracts/flows';
 import type { WorkspaceFeature, WorkspaceUse } from '@knowledge/contracts/identity';
 import type { ReviewThreadAnchor } from '@knowledge/contracts/reviews';
+import type { WorkflowGraph, WorkflowTrigger } from '@knowledge/contracts/workflows';
 
 // (docs/features/09 follow-up). The chat is an append-only intent log; the
 // sidebar materializes from each assistant message's toolCalls trace rather
@@ -2595,7 +2596,13 @@ export interface ApplyAgentRecipeResponse {
  * dispatch and the review screen all read this list, so a kind cannot be
  * proposed without something to apply it (#1311; later phases add kinds).
  */
-export const CONFIGURATION_CHANGE_KINDS = ['agent-schedule', 'agent-trigger', 'connector-drift-check'] as const;
+export const CONFIGURATION_CHANGE_KINDS = [
+  'agent-schedule',
+  'agent-trigger',
+  'connector-drift-check',
+  'workflow-draft',
+  'page-template',
+] as const;
 export type ConfigurationChangeKind = (typeof CONFIGURATION_CHANGE_KINDS)[number];
 
 /** Give an agent a schedule, or reshape the one it has. Never switches it on or off. */
@@ -2632,7 +2639,34 @@ export interface ConnectorDriftCheckChangeSpec {
   mode: 'off' | 'report' | 'propose';
 }
 
-export type ConfigurationChangeSpec = AgentScheduleChangeSpec | AgentTriggerChangeSpec | ConnectorDriftCheckChangeSpec;
+/** A new workflow definition, created disabled (#1312). Its graph compiled before it was offered. */
+export interface WorkflowDraftChangeSpec {
+  kind: 'workflow-draft';
+  name: string;
+  description: string | null;
+  /** Null = every project. */
+  projectId: string | null;
+  graph: WorkflowGraph;
+  trigger: WorkflowTrigger;
+}
+
+/** A new page template (#1312): a project's needs editor, a workspace-wide one admin. */
+export interface PageTemplateChangeSpec {
+  kind: 'page-template';
+  name: string;
+  description: string | null;
+  /** Null = workspace-wide. */
+  projectId: string | null;
+  /** Markdown with frontmatter, as `POST /v1/templates` takes it. */
+  source: string;
+}
+
+export type ConfigurationChangeSpec =
+  | AgentScheduleChangeSpec
+  | AgentTriggerChangeSpec
+  | ConnectorDriftCheckChangeSpec
+  | WorkflowDraftChangeSpec
+  | PageTemplateChangeSpec;
 
 /**
  * `unavailable` is decided when the proposal is written and never offered for
@@ -2655,6 +2689,12 @@ export const CONFIGURATION_UNAVAILABLE_REASONS = [
   'schedules-off',
   /** `AGENT_TRIGGERS_ENABLED` is off: no trigger would ever fire. */
   'triggers-off',
+  /** The workspace has the `workflows` section switched off (workflow drafts, templates). */
+  'section-off',
+  /** A workflow or template of that name already exists where it would land. */
+  'name-taken',
+  /** A workflow draft no longer compiles: a template its graph names went away. */
+  'invalid',
 ] as const;
 export type ConfigurationUnavailableReason = (typeof CONFIGURATION_UNAVAILABLE_REASONS)[number];
 
@@ -2678,11 +2718,11 @@ export interface ConfigurationChange {
   diff: ConfigurationDiffRow[];
   state: ConfigurationChangeState;
   unavailable: ConfigurationUnavailableReason | null;
-  /** The role apply requires on execution. Every phase-1 kind is workspace-level. */
-  requires: 'admin';
+  /** The role apply requires on execution: `editor` only for a project's page template. */
+  requires: 'admin' | 'editor';
   appliedAt: string | null;
   appliedBy: string | null;
-  /** What applying created or changed: the trigger, agent or connector id. */
+  /** What applying created or changed: the trigger, agent, connector, workflow or template id. */
   resultId: string | null;
 }
 

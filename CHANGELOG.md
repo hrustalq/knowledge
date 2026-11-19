@@ -28,6 +28,13 @@ in the pull request that introduces them — see
 
 ### Added
 
+- **The configurator drafts workflows and page templates (#1312).** A goal such as "when a use-case page is merged,
+  draft its test cases" now yields a workflow, compiled before it is offered, and a goal that needs a new page
+  template yields one. Applying creates the workflow switched off, so it shows in Workflows waiting for someone to
+  turn it on, and creates the template ready to use. An editor may apply a template for one project; a workspace
+  admin applies workflows and workspace-wide templates. Both are unavailable while the workspace has Workflows
+  switched off, and a name already taken is shown as unavailable rather than failing on apply. A goal whose every
+  proposed change is refused no longer leaves an empty proposal in the history.
 - **The configurator: describe what should happen and get the setup proposed (#1311).** Settings → AI →
   Configurator takes a goal such as "every Monday at 09:00 digest what changed, review every page merged in
   Payments, check pull requests in the api repository for drift". It proposes the agent schedules, agent triggers

@@ -4,10 +4,17 @@ import {
   AGENT_SCHEDULE_TIME_PATTERN,
   AGENT_TRIGGER_EVENTS,
   CONFIGURATION_CHANGE_KINDS,
+  DOCUMENT_CATEGORIES,
   DRIFT_CHECK_MODES,
+  KNOWN_EVENT_TYPES,
+  REPO_EVENT_TYPES,
   isValidTimezone,
   type ConfigurationChangeSpec,
+  type WorkflowGraph,
 } from '@knowledge/contracts';
+import { validateGraph } from '@knowledge/workflow';
+import { readWorkflowSteps } from '../workflows/workflow-draft.service.js';
+import { parseTemplateSource, TemplateSourceError } from '../templates/template-source.js';
 
 /**
  * The one parse of a proposed change (#1250): what the model handed
@@ -60,7 +67,38 @@ const drift = z.strictObject({
   reason,
 });
 
-const change = z.discriminatedUnion('kind', [schedule, trigger, drift]);
+/** What a workflow's auto-start may listen to: the events its settings form offers. */
+export const WORKFLOW_EVENTS = [
+  ...KNOWN_EVENT_TYPES.filter((e) => e.startsWith('document.') || e.startsWith('revision.')),
+  ...REPO_EVENT_TYPES,
+] as string[] as [string, ...string[]];
+
+const workflow = z.strictObject({
+  kind: z.literal('workflow-draft'),
+  name: z.string().trim().min(1).max(120), // CreateWorkflowDto's bounds
+  description: z.string().trim().max(2_000).nullish().transform((v) => v || null),
+  projectId: uuid.nullish(),
+  // Narrowed by the architect's own reader in `toSpec`, then compiled.
+  steps: z.array(z.unknown()).min(1),
+  autoStart: z.boolean().nullish(),
+  events: z.array(z.enum(WORKFLOW_EVENTS)).max(10).nullish(),
+  categories: z.array(z.enum(DOCUMENT_CATEGORIES)).max(20).nullish(),
+  reason,
+});
+
+/** A reviewer reads every line of a proposed template; the route's own ceiling is far above this. */
+const TEMPLATE_SOURCE_MAX = 20_000;
+
+const template = z.strictObject({
+  kind: z.literal('page-template'),
+  name: z.string().trim().min(1).max(200), // CreateTemplateDto's bounds
+  description: z.string().trim().max(1_000).nullish().transform((v) => v || null),
+  projectId: uuid.nullish(),
+  source: z.string().min(1).max(TEMPLATE_SOURCE_MAX),
+  reason,
+});
+
+const change = z.discriminatedUnion('kind', [schedule, trigger, drift, workflow, template]);
 
 export interface ReadChange {
   spec: ConfigurationChangeSpec;
@@ -101,7 +139,13 @@ export function readChanges(raw: unknown, timezone: string | null): { changes: R
       });
       return;
     }
-    changes.push({ spec: toSpec(parsed.data, timezone), reason: parsed.data.reason });
+    const spec = toSpec(parsed.data, timezone);
+    const error = compileError(spec);
+    if (error) {
+      dropped.push({ index, error });
+      return;
+    }
+    changes.push({ spec, reason: parsed.data.reason });
   });
   return { changes, dropped };
 }
@@ -139,5 +183,48 @@ function toSpec(c: z.infer<typeof change>, timezone: string | null): Configurati
       };
     case 'connector-drift-check':
       return { kind: c.kind, connectorId: c.connectorId, mode: c.mode };
+    case 'workflow-draft': {
+      const autoStart = c.autoStart === true;
+      return {
+        kind: c.kind,
+        name: c.name,
+        description: c.description,
+        projectId: c.projectId ?? null,
+        graph: { steps: readWorkflowSteps(c.steps) },
+        // `WorkflowsService`'s default trigger, with what the goal asked for. Inert until a person enables the workflow.
+        trigger: {
+          manual: true,
+          autoStart,
+          events: autoStart && c.events?.length ? [...new Set(c.events)] : ['revision.indexed'],
+          categories: [...new Set(c.categories ?? [])],
+        },
+      };
+    }
+    case 'page-template':
+      return { kind: c.kind, name: c.name, description: c.description, projectId: c.projectId ?? null, source: c.source };
   }
+}
+
+/**
+ * Whether a change's content compiles, by the rule its writer applies: a
+ * workflow's graph through `validateGraph`, a template's source through
+ * `parseTemplateSource`. Null when it does. Pure — whether the templates a
+ * graph names exist is `assess`'s question.
+ */
+export function compileError(spec: ConfigurationChangeSpec): string | null {
+  if (spec.kind === 'workflow-draft') return graphError(spec.graph);
+  if (spec.kind !== 'page-template') return null;
+  try {
+    parseTemplateSource(spec.source);
+    return null;
+  } catch (e) {
+    if (e instanceof TemplateSourceError) return `source: ${e.message}`;
+    throw e;
+  }
+}
+
+function graphError(graph: WorkflowGraph): string | null {
+  if (!graph.steps.length) return 'steps: no step survived the reader (check kind, id and title)';
+  const errors = validateGraph(graph).filter((i) => i.severity === 'error');
+  return errors.length ? errors.map((i) => `steps${i.stepId ? `.${i.stepId}` : ''}: ${i.message}`).join('; ') : null;
 }

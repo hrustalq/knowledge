@@ -595,8 +595,11 @@ export class TemplatesService {
     return row.builtInKey && isBuiltInTemplateKey(row.builtInKey) ? BUILT_IN_TEMPLATES[row.builtInKey].version : 0;
   }
 
-  /** Names are unique per (workspace, project, methodology) among custom templates, archived ones included. */
-  private async assertNameFree(
+  /**
+   * Names are unique per (workspace, project, methodology) among custom templates, archived ones included.
+   * Public for the configurator (#1312), which asks before it offers a template.
+   */
+  async assertNameFree(
     workspaceId: string,
     projectId: string | null,
     name: string,

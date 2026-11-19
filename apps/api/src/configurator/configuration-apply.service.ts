@@ -9,17 +9,20 @@ import { AgentRegistryService } from '../agents/agent-registry.service.js';
 import { AiAgentsService } from '../ai/ai-agents.service.js';
 import { AgentTriggersService } from '../ai/agent-triggers.service.js';
 import { ConnectorsService } from '../connectors/connectors.service.js';
+import { WorkflowsService } from '../workflows/workflows.service.js';
+import { TemplatesService } from '../templates/templates.service.js';
 import { lockSubject } from '../common/subject-lock.js';
 import { t } from '../i18n/t.js';
-import { ConfiguratorService, changesOf, toProposal } from './configurator.service.js';
+import { ConfiguratorService, changesOf, requiresFor, toProposal } from './configurator.service.js';
 
 /**
  * Applying a configuration proposal (#1250) — a person's act, never the model's.
  *
  * Every rule here is the one the change's own settings screen already applies,
  * because the change goes through that screen's service: `AiAgentsService.update`,
- * `AgentTriggersService.create`, `ConnectorsService.update`, recorded with the
- * activity action their route records. On top of that, two checks on execution:
+ * `AgentTriggersService.create`, `ConnectorsService.update`, `WorkflowsService.create`,
+ * `TemplatesService.create`, recorded with the activity action their route records
+ * (the last two record their own, as their routes rely on). On top of that, two checks on execution:
  *
  *   1. the role each picked change requires, for the caller, before anything is
  *      written — an editor who drafted a proposal cannot apply a workspace-level
@@ -42,6 +45,8 @@ export class ConfigurationApplyService {
     private readonly agents: AiAgentsService,
     private readonly triggers: AgentTriggersService,
     private readonly connectors: ConnectorsService,
+    private readonly workflows: WorkflowsService,
+    private readonly templates: TemplatesService,
     private readonly configurator: ConfiguratorService,
   ) {}
 
@@ -50,7 +55,8 @@ export class ConfigurationApplyService {
     const wanted = new Set(changeIds);
     const picked = changesOf(seen).filter((c) => wanted.has(c.id) && c.state === 'pending');
     if (!picked.length) throw new BadRequestException(t('error.configurator.nothingToApply'));
-    for (const role of new Set(picked.map((c) => c.requires))) {
+    // From the spec, as the change's own route would decide it, not the stored `requires`.
+    for (const role of new Set(picked.map((c) => requiresFor(c.spec)))) {
       await this.access.requireRole(principal, workspaceId, role);
     }
 
@@ -137,6 +143,17 @@ export class ConfigurationApplyService {
         const connector = await this.connectors.update(spec.connectorId, { config });
         this.afterCommit(workspaceId, actor, 'connector.updated', connector.id, { title: connector.name, fields: ['config'], ...via });
         return connector.id;
+      }
+      case 'workflow-draft': {
+        // Disabled: enabling it is a person's act in the builder, out of this proposal's reach.
+        const { name, description, projectId, graph, trigger } = spec;
+        const workflow = await this.workflows.create({ workspaceId, projectId, name, description, graph, trigger, enabled: false }, actor);
+        return workflow.id;
+      }
+      case 'page-template': {
+        const { name, description, projectId, source } = spec;
+        const template = await this.templates.create({ workspaceId, projectId, name, description, source }, actor);
+        return template.id ?? template.ref;
       }
     }
   }

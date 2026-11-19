@@ -3,14 +3,14 @@
  * The configurator (#1250): describe a goal, review the changes it proposes,
  * apply some, all or none. The model only proposes — the API applies each
  * change through the same service its own settings screen writes with, checks
- * the role on execution (workspace admin for every current kind), and writes
- * schedules and triggers switched off. Model text is shown as plain text only.
+ * the role on execution (workspace admin, or editor for a project's template),
+ * and writes schedules, triggers and workflows switched off. Model text is shown as plain text only.
  */
 import { useI18n } from 'vue-i18n'
 import { computed, ref, watch } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
-import { ArrowRight, CalendarClock, GitPullRequest, Sparkles, Zap } from 'lucide-vue-next'
+import { ArrowRight, CalendarClock, FileText, GitPullRequest, Sparkles, Workflow, Zap } from 'lucide-vue-next'
 import type {
   ConfigurationChange,
   ConfigurationChangeKind,
@@ -30,9 +30,12 @@ import { Checkbox } from '@knowledge/ui/checkbox'
 import { Textarea } from '@knowledge/ui/textarea'
 import { AiEmptyState } from '@knowledge/ui/empty-state'
 
-const { t } = useI18n()
+const { t, te } = useI18n()
 const workspaceId = getWorkspaceId()
-const canApply = usePermission('workspace:admin')
+const isAdmin = usePermission('workspace:admin')
+const canContribute = usePermission('workspace:contribute')
+/** The role apply asks on execution, mirrored so a control never offers what the API refuses. */
+const canApply = (change: ConfigurationChange) => (change.requires === 'admin' ? isAdmin.value : canContribute.value)
 const projects = useProjectsStore()
 void projects.fetchList()
 
@@ -44,7 +47,7 @@ const proposals = computed<ConfigurationProposal[]>(
 
 const propose = useApiMutation('post', '/v1/ai/configurator/proposals', { invalidates: () => [KEY] })
 const apply = useApiMutation('post', '/v1/ai/configurator/proposals/{id}/apply', {
-  invalidates: () => [KEY, ['/v1/ai/agents'], ['/v1/ai/agents/triggers'], ['/v1/connectors']],
+  invalidates: () => [KEY, ['/v1/ai/agents'], ['/v1/ai/agents/triggers'], ['/v1/connectors'], ['/v1/workflows'], ['/v1/templates']],
 })
 const dismiss = useApiMutation('post', '/v1/ai/configurator/proposals/{id}/dismiss', { invalidates: () => [KEY] })
 
@@ -57,9 +60,10 @@ const open = computed(() => proposals.value.find((p) => p.id === openId.value) ?
 const picked = ref(new Set<string>())
 const refused = ref<string | null>(null)
 const pending = computed(() => open.value?.changes.filter((c) => c.state === 'pending') ?? [])
-// A newly opened proposal starts with every pending change ticked: "apply all" is one press.
+const applicable = computed(() => pending.value.filter(canApply))
+// A newly opened proposal starts with every change you may apply ticked: "apply all" is one press.
 watch(openId, () => {
-  picked.value = new Set(pending.value.map((c) => c.id))
+  picked.value = new Set(applicable.value.map((c) => c.id))
   refused.value = null
 })
 
@@ -121,7 +125,12 @@ const KIND_ICON: Record<ConfigurationChangeKind, typeof Zap> = {
   'agent-schedule': CalendarClock,
   'agent-trigger': Zap,
   'connector-drift-check': GitPullRequest,
+  'workflow-draft': Workflow,
+  'page-template': FileText,
 }
+
+/** A template's source in the diff: enough to recognise it, not the whole file. */
+const SOURCE_PREVIEW = 400
 
 /** A field's value in words. Null — nothing set — is a dash. 2026-10-11 is a Sunday. */
 function show(field: string, value: unknown): string {
@@ -139,6 +148,17 @@ function show(field: string, value: unknown): string {
       return projects.items.find((p) => p.projectId === value)?.name ?? String(value)
     case 'connectorIds':
       return t('ai.configurator.connectorCount', { count: (value as string[]).length }, (value as string[]).length)
+    case 'categories':
+      // Free text on a trigger, a known set on a workflow: label what has one.
+      return formatList((value as string[]).map((c) => (te(`category.${c}`) ? t(`category.${c}`) : c)))
+    case 'steps':
+      return (value as string[]).join(' → ')
+    case 'autoStart':
+      return t(value ? 'common.yes' : 'common.no')
+    case 'source': {
+      const text = String(value)
+      return text.length > SOURCE_PREVIEW ? `${text.slice(0, SOURCE_PREVIEW)}…` : text
+    }
   }
   return Array.isArray(value) ? formatList(value.map(String)) : String(value)
 }
@@ -150,9 +170,15 @@ function stateText(change: ConfigurationChange): string | null {
   return null
 }
 
-const lands = computed(() =>
-  open.value?.changes.some((c) => c.state === 'applied' && c.spec.kind !== 'connector-drift-check'),
-)
+/** Where an applied change is switched on or seen: one link per screen, only for what landed. */
+const landed = computed(() => {
+  const kinds = new Set(open.value?.changes.filter((c) => c.state === 'applied').map((c) => c.spec.kind))
+  return [
+    (kinds.has('agent-schedule') || kinds.has('agent-trigger')) && { to: '/settings/ai/agents', label: t('ai.configurator.openAgents') },
+    kinds.has('workflow-draft') && { to: '/workflows', label: t('ai.configurator.openWorkflows') },
+    kinds.has('page-template') && { to: '/settings/templates', label: t('ai.configurator.openTemplates') },
+  ].filter((link): link is { to: string; label: string } => !!link)
+})
 </script>
 
 <template>
@@ -201,7 +227,7 @@ const lands = computed(() =>
             v-else
             class="mt-1"
             :model-value="picked.has(change.id)"
-            :disabled="!canApply"
+            :disabled="!canApply(change)"
             :aria-label="t('ai.configurator.pick', { target: change.target })"
             @update:model-value="toggle(change.id, !!$event)"
           />
@@ -228,7 +254,7 @@ const lands = computed(() =>
                 <dd class="text-muted-foreground break-words">
                   <span class="text-xs sm:sr-only">{{ t('ai.configurator.today') }}: </span>{{ show(row.field, row.before) }}
                 </dd>
-                <dd class="font-medium break-words">
+                <dd class="font-medium break-words" :class="{ 'font-mono text-xs font-normal whitespace-pre-wrap': row.field === 'source' }">
                   <span class="text-muted-foreground text-xs font-normal sm:sr-only">{{ t('ai.configurator.proposed') }}: </span>{{ show(row.field, row.after) }}
                 </dd>
               </div>
@@ -240,18 +266,23 @@ const lands = computed(() =>
 
       <div class="flex flex-wrap items-center gap-3">
         <template v-if="pending.length">
-          <Button v-if="canApply" :disabled="!picked.size || apply.isPending.value" @click="applyPicked">
+          <Button v-if="applicable.length" :disabled="!picked.size || apply.isPending.value" @click="applyPicked">
             {{ apply.isPending.value ? t('ai.configurator.applying') : t('ai.configurator.applySelected', { count: picked.size }) }}
           </Button>
           <Button variant="ghost" :disabled="dismiss.isPending.value" @click="dismissRest">
             {{ t('ai.configurator.dismissRest') }}
           </Button>
-          <span v-if="!canApply" class="text-muted-foreground text-sm">{{ t('ai.configurator.adminApplies') }}</span>
+          <span v-if="applicable.length < pending.length" class="text-muted-foreground text-sm">{{ t('ai.configurator.adminApplies') }}</span>
         </template>
         <p class="text-muted-foreground w-full text-xs">
           {{ t('ai.configurator.landsOff') }}
-          <RouterLink v-if="lands" to="/settings/ai/agents" class="text-primary ml-1 inline-flex items-center gap-1 hover:underline">
-            {{ t('ai.configurator.openAgents') }} <ArrowRight class="size-3" />
+          <RouterLink
+            v-for="link in landed"
+            :key="link.to"
+            :to="link.to"
+            class="text-primary ml-1 inline-flex items-center gap-1 hover:underline"
+          >
+            {{ link.label }} <ArrowRight class="size-3" />
           </RouterLink>
         </p>
       </div>
@@ -264,7 +295,7 @@ const lands = computed(() =>
         :icon="Sparkles"
         :title="t('ai.configurator.emptyTitle')"
         :body="t('ai.configurator.emptyBody')"
-        :example="{ label: t('ai.configurator.examplesLabel'), lines: [t('ai.configurator.example1'), t('ai.configurator.example2')] }"
+        :example="{ label: t('ai.configurator.examplesLabel'), lines: [t('ai.configurator.example1'), t('ai.configurator.example2'), t('ai.configurator.example3')] }"
       />
       <ul v-else class="divide-y rounded-md border">
         <li v-for="p in proposals" :key="p.id">

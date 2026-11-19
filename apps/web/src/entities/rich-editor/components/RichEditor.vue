@@ -12,15 +12,14 @@
  * extensions rebuilt in this folder (drag handle, expand, file handling and
  * table of contents).
  */
-import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { toast } from 'vue-sonner'
-import { Subject, Subscription, animationFrameScheduler, auditTime, distinctUntilChanged, filter, merge } from 'rxjs'
+import { Subject, Subscription, animationFrameScheduler, auditTime, distinctUntilChanged, filter } from 'rxjs'
 import { useI18n } from 'vue-i18n'
 import { onClickOutside, onKeyStroke } from '@vueuse/core'
 import { Editor, EditorContent } from '@tiptap/vue-3'
 import type { Editor as CoreEditor } from '@tiptap/core'
 import { Placeholder } from '@tiptap/extensions'
-import { IMAGE_OPTIONS, baseExtensions } from '@knowledge/editor-schema'
 import { createEditorLowlight, highlightMissingLanguages } from '../model/lowlight'
 import {
   AtSign,
@@ -61,22 +60,14 @@ import { staticBodyHtml } from '../model/static-body'
 import { api } from '@/shared/api/client'
 import { getWorkspaceId } from '@/shared/api/api'
 import type { EmbedAttributes } from './extensions/media'
-import { withC4CodeBlocks } from './extensions/c4'
+import { contentExtensions } from './extensions/content'
 import C4StudioHost from './nodes/C4StudioHost.vue'
 import type {
   AssistantDraftEdit,
-  GlossaryExclusion,
-  GlossaryTerm,
   RenderTemplateResponse,
 } from '@knowledge/contracts'
 import { useTemplatesStore } from '@/entities/template'
-import type { PageRefResolver } from '@/entities/document'
-import { fromWatch } from '@/shared/composables/rx-vue'
 import { PANEL_META, PANEL_TYPES, type PanelType } from '@/core/markdown/nodes'
-import { Layout, LayoutColumn, Expand, Panel, TableOfContents } from './extensions/blocks'
-import { ApiContract, ApiSection } from './extensions/api'
-import { Drawing, Embed, FileEmbed, Mermaid, ResizableImage } from './extensions/media'
-import { AgentMention, DocMention, StatusMark, UserMention } from './extensions/inline'
 import { createSuggestionExtension, type SuggestionSession } from './extensions/suggestion'
 import {
   createDragHandle,
@@ -86,9 +77,6 @@ import {
   startBlockDrag,
 } from './extensions/drag-handle'
 import { ListIndentKeymap } from './extensions/list-indent'
-import { CommentAnchors, type CommentAnchor } from './extensions/comment-anchors'
-import { GlossaryTerms } from './extensions/glossary-terms'
-import { SourceLines } from './extensions/source-lines'
 import { AiSuggestions, pendingSuggestions, withoutSuggestions } from './extensions/ai-suggestions'
 import { useAttachments } from '../model/use-attachments'
 import type { CollabHandle } from '../model/use-collab'
@@ -179,35 +167,6 @@ const props = withDefaults(
      */
     compact?: boolean
     /**
-     * Commented passages to highlight (feature 15). Drawn as ProseMirror
-     * decorations, so they survive editing and never fight the view's own DOM.
-     * The host owns the discussion UI; this component only marks the text.
-     */
-    commentAnchors?: CommentAnchor[]
-    /**
-     * Resolves a page reference written as a title (`lib/page-refs`). Supplied
-     * by read surfaces only — `toHtml` explains why an editor must not have it.
-     * Separate from `pages`, which is the `@` menu's roster: that one is a list
-     * to choose from, this one is an index, and the read view needs the index
-     * without offering the menu.
-     */
-    resolvePage?: PageRefResolver
-    /**
-     * Lines of the stored body held out before `modelValue` (a page's own
-     * `# Title`), so each block carries its line span for passage links (#708).
-     * Read surfaces only: a reader links lines of what is stored.
-     */
-    lineOffset?: number
-    /**
-     * Vocabulary to link (docs/features/14). Read surfaces only — while a page
-     * is being written, a definition link under every third word fights the
-     * text selection it sits in, and the affordance is for readers anyway.
-     * Decorations, so nothing is written to the document either way.
-     */
-    glossaryTerms?: GlossaryTerm[]
-    /** Occurrences on this page that are not mentions, despite matching. */
-    glossaryExclusions?: GlossaryExclusion[]
-    /**
      * Offers `/template` (issue #69), which inserts a template's body at the
      * cursor and emits `apply-template-defaults` for its tags, relations and
      * category. Opt-in: only a host that keeps page settings can take those,
@@ -229,15 +188,10 @@ const props = withDefaults(
     editable: true,
     compact: false,
     placeholder: '',
-    commentAnchors: () => [],
-    glossaryTerms: () => [],
-    glossaryExclusions: () => [],
   },
 )
 const emit = defineEmits<{
   'update:modelValue': [string]
-  /** Anchors whose passage is no longer in the text, after the last decoration pass. */
-  'outdated-anchors': [ids: string[]]
   /** The editor exists and holds `modelValue`, parsed. */
   ready: []
   /**
@@ -709,19 +663,12 @@ function emitMarkdown(markdown: string) {
 }
 
 /**
- * Read surfaces resolve `[text](Exact Page Title)` to a link; the authoring
- * view deliberately does not.
- *
- * This component is both reader and editor since docs/features/15, and the
- * asymmetry is the point: what it parses is what `serialize` writes back, so
- * resolving a title while editing would rewrite the destination to
- * `/documents/<id>` on the next keystroke — a content change nobody asked for,
- * triggered by opening the page. An author sees the reference exactly as it is
- * stored, and can fix it deliberately.
+ * Never resolves `[text](Exact Page Title)` (RichReader does): what this parses
+ * is what it writes back, so resolving here would rewrite the destination to
+ * `/documents/<id>` on the next keystroke. An author sees the reference as stored.
  */
 function toHtml(markdown: string): string {
-  if (props.editable) return markdownToHtml(markdown)
-  return markdownToHtml(markdown, { resolvePage: props.resolvePage, lineOffset: props.lineOffset })
+  return markdownToHtml(markdown)
 }
 
 /**
@@ -743,10 +690,13 @@ onMounted(() => {
     editable: props.editable,
     content: props.collab ? undefined : toHtml(props.modelValue),
     extensions: [
-      // Shared with the API's headless schema (@knowledge/editor-schema).
       // A shared draft brings its own per-person undo.
-      // Its code block also draws ```structurizr C4 models (#1244).
-      ...withC4CodeBlocks(baseExtensions(lowlight, { undoRedo: !props.collab })),
+      ...contentExtensions({
+        lowlight,
+        t,
+        undoRedo: !props.collab,
+        embed: { onEdit: (pos, attrs) => openEmbedPicker(pos, attrs), onPasted: (url) => void pinPasted(url) },
+      }),
       ...(props.collab?.extensions() ?? []),
       Placeholder.configure({
         placeholder: ({ node }) =>
@@ -754,32 +704,10 @@ onMounted(() => {
             ? t('editor.headingPlaceholder')
             : (props.placeholder as string) || t('editor.placeholder'),
       }),
-      Panel,
-      Expand,
-      Layout,
-      LayoutColumn,
-      TableOfContents,
-      // The block's section labels land in stored content, so it needs this
-      // app's translator — same reason CommentAnchors takes one.
-      ApiContract.configure({ t }),
-      ApiSection,
-      Mermaid,
-      Drawing,
-      FileEmbed,
-      Embed.configure({ onEdit: (pos, attrs) => openEmbedPicker(pos, attrs), onPasted: (url) => void pinPasted(url) }),
-      ResizableImage.configure(IMAGE_OPTIONS),
-      StatusMark,
-      DocMention,
-      UserMention,
-      AgentMention,
       SlashCommand,
       MentionCommand,
       DragHandleExtension,
       ListIndentKeymap.configure({ onLink: openLinkDialog }),
-      // The extension builds aria-labels, so it needs this app's translator.
-      CommentAnchors.configure({ t }),
-      GlossaryTerms,
-      SourceLines,
       // Its accept/discard bar builds labels, so it needs the translator too.
       AiSuggestions.configure({ t, shared: props.collab?.suggestions ?? null }),
     ],
@@ -856,53 +784,8 @@ onMounted(() => {
       .subscribe(() => highlightMissingLanguages(instance, lowlight)),
   )
 
-  syncCommentAnchors()
-  syncGlossary()
-  // One redraw when the roster and its exclusions land together — they are
-  // usually one response — instead of a full-document decoration pass each.
-  subscriptions.add(
-    merge(
-      fromWatch(() => props.glossaryTerms, { immediate: false }),
-      fromWatch(() => props.glossaryExclusions, { immediate: false }),
-      fromWatch(() => props.editable, { immediate: false }),
-    )
-      .pipe(auditTime(0))
-      .subscribe(syncGlossary),
-  )
   emit('ready')
 })
-
-/**
- * Redraw the highlights and report what no longer resolves. The outdated set is
- * only known after a pass, so it is read back from storage rather than computed
- * twice.
- */
-function syncCommentAnchors() {
-  const instance = editor.value
-  if (!instance) return
-  instance.commands.setCommentAnchors(props.commentAnchors)
-  // The outdated set is written during the decoration pass, so it is read back
-  // after the redraw has landed rather than in the same tick as the command.
-  void nextTick(() => {
-    if (editor.value === instance) emit('outdated-anchors', [...instance.storage.commentAnchors.outdated])
-  })
-}
-
-watch(() => props.commentAnchors, syncCommentAnchors, { deep: true })
-
-/**
- * The roster arrives after the first paint (it is a request) and changes when
- * someone edits the glossary, so the decorations are redrawn on both. Skipped
- * while editable for the reason the prop gives.
- */
-function syncGlossary() {
-  const instance = editor.value
-  if (!instance) return
-  instance.commands.setGlossaryTerms(
-    props.editable ? [] : props.glossaryTerms,
-    props.editable ? [] : props.glossaryExclusions,
-  )
-}
 
 watch(
   () => props.modelValue,
@@ -916,31 +799,12 @@ watch(
     instance.commands.discardAiSuggestions()
     lastEmitted = next
     instance.commands.setContent(toHtml(next), { emitUpdate: false })
-    syncCommentAnchors()
-    syncGlossary()
   },
 )
 
 watch(
   () => props.editable,
   (editable) => editor.value?.setEditable(editable),
-)
-
-/**
- * The resolver usually lands after the first paint — its roster is a request —
- * and title references cannot resolve without it, so re-parse once it arrives.
- * Read view only, for the reason `toHtml` gives, which also makes this cheap:
- * it fires at most once per page, and never while anyone is typing.
- */
-watch(
-  () => props.resolvePage,
-  () => {
-    const instance = editor.value
-    if (!instance || props.editable || props.collab) return
-    instance.commands.setContent(toHtml(props.modelValue), { emitUpdate: false })
-    syncCommentAnchors()
-    syncGlossary()
-  },
 )
 
 onBeforeUnmount(() => {

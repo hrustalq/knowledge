@@ -6,13 +6,15 @@ import { AssistantClientModule } from '../assistant/assistant-client.module.js';
 import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
 import { ProjectsCoreModule } from '../projects/projects-core.module.js';
 import { ConnectorsCoreModule } from '../connectors/connectors-core.module.js';
+import { WorkflowCoreModule } from '../workflows/workflow-core.module.js';
+import { TemplatesCoreModule } from '../templates/templates-core.module.js';
 import { ConfiguratorController } from './configurator.controller.js';
 import { ConfiguratorService } from './configurator.service.js';
 import { ConfigurationApplyService } from './configuration-apply.service.js';
 
 /** The configurator (#1250). API-only: a controller, and applying is a person's act. */
 @Module({
-  imports: [PrismaModule, ActivityModule, AiModule, AssistantClientModule, PermissionsCoreModule, ProjectsCoreModule, ConnectorsCoreModule],
+  imports: [PrismaModule, ActivityModule, AiModule, AssistantClientModule, PermissionsCoreModule, ProjectsCoreModule, ConnectorsCoreModule, WorkflowCoreModule, TemplatesCoreModule],
   controllers: [ConfiguratorController],
   providers: [ConfiguratorService, ConfigurationApplyService],
 })

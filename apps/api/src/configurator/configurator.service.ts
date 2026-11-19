@@ -1,16 +1,23 @@
 import { isDeepStrictEqual } from 'node:util';
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { ConfigurationProposal as ProposalRow, Prisma } from '@prisma/client';
 import type { ChatCompletionFunctionTool } from 'openai/resources/chat/completions';
 import {
   AGENT_TRIGGER_EVENTS,
   CONFIGURATION_CHANGE_KINDS,
+  AUTHORABLE_RELATION_TYPES,
+  BUILT_IN_TEMPLATE_KEYS,
   CONNECTOR_KIND_INFO,
+  DOCUMENT_CATEGORIES,
   DRIFT_CHECK_CONFIG_KEY,
   DRIFT_CHECK_MODES,
   RUNNABLE_AGENTS,
+  SYSTEM_PLACEHOLDERS,
+  TEMPLATE_PLACEHOLDER_KINDS,
+  WORKFLOW_STEP_KINDS,
   agentTriggerEventsFor,
+  builtInTemplateRef,
   driftCheckMode,
   isTriggerableAgent,
   type AgentTriggerFilter,
@@ -24,6 +31,7 @@ import {
 import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AccessService } from '../auth/access.service.js';
+import { FeaturesService } from '../auth/features.service.js';
 import type { Principal } from '../auth/principal.js';
 import { AgentRegistryService } from '../agents/agent-registry.service.js';
 import { filterOf } from '../agents/agent-trigger.service.js';
@@ -34,9 +42,11 @@ import { AssistantClient } from '../assistant/assistant.client.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { ProjectsService } from '../projects/projects.service.js';
 import { ConnectorsService } from '../connectors/connectors.service.js';
+import { TemplatesService } from '../templates/templates.service.js';
+import { templateIssues } from '../workflows/workflow-templates.js';
 import { wrapUntrusted } from '../common/untrusted.js';
 import { t } from '../i18n/t.js';
-import { readChanges, type ReadChange } from './configuration-changes.js';
+import { WORKFLOW_EVENTS, readChanges, type ReadChange } from './configuration-changes.js';
 
 /** Proposals listed at once, newest first. Older ones are history nobody reviews. */
 const LIST_LIMIT = 20;
@@ -58,6 +68,8 @@ const TOOLS: ChatCompletionFunctionTool[] = [
   tool('list_agent_triggers', 'Every agent trigger in the workspace: agent, event, project, filter and whether it is on.'),
   tool('list_projects', 'Projects you may see, with their ids.'),
   tool('list_connectors', 'Repository connectors that have a drift check, with their current mode.'),
+  tool('list_workflows', 'Workspace-wide workflow definitions: name, description and whether each is on.'),
+  tool('list_templates', 'Workspace-wide page templates and built-ins: ref, name and the category of page each writes.'),
   {
     type: 'function',
     function: {
@@ -85,14 +97,53 @@ const TOOLS: ChatCompletionFunctionTool[] = [
                 scheduleWeekdays: { type: 'array', items: { type: 'integer' }, description: 'agent-schedule, weekly: 0 = Sunday … 6 = Saturday' },
                 scheduleTimezone: { type: 'string', description: 'agent-schedule: IANA zone; omit to use the person\'s' },
                 event: { type: 'string', enum: [...AGENT_TRIGGER_EVENTS], description: 'agent-trigger' },
-                projectId: { type: 'string', description: 'agent-trigger: only this project; omit for every project' },
-                categories: { type: 'array', items: { type: 'string' }, description: 'agent-trigger: only pages of these categories' },
+                projectId: { type: 'string', description: 'agent-trigger, workflow-draft, page-template: only this project; omit for every project (a workspace-wide template needs an admin to apply)' },
+                categories: { type: 'array', items: { type: 'string' }, description: `agent-trigger, workflow-draft: only pages of these categories (workflow-draft: ${DOCUMENT_CATEGORIES.join(', ')})` },
                 connectorIds: { type: 'array', items: { type: 'string' }, description: 'agent-trigger: only these connectors' },
                 branch: { type: 'string', description: 'agent-trigger: only this branch' },
                 labels: { type: 'array', items: { type: 'string' }, description: 'agent-trigger, work-item.updated: only tickets with these labels' },
                 note: { type: 'string', description: 'agent-schedule, agent-trigger: an extra instruction for every run it starts' },
                 connectorId: { type: 'string', description: 'connector-drift-check' },
                 mode: { type: 'string', enum: [...DRIFT_CHECK_MODES], description: 'connector-drift-check' },
+                name: { type: 'string', description: 'workflow-draft, page-template: a short name, unique in the workspace' },
+                description: { type: 'string', description: 'workflow-draft, page-template: one line on what it is for' },
+                steps: {
+                  type: 'array',
+                  description:
+                    'workflow-draft: the chain. Exactly one step has nothing pointing at it, which is where a run starts on a page. ' +
+                    '"ai.generate" fans out a list, "ai.draft" writes one page per item, "review" waits for a person.',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      id: { type: 'string', description: 'lower-case-dashed slug' },
+                      kind: { type: 'string', enum: [...WORKFLOW_STEP_KINDS] },
+                      title: { type: 'string' },
+                      prompt: { type: 'string', description: 'ai.* only: what the model running this step is told' },
+                      next: { type: 'array', items: { type: 'string' }, description: 'ids of the steps that run after this one' },
+                      fanOut: { type: 'boolean', description: 'ai.generate only' },
+                      maxItems: { type: 'integer', description: 'ai.generate: 1–50' },
+                      produces: {
+                        type: 'object',
+                        description: 'a step that writes pages: their category, the edge to the page they came from, optionally a template',
+                        properties: {
+                          category: { type: 'string', enum: [...DOCUMENT_CATEGORIES] },
+                          relationToParent: { type: 'string', enum: [...AUTHORABLE_RELATION_TYPES] },
+                          templateRef: { type: 'string', description: `a ref from list_templates, or one of ${BUILT_IN_TEMPLATE_KEYS.map(builtInTemplateRef).join(', ')}` },
+                        },
+                      },
+                    },
+                  },
+                },
+                autoStart: { type: 'boolean', description: 'workflow-draft: start a run on its own when one of events fires on a matching page' },
+                events: { type: 'array', items: { type: 'string', enum: WORKFLOW_EVENTS }, description: 'workflow-draft, with autoStart: revision.indexed is "a page was merged or published"' },
+                source: {
+                  type: 'string',
+                  description:
+                    'page-template: markdown with frontmatter. A reserved `template:` mapping carries `category` ' +
+                    `(${DOCUMENT_CATEGORIES.join(', ')}), \`titlePattern\` and \`placeholders\`: a list of mappings ` +
+                    `{ name, label, kind: ${TEMPLATE_PLACEHOLDER_KINDS.join(' | ')}, required }, never bare strings. ` +
+                    `The body uses them as {{name}}; ${SYSTEM_PLACEHOLDERS.map((n) => `{{${n}}}`).join(', ')} need no declaration.`,
+                },
               },
             },
           },
@@ -127,6 +178,8 @@ export class ConfiguratorService {
     private readonly access: AccessService,
     private readonly projects: ProjectsService,
     private readonly connectors: ConnectorsService,
+    private readonly features: FeaturesService,
+    private readonly templates: TemplatesService,
     config: ConfigService<Env, true>,
   ) {
     this.schedulesOn = config.get('AGENT_SCHEDULE_ENABLED', { infer: true }) === true;
@@ -164,8 +217,8 @@ export class ConfiguratorService {
         if (name === PROPOSE_TOOL) {
           const { changes, dropped } = readChanges(args.changes, timezone);
           const assessed = await this.assess(workspaceId, changes);
-          const row = await this.write(proposalId, workspaceId, goal, assessed, principal.userId);
-          proposalId = row.id;
+          // Nothing accepted writes nothing: an empty proposal is a history row with nothing to review.
+          if (assessed.length) proposalId = (await this.write(proposalId, workspaceId, goal, assessed, principal.userId)).id;
           return {
             content: JSON.stringify({
               accepted: assessed.map((c) => ({ kind: c.spec.kind, target: c.target, unavailable: c.unavailable })),
@@ -223,8 +276,9 @@ export class ConfiguratorService {
    */
   async assess(workspaceId: string, changes: ReadChange[]): Promise<ConfigurationChange[]> {
     const out: ConfigurationChange[] = [];
+    const sectionOff = (await this.features.disabled(workspaceId)).includes('workflows');
     for (const [i, { spec, reason }] of changes.entries()) {
-      const { target, diff, unavailable, normalized } = await this.assessOne(workspaceId, spec);
+      const { target, diff, unavailable, normalized } = await this.assessOne(workspaceId, spec, sectionOff);
       out.push({
         id: `c${i + 1}`,
         spec: normalized,
@@ -233,7 +287,7 @@ export class ConfiguratorService {
         diff,
         state: unavailable ? 'unavailable' : 'pending',
         unavailable,
-        requires: 'admin',
+        requires: requiresFor(normalized),
         appliedAt: null,
         appliedBy: null,
         resultId: null,
@@ -245,6 +299,7 @@ export class ConfiguratorService {
   private async assessOne(
     workspaceId: string,
     spec: ConfigurationChangeSpec,
+    sectionOff: boolean,
   ): Promise<{ target: string; diff: ConfigurationDiffRow[]; unavailable: ConfigurationUnavailableReason | null; normalized: ConfigurationChangeSpec }> {
     switch (spec.kind) {
       case 'agent-schedule': {
@@ -276,7 +331,7 @@ export class ConfiguratorService {
         // Only the filter fields the event has a dimension for — the rule the trigger writer applies.
         const filter = mergeFilter(spec.event, {}, spec.filter);
         const normalized = { ...spec, filter };
-        const projectOk = !spec.projectId || (await this.prisma.project.count({ where: { id: spec.projectId, workspaceId } })) > 0;
+        const projectOk = await this.projectIn(workspaceId, spec.projectId);
         const ids = filter.connectorIds ?? [];
         const connectorsOk = !ids.length || (await this.prisma.connector.count({ where: { id: { in: ids }, workspaceId } })) === ids.length;
         const existing = await this.prisma.agentTrigger.findMany({
@@ -289,12 +344,9 @@ export class ConfiguratorService {
           : !this.triggersOn ? 'triggers-off'
           : existing.some((row) => same(filterOf(row.filter), filter)) ? 'already-configured'
           : null;
-        const after = { event: spec.event, projectId: spec.projectId, ...filter, note: spec.note };
         return {
           target: name ?? spec.agentKey,
-          diff: Object.entries(after)
-            .filter(([, value]) => value !== null)
-            .map(([field, value]) => ({ field, before: null, after: value })),
+          diff: created({ event: spec.event, projectId: spec.projectId, ...filter, note: spec.note }),
           unavailable,
           normalized,
         };
@@ -310,7 +362,58 @@ export class ConfiguratorService {
           : null;
         return { target: row?.name ?? spec.connectorId, diff: [{ field: 'mode', before, after: spec.mode }], unavailable, normalized: spec };
       }
+
+      case 'workflow-draft': {
+        const projectOk = await this.projectIn(workspaceId, spec.projectId);
+        // `@@unique([workspaceId, name])`: the create would 409.
+        const taken = (await this.prisma.workflowDefinition.count({ where: { workspaceId, name: spec.name } })) > 0;
+        // `validateGraph` passed at propose and the graph is stored; what can change is whether its templates still exist.
+        const broken = (await templateIssues(this.templates, workspaceId, spec.graph)).length > 0;
+        const { autoStart, events, categories } = spec.trigger;
+        const unavailable =
+          !projectOk ? 'not-found' : sectionOff ? 'section-off' : taken ? 'name-taken' : broken ? 'invalid' : null;
+        return {
+          target: spec.name,
+          diff: created({
+            name: spec.name,
+            description: spec.description,
+            projectId: spec.projectId,
+            steps: spec.graph.steps.map((step) => step.title),
+            autoStart,
+            events: autoStart ? events : null,
+            categories,
+          }),
+          unavailable,
+          normalized: spec,
+        };
+      }
+
+      case 'page-template': {
+        const projectOk = await this.projectIn(workspaceId, spec.projectId);
+        const taken = await this.templates.assertNameFree(workspaceId, spec.projectId, spec.name).then(
+          () => false,
+          (e: unknown) => {
+            if (e instanceof ConflictException) return true;
+            throw e;
+          },
+        );
+        const unavailable =
+          !projectOk ? 'not-found'
+          : sectionOff ? 'section-off'
+          : taken ? 'name-taken'
+          : null;
+        return {
+          target: spec.name,
+          diff: created({ name: spec.name, description: spec.description, projectId: spec.projectId, source: spec.source }),
+          unavailable,
+          normalized: spec,
+        };
+      }
     }
+  }
+
+  private async projectIn(workspaceId: string, projectId: string | null): Promise<boolean> {
+    return !projectId || (await this.prisma.project.count({ where: { id: projectId, workspaceId } })) > 0;
   }
 
   private async agentName(workspaceId: string, key: string): Promise<string | null> {
@@ -369,6 +472,20 @@ export class ConfiguratorService {
           .filter((c) => DRIFT_KINDS.has(c.kind))
           .map((c) => ({ id: c.id, name: c.name, kind: c.kind, projectId: c.projectId, driftCheck: driftCheckMode(c.config) }));
       }
+      case 'list_workflows':
+        // Workspace-wide only, as the templates' listing: a restricted project's definitions stay its own.
+        return this.prisma.workflowDefinition.findMany({
+          where: { workspaceId, projectId: null },
+          orderBy: { name: 'asc' },
+          select: { name: true, description: true, enabled: true },
+        });
+      case 'list_templates':
+        return (await this.templates.list({ workspaceId })).templates.map((tpl) => ({
+          ref: tpl.ref,
+          name: tpl.name,
+          category: tpl.category,
+          description: tpl.description,
+        }));
       default:
         return null;
     }
@@ -390,6 +507,22 @@ export class ConfiguratorService {
   isAdmin(principal: Principal, workspaceId: string): Promise<boolean> {
     return this.access.requireRole(principal, workspaceId, 'admin').then(() => true, () => false);
   }
+}
+
+/**
+ * The role applying a change needs, by its writer's route: a project's page
+ * template is `editor` (`templates.controller.ts`), everything else workspace
+ * `admin`. Asked again at apply, from the spec, never from the stored row.
+ */
+export function requiresFor(spec: ConfigurationChangeSpec): 'admin' | 'editor' {
+  return spec.kind === 'page-template' && spec.projectId ? 'editor' : 'admin';
+}
+
+/** A change that creates something: every field it sets, against nothing today. */
+function created(after: Record<string, unknown>): ConfigurationDiffRow[] {
+  return Object.entries(after)
+    .filter(([, value]) => value !== null && !(Array.isArray(value) && !value.length))
+    .map(([field, value]) => ({ field, before: null, after: value }));
 }
 
 function tool(name: string, description: string): ChatCompletionFunctionTool {

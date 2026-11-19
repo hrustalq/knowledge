@@ -9129,7 +9129,8 @@
       "requires": {
         "type": "string",
         "enum": [
-          "admin"
+          "admin",
+          "editor"
         ]
       },
       "appliedAt": {
@@ -9169,6 +9170,12 @@
       },
       {
         "$ref": "#/components/schemas/ConnectorDriftCheckChangeSpec"
+      },
+      {
+        "$ref": "#/components/schemas/WorkflowDraftChangeSpec"
+      },
+      {
+        "$ref": "#/components/schemas/PageTemplateChangeSpec"
       }
     ]
   },
@@ -9246,7 +9253,10 @@
       "not-found",
       "connector-unsupported",
       "schedules-off",
-      "triggers-off"
+      "triggers-off",
+      "section-off",
+      "name-taken",
+      "invalid"
     ]
   },
   "ConflictCodeRef": {
@@ -20717,6 +20727,38 @@
       "name"
     ]
   },
+  "PageTemplateChangeSpec": {
+    "type": "object",
+    "properties": {
+      "kind": {
+        "type": "string",
+        "enum": [
+          "page-template"
+        ]
+      },
+      "name": {
+        "type": "string"
+      },
+      "description": {
+        "type": "string",
+        "nullable": true
+      },
+      "projectId": {
+        "type": "string",
+        "nullable": true
+      },
+      "source": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "kind",
+      "name",
+      "description",
+      "projectId",
+      "source"
+    ]
+  },
   "PlaudAuthorizeResponse": {
     "type": "object",
     "properties": {
@@ -28177,6 +28219,42 @@
       "trigger",
       "createdAt",
       "updatedAt"
+    ]
+  },
+  "WorkflowDraftChangeSpec": {
+    "type": "object",
+    "properties": {
+      "kind": {
+        "type": "string",
+        "enum": [
+          "workflow-draft"
+        ]
+      },
+      "name": {
+        "type": "string"
+      },
+      "description": {
+        "type": "string",
+        "nullable": true
+      },
+      "projectId": {
+        "type": "string",
+        "nullable": true
+      },
+      "graph": {
+        "$ref": "#/components/schemas/WorkflowGraph"
+      },
+      "trigger": {
+        "$ref": "#/components/schemas/WorkflowTrigger"
+      }
+    },
+    "required": [
+      "kind",
+      "name",
+      "description",
+      "projectId",
+      "graph",
+      "trigger"
     ]
   },
   "WorkflowGraph": {

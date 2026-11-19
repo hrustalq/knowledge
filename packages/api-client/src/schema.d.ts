@@ -14013,12 +14013,12 @@ export interface components {
             state: components["schemas"]["ConfigurationChangeState"];
             unavailable: components["schemas"]["ConfigurationUnavailableReason"] | null;
             /** @enum {string} */
-            requires: "admin";
+            requires: "admin" | "editor";
             appliedAt: string | null;
             appliedBy: string | null;
             resultId: string | null;
         };
-        ConfigurationChangeSpec: components["schemas"]["AgentScheduleChangeSpec"] | components["schemas"]["AgentTriggerChangeSpec"] | components["schemas"]["ConnectorDriftCheckChangeSpec"];
+        ConfigurationChangeSpec: components["schemas"]["AgentScheduleChangeSpec"] | components["schemas"]["AgentTriggerChangeSpec"] | components["schemas"]["ConnectorDriftCheckChangeSpec"] | components["schemas"]["WorkflowDraftChangeSpec"] | components["schemas"]["PageTemplateChangeSpec"];
         /** @enum {string} */
         ConfigurationChangeState: "pending" | "applied" | "dismissed" | "unavailable";
         ConfigurationDiffRow: {
@@ -14037,7 +14037,7 @@ export interface components {
             updatedAt: string;
         };
         /** @enum {string} */
-        ConfigurationUnavailableReason: "already-configured" | "agent-unsupported" | "not-found" | "connector-unsupported" | "schedules-off" | "triggers-off";
+        ConfigurationUnavailableReason: "already-configured" | "agent-unsupported" | "not-found" | "connector-unsupported" | "schedules-off" | "triggers-off" | "section-off" | "name-taken" | "invalid";
         ConflictCodeRef: {
             connectorId: string;
             repository: string;
@@ -16654,6 +16654,14 @@ export interface components {
             key: string;
             name: string;
         };
+        PageTemplateChangeSpec: {
+            /** @enum {string} */
+            kind: "page-template";
+            name: string;
+            description: string | null;
+            projectId: string | null;
+            source: string;
+        };
         PlaudAuthorizeResponse: {
             url: string;
         };
@@ -18398,6 +18406,15 @@ export interface components {
             trigger: components["schemas"]["WorkflowTrigger"];
             createdAt: string;
             updatedAt: string;
+        };
+        WorkflowDraftChangeSpec: {
+            /** @enum {string} */
+            kind: "workflow-draft";
+            name: string;
+            description: string | null;
+            projectId: string | null;
+            graph: components["schemas"]["WorkflowGraph"];
+            trigger: components["schemas"]["WorkflowTrigger"];
         };
         WorkflowGraph: {
             steps: components["schemas"]["WorkflowStep"][];

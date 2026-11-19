@@ -128,7 +128,7 @@ export class WorkflowDraftService {
 
     const parsed = parseModelJson(raw);
     const reply = typeof parsed?.reply === 'string' ? parsed.reply.trim() : '';
-    const steps = this.readSteps(parsed);
+    const steps = readWorkflowSteps(parsed?.steps);
 
     // "done" is the model's claim; an empty step list is the fact. Trusting the
     // flag alone hands the wizard a finished-looking proposal with nothing in it.
@@ -180,61 +180,62 @@ export class WorkflowDraftService {
     // about.
     return last?.role === 'user' ? [...recent.slice(0, -1), current, last] : [...recent, current];
   }
+}
 
-  /**
-   * Read the model's steps into the shape the compiler accepts.
-   *
-   * Everything is narrowed rather than trusted: an unknown kind, a category
-   * this product does not have, a `next` pointing nowhere. `validateGraph` would
-   * catch most of it and report it honestly, but a proposal whose problems are
-   * all "the model wrote nonsense" teaches the operator nothing — dropping what
-   * cannot be true and compiling the rest gives them something to edit.
-   */
-  private readSteps(parsed: Record<string, unknown> | null): WorkflowStep[] {
-    const raw = Array.isArray(parsed?.steps) ? (parsed.steps as Array<Record<string, unknown>>) : [];
-    const out: WorkflowStep[] = [];
-    const seen = new Set<string>();
+/**
+ * Read the model's steps into the shape the compiler accepts. Also the
+ * configurator's reader for a workflow draft (#1312): one narrowing, not two.
+ *
+ * Everything is narrowed rather than trusted: an unknown kind, a category
+ * this product does not have, a `next` pointing nowhere. `validateGraph` would
+ * catch most of it and report it honestly, but a proposal whose problems are
+ * all "the model wrote nonsense" teaches the operator nothing — dropping what
+ * cannot be true and compiling the rest gives them something to edit.
+ */
+export function readWorkflowSteps(steps: unknown): WorkflowStep[] {
+  const raw = Array.isArray(steps) ? (steps as Array<Record<string, unknown>>) : [];
+  const out: WorkflowStep[] = [];
+  const seen = new Set<string>();
 
-    for (const item of raw) {
-      if (out.length >= MAX_STEPS) break;
-      const kind = String(item?.kind ?? '');
-      if (!KIND_SET.has(kind)) continue;
-      const id = slug(String(item?.id ?? ''));
-      if (!id || seen.has(id)) continue;
-      const title = String(item?.title ?? '').trim().slice(0, 120);
-      if (!title) continue;
-      seen.add(id);
+  for (const item of raw) {
+    if (out.length >= MAX_STEPS) break;
+    const kind = String(item?.kind ?? '');
+    if (!KIND_SET.has(kind)) continue;
+    const id = slug(String(item?.id ?? ''));
+    if (!id || seen.has(id)) continue;
+    const title = String(item?.title ?? '').trim().slice(0, 120);
+    if (!title) continue;
+    seen.add(id);
 
-      const isAi = kind === 'ai.generate' || kind === 'ai.draft';
-      const prompt = typeof item?.prompt === 'string' ? item.prompt.trim() : '';
-      const produces = readProduces(item?.produces);
+    const isAi = kind === 'ai.generate' || kind === 'ai.draft';
+    const prompt = typeof item?.prompt === 'string' ? item.prompt.trim() : '';
+    const produces = readProduces(item?.produces);
 
-      out.push({
-        id,
-        kind: kind as WorkflowStep['kind'],
-        title,
-        next: Array.isArray(item?.next)
-          ? [...new Set(item.next.filter((n): n is string => typeof n === 'string').map(slug))].filter(Boolean)
-          : [],
-        // Only ai.generate fans out, whatever the model claimed: the compiler
-        // warns about the mismatch, and a `search` step marked fanOut would
-        // make that warning the first thing the operator sees.
-        fanOut: kind === 'ai.generate' && item?.fanOut !== false,
-        // Never inherited from the model. Publishing without review is the
-        // operator's decision, and a proposal that quietly took it would be
-        // the one thing in this flow that cannot be undone by editing.
-        autoApprove: false,
-        ...(isAi ? { prompt: { user: prompt } } : {}),
-        ...(produces ? { produces } : {}),
-        ...(kind === 'ai.generate' ? { maxItems: clampItems(item?.maxItems) } : {}),
-      });
-    }
-
-    // A `next` naming a step that was dropped would fail the compiler with an
-    // error about the operator's graph rather than about our own filtering.
-    const present = new Set(out.map((s) => s.id));
-    return out.map((s) => ({ ...s, next: s.next.filter((n) => present.has(n) && n !== s.id) }));
+    out.push({
+      id,
+      kind: kind as WorkflowStep['kind'],
+      title,
+      next: Array.isArray(item?.next)
+        ? [...new Set(item.next.filter((n): n is string => typeof n === 'string').map(slug))].filter(Boolean)
+        : [],
+      // Only ai.generate fans out, whatever the model claimed: the compiler
+      // warns about the mismatch, and a `search` step marked fanOut would
+      // make that warning the first thing the operator sees.
+      fanOut: kind === 'ai.generate' && item?.fanOut !== false,
+      // Never inherited from the model. Publishing without review is the
+      // operator's decision, and a proposal that quietly took it would be
+      // the one thing in this flow that cannot be undone by editing.
+      autoApprove: false,
+      ...(isAi ? { prompt: { user: prompt } } : {}),
+      ...(produces ? { produces } : {}),
+      ...(kind === 'ai.generate' ? { maxItems: clampItems(item?.maxItems) } : {}),
+    });
   }
+
+  // A `next` naming a step that was dropped would fail the compiler with an
+  // error about the operator's graph rather than about our own filtering.
+  const present = new Set(out.map((s) => s.id));
+  return out.map((s) => ({ ...s, next: s.next.filter((n) => present.has(n) && n !== s.id) }));
 }
 
 function readProduces(value: unknown): WorkflowStepProduces | null {

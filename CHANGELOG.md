@@ -17,6 +17,12 @@ in the pull request that introduces them — see
 
 ### Changed
 
+- **Opening the assistant downloads about 185 KiB less script (#1285).** The graph, search and activity views a
+  reply can embed now load only when a reply actually contains one, and a C4 diagram's renderer loads only when a
+  reply or page has a C4 block. In the lab's 390 px profile a cold `/assistant` load falls from 1,597 to 1,412 KiB of
+  script, and the time until its content appears falls from 7.1 s to 5.9 s. Most of what is left is the conversation
+  itself: it is still drawn in the browser after the app's code and two requests have finished, not on the server.
+  Chats, the composer, citations, feedback, rename and delete work as before.
 - **A share link no longer downloads published-site code (#1281).** The public reader now loads only the page for
   what it is showing: a share link gets the share page, a published site gets the site with its search, Ask and tree,
   and the Ask widget gets only Ask. A share's Download dialog loads only on links that offer downloads. Together with

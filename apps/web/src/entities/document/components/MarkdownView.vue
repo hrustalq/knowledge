@@ -29,7 +29,8 @@ import { useTheme } from '@/shared/utils/theme'
 import { mermaidConfig, mermaidSvg } from '@/shared/utils/mermaid'
 import { createRevealTracker, wrapRuns } from '@/shared/utils/stream-reveal'
 import { takeC4Blocks, type C4Block } from '../model/c4-blocks'
-import C4Diagram from './C4Diagram.vue'
+// Client-only (the hosts are found after mount), so a page with no C4 block never loads it.
+import { LazyC4Diagram as C4Diagram } from './lazy'
 import { DiagramLightbox, ImageLightbox, markDiagrams, markZoomable } from '@knowledge/ui/lightbox'
 
 // Several roots (the body and the lightboxes), so a parent's class lands on the body by hand.

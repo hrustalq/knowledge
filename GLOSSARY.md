@@ -81,3 +81,25 @@ _Avoid_: flow (that is a code-defined question sequence that writes), wizard, qu
 **Scaffold stub** («Незаполненная страница»):
 A page whose head is still the revision the scaffold wrote. It is in the tree for people to fill in, but kept out of search, Ask, llms.txt and the health counts until its first real edit.
 _Avoid_: draft (that is a private page or branch), template (in the ru UI «заготовка» already means a page template), placeholder page
+
+## The relation graph
+
+**Entity** («Сущность»):
+A thing the graph knows, held as one vertex per canonical entity key. Pages point at entities through relations; there is no page-to-page edge.
+_Avoid_: object, node (pages are nodes too), concept (`concept` is a layer)
+
+**Entity key** («Ключ сущности»):
+An entity's identity, written `type:name` (`service:identity`) and folded to one canonical spelling. Two spellings of one entity are joined by an entity alias, not a glossary term.
+_Avoid_: id, slug
+
+**Entity type** («Тип сущности»):
+The prefix of an entity key: `service` in `service:identity`. Any prefix is accepted and none is registered; some also place the entity on a layer. See docs/architecture/14.
+_Avoid_: class, kind (a document's kind is openapi or asyncapi), category (that is a page's)
+
+**Relation type** («Тип связи»):
+One of the fixed set of edge types a page may declare towards an entity: `DESCRIBES`, `DEPENDS_ON`, `IMPLEMENTS`, `RELATED_TO`, `OWNED_BY`, `SUPERSEDES`, `CONTRADICTS`; `TAGGED_WITH` comes from tags only.
+_Avoid_: link (a link maps external content onto a page), predicate, property
+
+**Ontology** («Онтология»):
+Only the L1 level of the construction methodology: a team's own domain model, documented as one entity page per domain entity with the words in the glossary. The graph's entity and relation types are not called an ontology, because nothing enforces which relation may join which types. See docs/architecture/14.
+_Avoid_: using it for the graph's types; schema (that is Prisma or OpenAPI); taxonomy

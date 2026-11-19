@@ -50,9 +50,8 @@ import TreeDragLayer from '@/modules/documents/components/TreeDragLayer.vue'
 import { provideTreeDnd } from '@/modules/documents/model/tree-dnd'
 import { toast } from 'vue-sonner'
 import { DocumentFacets } from '@/entities/search'
-import { GraphCanvas } from '@/entities/graph'
-import { toGraphNodes } from '@/entities/graph'
-import { useGraphTime } from '@/entities/graph'
+import { useMounted } from '@vueuse/core'
+import { LazyGraphCanvas as GraphCanvas, toGraphNodes, useGraphTime } from '@/entities/graph'
 import { VERIFICATION_MARK_CLASS, needsAttention, verificationDotClass } from '@/entities/document'
 
 const { t } = useI18n()
@@ -89,6 +88,12 @@ const VIEWS = [
  * going to be a placeholder.
  */
 const view = ref<View>('graph')
+/**
+ * The canvas is a lazy chunk (#1279), so that placeholder frame is a plain
+ * skeleton: hydrating the real one would download the graph before the stored
+ * view is read. Called before the storage hook, so both land in one render.
+ */
+const mounted = useMounted()
 
 /**
  * The facets rail. Offered on the list only: they filter *which documents*,
@@ -374,7 +379,9 @@ watch(virtualRows, (rows) => {
 
         <!-- Graph ---------------------------------------------------------->
         <template v-else-if="view === 'graph'">
+          <Skeleton v-if="!mounted" class="size-full rounded-none" />
           <GraphCanvas
+            v-else
             :loading="!(store.graphLoaded && store.graph)"
             :nodes="graphNodes"
             :edges="graphEdges"

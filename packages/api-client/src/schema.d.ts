@@ -15456,6 +15456,8 @@ export interface components {
             documentId: string;
             title: string;
             updatedAt: string;
+            headRevisionStatus: components["schemas"]["RevisionStatus"] | null;
+            verification: components["schemas"]["SourceVerificationState"];
         };
         HomeResponse: {
             workspaceId: string;
@@ -16920,11 +16922,7 @@ export interface components {
                 workflows: number;
                 openMergeRequests: number;
             };
-            recentPages: {
-                documentId: string;
-                title: string;
-                updatedAt: string;
-            }[];
+            recentPages: components["schemas"]["HomeRecentPage"][];
         };
         ProjectPermissions: {
             "document:view": boolean;

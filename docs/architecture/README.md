@@ -36,3 +36,4 @@ here. If a rule fits on one line and applies everywhere, it belongs there.
 | 11  | [Web layers & modules](11-web-modules.md)                    | `app → widgets → modules → entities → stores → shared → core`; modules never import each other |
 | 12  | [CouchDB storage evaluation](12-couchdb-storage-evaluation.md) | Why PostgreSQL and MinIO stay; replication, offline sync and migration cost                    |
 | 13  | [microVM sandbox evaluation](13-sandbox-microvm-evaluation.md) | smolvm vs Firecracker, gVisor, Kata, microsandbox, E2B; why it is deferred and what to harden first |
+| 14  | [What "ontology" means](14-ontology-decision.md)             | Entity and relation types vs an ontology; why the word stays out of the product, and the vocabulary |

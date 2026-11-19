@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
+import { JSDOM } from 'jsdom'
 import type { AssistantSource } from '@knowledge/contracts'
 import {
   CITE_MARKER_RE,
   citeLabels,
+  decorateCitations,
   citeNumber,
   headingAnchor,
   sourceByCite,
@@ -83,5 +85,17 @@ describe('unsupportedMarkers (#530)', () => {
 
   it('is empty with no marks', () => {
     expect(unsupportedMarkers(text, undefined).size).toBe(0)
+  })
+})
+
+// The server draws the opening conversation's chips (#1331) in a jsdom window, with no DOM globals.
+describe('decorateCitations on the server', () => {
+  it('decorates in a document of its own, with no global NodeFilter', () => {
+    const { document } = new JSDOM('').window
+    const root = document.createElement('div')
+    root.innerHTML = '<p>Postgres stays [S1, S2]. <code>[S3]</code></p>'
+    expect(decorateCitations(root, new Set(['S1']))).toBe(2)
+    expect([...root.querySelectorAll('.kn-cite')].map((b) => b.className)).toEqual(['kn-cite', 'kn-cite kn-cite-pending'])
+    expect(root.querySelector('code')!.textContent).toBe('[S3]')
   })
 })

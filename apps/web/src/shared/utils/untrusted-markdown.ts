@@ -15,7 +15,7 @@
  * The work happens on a `<template>`: its content belongs to an inert document,
  * so nothing in it starts loading before it is stripped.
  */
-import DOMPurify from 'dompurify'
+import DOMPurify, { type WindowLike } from 'dompurify'
 import { parseAttachmentPath } from '@knowledge/contracts/publishing'
 import { SANITIZE_CONFIG } from '@/core/markdown/render'
 
@@ -30,9 +30,25 @@ const UNTRUSTED_CONFIG = {
   FORBID_ATTR: [...SANITIZE_CONFIG.FORBID_ATTR, ...REMOTE_ATTRS],
 }
 
-/** markdownToHtml output from a model → HTML that loads nothing from another host. */
-export function sanitizeUntrusted(html: string): string {
-  return withoutRemoteLoads(DOMPurify.sanitize(html, UNTRUSTED_CONFIG))
+/**
+ * DOMPurify for the window `doc` belongs to: the server's jsdom one (#1331), or
+ * the browser's own when `doc` has none (a detached document, `inertDocument`).
+ */
+const purifiers = new WeakMap<object, typeof DOMPurify>()
+export function purifierFor(doc?: Document): typeof DOMPurify {
+  const view = doc?.defaultView
+  if (!view) return DOMPurify
+  let purify = purifiers.get(view)
+  if (!purify) purifiers.set(view, (purify = DOMPurify(view as unknown as WindowLike)))
+  return purify
+}
+
+/**
+ * markdownToHtml output from a model → HTML that loads nothing from another host.
+ * `doc` is where the work happens; the browser's document when absent.
+ */
+export function sanitizeUntrusted(html: string, doc?: Document): string {
+  return withoutRemoteLoads(purifierFor(doc).sanitize(html, UNTRUSTED_CONFIG), doc)
 }
 
 /** An SVG drawn from untrusted text (a mermaid diagram), stripped the same way. */
@@ -46,8 +62,8 @@ const CSS_IMPORT = /@import\b[^;]*;?/gi
 /** `url(…)` that is not a reference into this document (`url(#arrow)`). */
 const REMOTE_URL = /url\(\s*(?!['"]?#)[^)]*\)/gi
 
-function withoutRemoteLoads(html: string): string {
-  const tpl = document.createElement('template')
+function withoutRemoteLoads(html: string, doc: Document = document): string {
+  const tpl = doc.createElement('template')
   tpl.innerHTML = html
   const root = tpl.content
   for (const img of root.querySelectorAll('img')) {
@@ -55,7 +71,7 @@ function withoutRemoteLoads(html: string): string {
     if (parseAttachmentPath(src) || /^data:image\//i.test(src)) continue
     const alt = img.getAttribute('alt')?.trim() ?? ''
     if (/^https?:\/\//i.test(src) && !img.closest('a')) {
-      const link = document.createElement('a')
+      const link = doc.createElement('a')
       link.setAttribute('href', src)
       link.setAttribute('target', '_blank')
       link.setAttribute('rel', 'noopener noreferrer nofollow')
@@ -63,7 +79,7 @@ function withoutRemoteLoads(html: string): string {
       img.replaceWith(link)
     } else {
       // A member-only or protocol-relative path, or an image already inside a link: its words, if any.
-      img.replaceWith(document.createTextNode(alt))
+      img.replaceWith(doc.createTextNode(alt))
     }
   }
   // A stylesheet (mermaid's own, which an init directive can extend) or a

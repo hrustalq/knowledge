@@ -34,6 +34,14 @@ in the pull request that introduces them — see
   time to fusion, community scoring, methodology levels and re-ranking, page grouping and snippets, placement and
   validity, and analytics enqueueing. Timings are collected through reusable method decorators, isolated between
   concurrent searches. (#1291)
+- **The configurator links methodologies and copies agents from blueprints (#1314).** A goal such as "set Payments
+  up for discovery work" now proposes linking the project to the Discovery methodology. Applying it links the
+  methodology exactly as the project settings screen does, including the sections the project lacks on a first
+  link, which the proposal lists. A goal that needs an agent a methodology declares can copy that agent into the
+  workspace, with its instructions exactly as the blueprint writes them; the configurator never writes an agent's
+  instructions itself. The project's maintainer applies a link, and a workspace admin applies an agent. If the
+  blueprint or the project changed after the proposal was written, the change is shown as stale and nothing is
+  written.
 - **The configurator proposes project settings (#1313).** A goal such as "review Payments pages monthly and block
   breaking API changes there" now yields project-setting changes: a project's freshness thresholds, tracker handoff
   rules, breaking-API gate or style lint gate. Each row shows the project's own value today and after, and beside

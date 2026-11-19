@@ -4,6 +4,7 @@ import {
   levelOf,
   ownedAgentKey,
   type BlueprintLevel,
+  type BlueprintNode,
   type Locale,
   type MethodologyPreviewResponse,
   type ProjectLevelsResponse,
@@ -72,7 +73,7 @@ export class ProjectMethodologyService {
     const { workspaceId } = await this.requireProject(projectId);
     const scope = await this.permissions.scopeFor(principal, workspaceId);
     const blueprint = await this.blueprints.resolve(workspaceId, key);
-    const sections = missingSections(await this.topPages(projectId, scope), blueprint.tree, locale);
+    const sections = await this.missing(projectId, scope, blueprint.tree, locale);
     return {
       blueprintKey: key,
       sections: sections.map(({ id, title, parentTitle, pages }) => ({ id, title, parentTitle, pages })),
@@ -108,7 +109,7 @@ export class ProjectMethodologyService {
 
         const wanted = new Set(input.sections ?? []);
         if (!wanted.size) return;
-        const offered = missingSections(await this.topPages(projectId, scope), link.blueprint.tree, locale).filter((s) => wanted.has(s.id));
+        const offered = (await this.missing(projectId, scope, link.blueprint.tree, locale)).filter((s) => wanted.has(s.id));
         const unknown = [...wanted].find((id) => !offered.some((s) => s.id === id));
         if (unknown) throw new BadRequestException(t('error.blueprint.unknownSection', { id: unknown }));
         for (const s of offered) await this.permissions.requireCreateUnder(scope, { projectId, ...(s.parentId ? { parentId: s.parentId } : {}) });
@@ -134,6 +135,11 @@ export class ProjectMethodologyService {
       }
     }
     return levels.map((l) => ({ key: l.key, name: blueprintText(l.name, locale), pages: counts.get(l.key) ?? 0 }));
+  }
+
+  /** The sections of `tree` the project lacks, matched against the pages `scope` can see. */
+  async missing(projectId: string, scope: AccessScope, tree: readonly BlueprintNode[], locale: Locale) {
+    return missingSections(await this.topPages(projectId, scope), tree, locale);
   }
 
   /** Root pages and their children the caller can see: what sections are matched against. */

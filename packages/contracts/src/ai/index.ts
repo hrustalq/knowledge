@@ -5,6 +5,7 @@ import type {
   AssistantSource,
   AssistantToolCall,
   AssistantWebSource,
+  Locale,
   ScopedSetting,
   SourceVerificationState,
 } from '@knowledge/contracts/core';
@@ -2605,6 +2606,8 @@ export const CONFIGURATION_CHANGE_KINDS = [
   'workflow-draft',
   'page-template',
   'project-setting',
+  'methodology-link',
+  'custom-agent',
 ] as const;
 export type ConfigurationChangeKind = (typeof CONFIGURATION_CHANGE_KINDS)[number];
 
@@ -2690,13 +2693,41 @@ export type ProjectSettingChangeSpec = { kind: 'project-setting'; projectId: str
   | { setting: 'lintPolicy'; values: { policy: LintPolicy | null } }
 );
 
+/**
+ * Link a project to a methodology (#1314) through its own route's service,
+ * creating the sections the project settings screen would tick: every missing
+ * one on a first link, none on a switch. `locale` is the drafter's: sections are
+ * matched and titled in it.
+ */
+export interface MethodologyLinkChangeSpec {
+  kind: 'methodology-link';
+  projectId: string;
+  /** As `GET /v1/blueprints` lists it: a built-in key or a saved blueprint's id. */
+  blueprintKey: string;
+  locale: Locale;
+}
+
+/**
+ * A workspace custom agent copied from a methodology's declaration (#1314).
+ * Only references: the instructions are trusted prompt text, so they are read
+ * from the blueprint, never from the model.
+ */
+export interface CustomAgentChangeSpec {
+  kind: 'custom-agent';
+  blueprintKey: string;
+  /** The declared key, which the copy keeps. */
+  agentKey: string;
+}
+
 export type ConfigurationChangeSpec =
   | AgentScheduleChangeSpec
   | AgentTriggerChangeSpec
   | ConnectorDriftCheckChangeSpec
   | WorkflowDraftChangeSpec
   | PageTemplateChangeSpec
-  | ProjectSettingChangeSpec;
+  | ProjectSettingChangeSpec
+  | MethodologyLinkChangeSpec
+  | CustomAgentChangeSpec;
 
 /**
  * `unavailable` is decided when the proposal is written and never offered for
@@ -2725,6 +2756,8 @@ export const CONFIGURATION_UNAVAILABLE_REASONS = [
   'name-taken',
   /** A workflow draft no longer compiles: a template its graph names went away. */
   'invalid',
+  /** What applying would write is no longer what was reviewed: the blueprint or the project changed since (#1314). */
+  'stale',
 ] as const;
 export type ConfigurationUnavailableReason = (typeof CONFIGURATION_UNAVAILABLE_REASONS)[number];
 
@@ -2766,12 +2799,12 @@ export interface ConfigurationChange {
   /**
    * The role apply requires on execution: `editor` for a project's page
    * template, `maintainer` (`requireProjectManage`) for a project setting that
-   * is not a merge gate, else workspace `admin`.
+   * is not a merge gate or a methodology link, else workspace `admin`.
    */
   requires: 'admin' | 'editor' | 'maintainer';
   appliedAt: string | null;
   appliedBy: string | null;
-  /** What applying created or changed: the trigger, agent, connector, workflow or template id. */
+  /** What applying created or changed: the trigger, agent, connector, workflow, template or project id. */
   resultId: string | null;
 }
 

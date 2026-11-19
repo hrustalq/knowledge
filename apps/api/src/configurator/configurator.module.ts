@@ -13,6 +13,7 @@ import { ApiRunnerCoreModule } from '../api-specs/api-runner-core.module.js';
 import { LintCoreModule } from '../documents/lint/lint-core.module.js';
 import { WorkItemHandoffModule } from '../connectors/handoff/work-item-handoff.module.js';
 import { ReadCacheCoreModule } from '../cache/read-cache.module.js';
+import { ProjectScaffoldCoreModule } from '../projects/project-scaffold-core.module.js';
 import { ConfiguratorController } from './configurator.controller.js';
 import { ConfiguratorService } from './configurator.service.js';
 import { ConfigurationApplyService } from './configuration-apply.service.js';
@@ -36,6 +37,8 @@ import { ProjectSettingChanges } from './project-setting-changes.js';
     LintCoreModule,
     WorkItemHandoffModule,
     ReadCacheCoreModule,
+    // Methodology links and custom agents from blueprints (#1314).
+    ProjectScaffoldCoreModule,
   ],
   controllers: [ConfiguratorController],
   providers: [ConfiguratorService, ConfigurationApplyService, ProjectSettingChanges],

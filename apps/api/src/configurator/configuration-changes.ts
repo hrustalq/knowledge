@@ -15,6 +15,7 @@ import {
   WORK_ITEM_VERIFICATION_RULES,
   isValidTimezone,
   type ConfigurationChangeSpec,
+  type Locale,
   type WorkflowGraph,
 } from '@knowledge/contracts';
 import { validateGraph } from '@knowledge/workflow';
@@ -136,7 +137,16 @@ const settings = z.discriminatedUnion('setting', [
   z.strictObject({ ...projectSetting('lintPolicy'), policy: z.enum(LINT_POLICIES).nullable() }),
 ]);
 
-const change = z.discriminatedUnion('kind', [schedule, trigger, drift, workflow, template, settings]);
+/**
+ * A methodology link or a custom agent (#1314): references into a blueprint
+ * only. What they write — the methodology's sections, the agent's instructions —
+ * is read from the blueprint when the change is assessed, never from the model.
+ */
+const blueprintKey = z.string().trim().min(1).max(100); // SetProjectMethodologyDto's bound
+const methodology = z.strictObject({ kind: z.literal('methodology-link'), projectId: uuid, blueprintKey, reason });
+const customAgent = z.strictObject({ kind: z.literal('custom-agent'), blueprintKey, agentKey: z.string().trim().min(1).max(60), reason });
+
+const change = z.discriminatedUnion('kind', [schedule, trigger, drift, workflow, template, settings, methodology, customAgent]);
 
 export interface ReadChange {
   spec: ConfigurationChangeSpec;
@@ -155,9 +165,14 @@ export const MAX_CHANGES = 20;
 /**
  * Read the model's change list. Each item is parsed on its own, so one bad
  * change drops that change, not the proposal. `timezone` is the requester's
- * zone, used when a time-of-day schedule names none.
+ * zone, used when a time-of-day schedule names none; `locale` theirs, which a
+ * methodology's sections are matched and titled in.
  */
-export function readChanges(raw: unknown, timezone: string | null): { changes: ReadChange[]; dropped: DroppedChange[] } {
+export function readChanges(
+  raw: unknown,
+  timezone: string | null,
+  locale: Locale = 'en',
+): { changes: ReadChange[]; dropped: DroppedChange[] } {
   const items = Array.isArray(raw) ? raw : [];
   const changes: ReadChange[] = [];
   const dropped: DroppedChange[] = [];
@@ -177,7 +192,7 @@ export function readChanges(raw: unknown, timezone: string | null): { changes: R
       });
       return;
     }
-    const spec = toSpec(parsed.data, timezone);
+    const spec = toSpec(parsed.data, timezone, locale);
     const error = compileError(spec);
     if (error) {
       dropped.push({ index, error });
@@ -188,7 +203,7 @@ export function readChanges(raw: unknown, timezone: string | null): { changes: R
   return { changes, dropped };
 }
 
-function toSpec(c: z.infer<typeof change>, timezone: string | null): ConfigurationChangeSpec {
+function toSpec(c: z.infer<typeof change>, timezone: string | null, locale: Locale): ConfigurationChangeSpec {
   switch (c.kind) {
     case 'agent-schedule': {
       const interval = c.scheduleKind === 'interval';
@@ -253,6 +268,10 @@ function toSpec(c: z.infer<typeof change>, timezone: string | null): Configurati
           return { kind, projectId, setting: c.setting, values: { policy: c.policy } };
       }
     }
+    case 'methodology-link':
+      return { kind: c.kind, projectId: c.projectId, blueprintKey: c.blueprintKey, locale };
+    case 'custom-agent':
+      return { kind: c.kind, blueprintKey: c.blueprintKey, agentKey: c.agentKey.toLowerCase() };
   }
 }
 

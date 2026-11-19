@@ -4,18 +4,19 @@
  * apply some, all or none. The model only proposes — the API applies each
  * change through the same service its own settings screen writes with, checks
  * the role on execution (workspace admin, editor for a project's template, the
- * project's maintainer for its settings other than the merge gates),
+ * project's maintainer for its settings other than the merge gates and for its methodology),
  * and writes schedules, triggers and workflows switched off. Model text is shown as plain text only.
  */
 import { useI18n } from 'vue-i18n'
 import { computed, ref, watch } from 'vue'
 import { useQueries, useQuery } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
-import { ArrowRight, CalendarClock, FileText, GitPullRequest, SlidersHorizontal, Sparkles, Workflow, Zap } from 'lucide-vue-next'
+import { ArrowRight, Bot, CalendarClock, FileText, GitPullRequest, Layers, SlidersHorizontal, Sparkles, Workflow, Zap } from 'lucide-vue-next'
 import type {
   ConfigurationAppliedValue,
   ConfigurationChange,
   ConfigurationChangeKind,
+  ConfigurationChangeSpec,
   ConfigurationProposal,
   ListConfigurationProposalsResponse,
   ProposeConfigurationResponse,
@@ -59,6 +60,8 @@ const apply = useApiMutation('post', '/v1/ai/configurator/proposals/{id}/apply',
     ['/v1/projects/{id}/settings/breaking-changes'],
     ['/v1/lint-policy'],
     ['/v1/projects/setting-overrides'],
+    ['/v1/projects/{id}/methodology'],
+    ['/v1/projects/{id}/levels'],
   ],
 })
 const dismiss = useApiMutation('post', '/v1/ai/configurator/proposals/{id}/dismiss', { invalidates: () => [KEY] })
@@ -69,15 +72,21 @@ const reply = ref<string | null>(null)
 const openId = ref<string | null>(null)
 const open = computed(() => proposals.value.find((p) => p.id === openId.value) ?? null)
 
+/** The project a maintainer's change belongs to: a project setting or a methodology link. */
+function projectOf(spec: ConfigurationChangeSpec): string | null {
+  return spec.kind === 'project-setting' || spec.kind === 'methodology-link' ? spec.projectId : null
+}
+
 /**
- * Who maintains each project a pending setting names: the API's own answer
+ * Who maintains each project a pending change names: the API's own answer
  * (`project:manage-settings` on the project's detail), never the role.
  */
 const maintainedIds = computed(() => [
   ...new Set(
-    (open.value?.changes ?? []).flatMap((c) =>
-      c.state === 'pending' && c.requires === 'maintainer' && c.spec.kind === 'project-setting' ? [c.spec.projectId] : [],
-    ),
+    (open.value?.changes ?? []).flatMap((c) => {
+      const id = c.state === 'pending' && c.requires === 'maintainer' ? projectOf(c.spec) : null
+      return id ? [id] : []
+    }),
   ),
 ])
 const maintained = useQueries({
@@ -89,7 +98,8 @@ const maintained = useQueries({
 function canApply(change: ConfigurationChange): boolean {
   if (change.requires === 'admin') return isAdmin.value
   if (change.requires === 'editor') return canContribute.value
-  return change.spec.kind === 'project-setting' && maintained.value[maintainedIds.value.indexOf(change.spec.projectId)] === true
+  const id = projectOf(change.spec)
+  return id !== null && maintained.value[maintainedIds.value.indexOf(id)] === true
 }
 
 const picked = ref(new Set<string>())
@@ -164,6 +174,8 @@ const KIND_ICON: Record<ConfigurationChangeKind, typeof Zap> = {
   'workflow-draft': Workflow,
   'page-template': FileText,
   'project-setting': SlidersHorizontal,
+  'methodology-link': Layers,
+  'custom-agent': Bot,
 }
 
 /** What a change is, in a few words: a project setting names which one. */
@@ -228,6 +240,10 @@ function show(field: string, value: unknown): string {
       return (value as string[]).join(' → ')
     case 'autoStart':
       return t(value ? 'common.yes' : 'common.no')
+    case 'sections':
+      return (value as string[]).join('\n')
+    case 'minTier':
+      return t(`ai.models.tier.${value}`)
     case 'source': {
       const text = String(value)
       return text.length > SOURCE_PREVIEW ? `${text.slice(0, SOURCE_PREVIEW)}…` : text
@@ -243,21 +259,27 @@ function stateText(change: ConfigurationChange): string | null {
   return null
 }
 
-/** The projects whose settings an applied change wrote: each links to its Policies page. */
-const settledProjects = computed(() => [
-  ...new Set(open.value?.changes.flatMap((c) => (c.state === 'applied' && c.spec.kind === 'project-setting' ? [c.spec.projectId] : [])) ?? []),
-])
+/** The projects an applied change of `kind` wrote. */
+const settled = (kind: 'project-setting' | 'methodology-link') => [
+  ...new Set(open.value?.changes.flatMap((c) => (c.state === 'applied' && c.spec.kind === kind ? [c.spec.projectId] : [])) ?? []),
+]
+const projectName = (id: string) => projects.items.find((p) => p.projectId === id)?.name ?? ''
 
 /** Where an applied change is switched on or seen: one link per screen, only for what landed. */
 const landed = computed(() => {
   const kinds = new Set(open.value?.changes.filter((c) => c.state === 'applied').map((c) => c.spec.kind))
   return [
     (kinds.has('agent-schedule') || kinds.has('agent-trigger')) && { to: '/settings/ai/agents', label: t('ai.configurator.openAgents') },
+    kinds.has('custom-agent') && !kinds.has('agent-schedule') && !kinds.has('agent-trigger') && { to: '/settings/ai/agents', label: t('ai.configurator.seeAgents') },
     kinds.has('workflow-draft') && { to: '/workflows', label: t('ai.configurator.openWorkflows') },
     kinds.has('page-template') && { to: '/settings/templates', label: t('ai.configurator.openTemplates') },
-    ...settledProjects.value.map((id) => ({
+    ...settled('project-setting').map((id) => ({
       to: `/settings/projects/${id}/policies`,
-      label: t('ai.configurator.openPolicies', { project: projects.items.find((p) => p.projectId === id)?.name ?? '' }),
+      label: t('ai.configurator.openPolicies', { project: projectName(id) }),
+    })),
+    ...settled('methodology-link').map((id) => ({
+      to: `/settings/projects/${id}`,
+      label: t('ai.configurator.openMethodology', { project: projectName(id) }),
     })),
   ].filter((link): link is { to: string; label: string } => !!link)
 })
@@ -338,7 +360,14 @@ const landed = computed(() => {
                   <!-- A project setting: what applies and which level decides it, beside the project's own value. -->
                   <span v-if="row.applies" class="block text-xs">{{ appliesText(change, row.field, row.applies.before) }}</span>
                 </dd>
-                <dd class="font-medium break-words" :class="{ 'font-mono text-xs font-normal whitespace-pre-wrap': row.field === 'source' }">
+                <!-- A template's source and an agent's instructions read as written: the instructions in full, since they become trusted prompt text. -->
+                <dd
+                  class="font-medium break-words"
+                  :class="{
+                    'font-mono text-xs font-normal whitespace-pre-wrap': row.field === 'source' || row.field === 'instructions',
+                    'whitespace-pre-line': row.field === 'sections',
+                  }"
+                >
                   <span class="text-muted-foreground text-xs font-normal sm:sr-only">{{ t('ai.configurator.proposed') }}: </span>{{ settingValue(change, row.field, row.after) }}
                   <span v-if="row.applies" class="text-muted-foreground block text-xs font-normal">{{ appliesText(change, row.field, row.applies.after) }}</span>
                 </dd>

@@ -20,6 +20,7 @@ import {
   type AiAgentSummary,
   type ListAgentRunStepsResponse,
   type ListAgentRunsResponse,
+  type ModelTier,
   RUNNABLE_AGENTS,
 } from '@knowledge/contracts';
 import { mayReadRun, privateRunWhere, runFrameAddress } from './run-privacy.js';
@@ -189,7 +190,8 @@ export class AiAgentsService {
     return this.get(workspaceId, key);
   }
 
-  async create(workspaceId: string, dto: CreateAiAgentDto, userId?: string): Promise<AiAgentSummary> {
+  /** `minTier` is not on the route's DTO: only a copy of a methodology's agent carries one (#1314). */
+  async create(workspaceId: string, dto: CreateAiAgentDto & { minTier?: ModelTier | null }, userId?: string): Promise<AiAgentSummary> {
     const key = dto.key.trim().toLowerCase();
     if (!/^[a-z0-9][a-z0-9-]{1,59}$/.test(key)) {
       throw new BadRequestException(t('error.ai.agentKeyInvalid'));
@@ -217,6 +219,7 @@ export class AiAgentsService {
         skillIds: dto.skillIds ?? [],
         memoryPolicy: dto.memoryPolicy ? resolveAgentMemoryPolicy(dto.memoryPolicy) as unknown as Prisma.InputJsonValue : undefined,
         modelId: dto.modelId ?? null,
+        minTier: dto.minTier ?? null,
         createdBy: userId ?? null,
       },
     });

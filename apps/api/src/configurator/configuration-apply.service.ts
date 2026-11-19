@@ -1,4 +1,4 @@
-import { BadRequestException, HttpException, Injectable } from '@nestjs/common';
+import { BadRequestException, HttpException, Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { DRIFT_CHECK_CONFIG_KEY, type ConfigurationChange, type ConfigurationProposal } from '@knowledge/contracts';
 import { ReadCache, READ_CACHE_FAMILIES } from '../cache/read-cache.service.js';
@@ -19,7 +19,8 @@ import { LintChecksService } from '../documents/lint/lint-checks.service.js';
 import { WorkItemRulesService } from '../connectors/handoff/work-item-rules.service.js';
 import { lockSubject } from '../common/subject-lock.js';
 import { t } from '../i18n/t.js';
-import { ConfiguratorService, changesOf, requiresFor, toProposal } from './configurator.service.js';
+import { ProjectMethodologyService } from '../projects/project-methodology.service.js';
+import { ConfiguratorService, changesOf, requiresFor, same, toProposal } from './configurator.service.js';
 
 /**
  * Applying a configuration proposal (#1250) — a person's act, never the model's.
@@ -27,7 +28,8 @@ import { ConfiguratorService, changesOf, requiresFor, toProposal } from './confi
  * Every rule here is the one the change's own settings screen already applies,
  * because the change goes through that screen's service: `AiAgentsService.update`,
  * `AgentTriggersService.create`, `ConnectorsService.update`, `WorkflowsService.create`,
- * `TemplatesService.create`, and for a project setting its route's service
+ * `TemplatesService.create`, `ProjectMethodologyService.set`, `AiAgentsService.create`,
+ * and for a project setting its route's service
  * (`VerificationPolicyService`, `WorkItemRulesService`, `ApiSettingsService`,
  * `LintChecksService`), recorded with the activity action their route records
  * (workflows and templates record their own, as their routes rely on; of the
@@ -64,6 +66,7 @@ export class ConfigurationApplyService {
     private readonly lint: LintChecksService,
     private readonly workItems: WorkItemRulesService,
     private readonly cache: ReadCache,
+    private readonly methodology: ProjectMethodologyService,
   ) {}
 
   async apply(id: string, workspaceId: string, changeIds: string[], principal: Principal): Promise<ConfigurationProposal> {
@@ -75,7 +78,7 @@ export class ConfigurationApplyService {
     const asked = new Map<string, () => Promise<unknown>>();
     for (const { spec } of picked) {
       const role = requiresFor(spec);
-      if (role === 'maintainer' && spec.kind === 'project-setting') {
+      if (role === 'maintainer' && (spec.kind === 'project-setting' || spec.kind === 'methodology-link')) {
         asked.set(`project:${spec.projectId}`, () => this.permissions.requireProjectManage(principal, spec.projectId));
       } else if (role !== 'maintainer') {
         asked.set(role, () => this.access.requireRole(principal, workspaceId, role));
@@ -96,8 +99,11 @@ export class ConfigurationApplyService {
             continue;
           }
           const [fresh] = await this.configurator.assess(workspaceId, [{ spec: change.spec, reason: change.reason }]);
-          if (fresh!.unavailable) {
-            changes.push({ ...change, diff: fresh!.diff, state: 'unavailable', unavailable: fresh!.unavailable });
+          // What a blueprint-sourced change writes is read again now; trusted text nobody reviewed never lands (#1314).
+          const stale = (change.spec.kind === 'methodology-link' || change.spec.kind === 'custom-agent') && !same(fresh!.diff, change.diff);
+          const unavailable = fresh!.unavailable ?? (stale ? 'stale' : null);
+          if (unavailable) {
+            changes.push({ ...change, diff: fresh!.diff, state: 'unavailable', unavailable });
             continue;
           }
           const resultId = await this.applyOne(change, workspaceId, principal, id).catch((error: unknown) => {
@@ -115,7 +121,8 @@ export class ConfigurationApplyService {
         });
         return toProposal(updated);
       },
-      { timeout: 20_000 },
+      // A methodology link may write a whole section tree.
+      { timeout: 60_000 },
     );
   }
 
@@ -204,6 +211,26 @@ export class ConfigurationApplyService {
           }
         }
         return projectId;
+      }
+      case 'methodology-link': {
+        // The sections the reviewed diff listed, through the project settings screen's own write.
+        const plan = await this.configurator.linkPlan(workspaceId, spec);
+        if (!plan) throw new NotFoundException(t('error.project.notFound', { id: spec.projectId }));
+        const sections = plan.sections.map((s) => s.id);
+        await this.methodology.set(spec.projectId, { blueprintKey: spec.blueprintKey, sections, locale: spec.locale }, principal);
+        return spec.projectId;
+      }
+      case 'custom-agent': {
+        // Copied from the declaration, byte for byte: the model never wrote any of it.
+        const a = await this.configurator.declaredAgent(workspaceId, spec);
+        if (!a) throw new NotFoundException(t('error.ai.agentNotFound', { key: spec.agentKey }));
+        const agent = await this.agents.create(
+          workspaceId,
+          { workspaceId, key: a.key, name: a.name, description: a.description ?? '', instructions: a.instructions, tools: a.tools ?? [], minTier: a.minTier ?? null },
+          actor,
+        );
+        this.afterCommit(workspaceId, actor, 'ai.agent.created', agent.id ?? undefined, { key: agent.key, name: agent.name, ...via });
+        return agent.id ?? agent.key;
       }
     }
   }

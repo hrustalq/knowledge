@@ -1193,8 +1193,6 @@
     },
     "brokeIntoItems": "This step broke the source into {items}.",
     "waitingForReview": "Waiting for review",
-    "removeStep": "Remove this step",
-    "stepTitlePlaceholder": "Use cases",
     "disconnect": "Disconnect",
     "connectStep": "Connect a step…",
     "runs": "Workflow runs",
@@ -1247,7 +1245,6 @@
       "nestingHint": "New pages are nested under the page they came from and linked back to it.",
       "maxItemsHint": "items, so one long list cannot open hundreds of cards.",
       "nothingAfter": "Nothing runs after this step.",
-      "dragHint": "Or drag between the dots on the canvas.",
       "template": "Written into template",
       "noTemplate": "No template",
       "templateHint": "Drafts keep the template's headings and carry its tags and relations. Picking one files pages under its category."
@@ -1345,13 +1342,12 @@
     "runStarted": "Run started",
     "draftSaved": "Draft saved",
     "map": {
-      "many": "many",
       "empty": "This workflow has no steps yet.",
       "summary": "A chain of {steps}: {chain}"
     },
     "palette": {
       "title": "Steps",
-      "hint": "Drag one onto the canvas, or click to add it."
+      "hint": "Add a step from the toolbar: drag it onto the canvas, or click it."
     },
     "reading": {
       "search": "Searches the knowledge base and hands what it finds to the next step.",
@@ -1468,7 +1464,26 @@
     "cancelRunAction": "Cancel run",
     "keepRunning": "Keep running",
     "promptPlaceholderGenerate": "List the use cases this entity takes part in.",
-    "promptPlaceholderDraft": "Write the API endpoint specification for this use case."
+    "promptPlaceholderDraft": "Write the API endpoint specification for this use case.",
+    "quick": {
+      "renameKey": "F2 renames",
+      "more": "Prompt & details",
+      "remove": "Remove"
+    },
+    "history": {
+      "undo": "Undo",
+      "undoHint": "Undo (Ctrl+Z / ⌘Z)",
+      "redo": "Redo",
+      "redoHint": "Redo (Ctrl+Y / ⇧⌘Z)"
+    },
+    "file": {
+      "export": "Export as JSON",
+      "import": "Import JSON",
+      "notJson": "That file is not JSON.",
+      "notGraph": "That file is not a workflow graph.",
+      "imported": "Graph imported. Save to keep it.",
+      "importedWithProblems": "Imported with {n} problem to fix | Imported with {n} problems to fix"
+    }
   },
   "activity": {
     "action": {

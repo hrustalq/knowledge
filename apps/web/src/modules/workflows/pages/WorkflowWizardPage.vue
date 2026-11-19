@@ -30,7 +30,7 @@ import { usePermission } from '@/stores/permissions'
 import { useWorkflowsStore } from '@/entities/workflow'
 import { Button } from '@knowledge/ui/button'
 import { Input } from '@knowledge/ui/input'
-import WorkflowMap from '@/modules/workflows/components/WorkflowMap.vue'
+import WorkflowCanvas from '@/modules/workflows/components/WorkflowCanvas.vue'
 import WorkflowArchitectChat from '@/modules/workflows/components/WorkflowArchitectChat.vue'
 import WorkflowSettingsForm from '@/modules/workflows/components/WorkflowSettingsForm.vue'
 import { describeChain } from '@/entities/workflow'
@@ -118,7 +118,6 @@ const issues = computed<WorkflowValidationIssue[]>(() =>
   context.value.graph ? validateGraph(context.value.graph) : [],
 )
 const errors = computed(() => issues.value.filter((i) => i.severity === 'error'))
-const invalidSteps = computed(() => errors.value.map((i) => i.stepId).filter((id): id is string => !!id))
 
 const reading = computed(() => (context.value.graph ? describeChain(context.value.graph, t) : []))
 
@@ -322,10 +321,10 @@ function leave() {
         <!-- Right: the proposal, drawn. Empty until there is one, and saying so
              rather than showing a blank canvas that looks like a failure. -->
         <div class="bg-muted/15 relative hidden min-h-0 lg:block">
-          <WorkflowMap
+          <WorkflowCanvas
             v-if="context.graph?.steps.length"
             :graph="context.graph"
-            :invalid="invalidSteps"
+            :issues="issues"
             :interactive="false"
           />
           <div v-else class="text-muted-foreground grid h-full place-items-center px-6 text-center text-sm">
@@ -360,11 +359,11 @@ function leave() {
                  read; the sentences are what a reader without it gets, and the
                  only place the chain's real consequences are spelled out. -->
             <div class="overflow-hidden rounded-xl border">
-              <div class="bg-muted/15 h-56">
-                <WorkflowMap
+              <div class="flex h-56">
+                <WorkflowCanvas
                   v-if="context.graph"
                   :graph="context.graph"
-                  :invalid="invalidSteps"
+                  :issues="issues"
                   :interactive="false"
                 />
               </div>

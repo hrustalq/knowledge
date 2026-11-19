@@ -19,7 +19,7 @@ import { usePermission } from '@/stores/permissions'
 import { Button } from '@knowledge/ui/button'
 import { confirm } from '@knowledge/ui/confirm'
 import { Skeleton } from '@knowledge/ui/skeleton'
-import WorkflowMap from '@/modules/workflows/components/WorkflowMap.vue'
+import WorkflowCanvas from '@/modules/workflows/components/WorkflowCanvas.vue'
 import WorkflowNodePanel from '@/modules/workflows/components/WorkflowNodePanel.vue'
 import WorkflowRunTree from '@/modules/workflows/components/WorkflowRunTree.vue'
 import { isBusyStatus, RUN_STATUS_CLASS, RUN_STATUS_ICON, RUN_STATUS_LABEL } from '@/entities/workflow'
@@ -33,6 +33,9 @@ const { t } = useI18n()
  * Nothing here polls. The run advances in the worker and arrives over the live
  * channel, so a reviewer can leave the page open and watch nodes fill in — and
  * a reviewer who comes back a week later sees exactly where it parked.
+ *
+ * The chain is drawn by the builder's own canvas (#1246), read-only, with each
+ * step's dot and the edge into it carrying the run's progress.
  */
 const route = useRoute()
 const canContribute = usePermission('workspace:contribute')
@@ -92,8 +95,9 @@ const stepCounts = computed(() => {
   return out
 })
 
-/** Clicking a step on the map selects its first card that wants a person. */
-function selectStep(stepId: string) {
+/** Clicking a step on the canvas selects its first card that wants a person. */
+function selectStep(stepId: string | null) {
+  if (!stepId) return
   const atStep = nodes.value.filter((n) => n.stepId === stepId)
   const wanted = atStep.find((n) => n.status === 'awaiting-review') ?? atStep[0]
   if (wanted) selectedId.value = wanted.id
@@ -221,13 +225,13 @@ const RUN_ACTION = {
       <!-- The chain, lit by the run. It is the fastest answer to "where has
            this got to", and the one thing a nested list of cards cannot show:
            how wide the fan-out opened and what is still ahead of it. -->
-      <section class="bg-muted/15 h-40 shrink-0 overflow-hidden rounded-xl border sm:h-44">
-        <WorkflowMap
+      <section class="flex h-48 shrink-0 overflow-hidden rounded-xl border sm:h-56">
+        <WorkflowCanvas
           :graph="data.graph"
           :statuses="stepStatuses"
           :counts="stepCounts"
           :selected-id="selected ? selected.stepId : null"
-          @select="selectStep"
+          @update:selected-id="selectStep"
         />
       </section>
 

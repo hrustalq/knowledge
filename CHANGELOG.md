@@ -13,6 +13,29 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Changed
+
+- **One workflow canvas for building, reading and watching (#1246).** The detail page, a run and the wizard's
+  preview now draw a workflow with the builder's own canvas, so they show the arrangement the builder saved. Before
+  this, every read-only view re-laid the graph out and could look different from the builder. In the builder, the
+  step palette, undo/redo and export/import float on the canvas. A step is renamed on its card (double-click or F2),
+  and its kind, output, category and next steps are edited in a popover on the step. The drawer keeps only the long
+  fields: prompt, template, relation and cap. Adding a step while another is selected places it to the right and
+  connects it. A run's canvas shows progress on each step and along the edge into it: a flowing line into a step
+  that is working, a dotted warning line into one waiting for review, a solid line once the hand-off is done.
+
+### Added
+
+- **Undo and redo in the workflow builder.** Ctrl/Cmd-Z and Ctrl-Y / Shift-Cmd-Z (or the canvas toolbar) step
+  through every change to the graph made in the session: moves, connections, added and removed steps, popover and
+  drawer edits, imports and architect proposals. Typing a prompt or nudging a step with the arrow keys counts as one
+  edit.
+- **Workflow graphs as JSON.** Export a workflow's graph from the builder or the detail page (any member), and import
+  one in the builder. An import that is not a graph is refused. One that is a graph but has problems loads as an
+  unsaved edit with the problems listed, and Save stays blocked until they are fixed.
+
 ## [0.60.0] — 2026-11-19
 
 ### Added

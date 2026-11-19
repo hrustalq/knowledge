@@ -2383,7 +2383,7 @@
       "example1": "Every weekday at 08:30, run the curator to look for stale pages.",
       "example2": "When a tracker ticket is labelled docs, have the scribe draft the pages.",
       "assistantOff": "The assistant is switched off in this workspace, and the configurator with it.",
-      "hint": "Describe what should happen — when an agent runs, what starts it, which repositories are checked for drift, which workflows and templates to add. The configurator reads today's setup and proposes the changes; nothing changes until someone allowed to applies them.",
+      "hint": "Describe what should happen — when an agent runs, what starts it, which repositories are checked for drift, which workflows and templates to add, which methodology a project follows. The configurator reads today's setup and proposes the changes; nothing changes until someone allowed to applies them.",
       "goalLabel": "Goal",
       "goalPlaceholder": "Every Monday at 09:00 digest what changed; review every page merged in Payments; check pull requests in the api repository for drift.",
       "propose": "Propose changes",
@@ -2399,7 +2399,7 @@
       "appliedAt": "Applied {when}",
       "dismissRest": "Dismiss the rest",
       "adminApplies": "Some changes need a workspace admin, or the maintainer of their project.",
-      "landsOff": "Schedules, triggers and workflows are created switched off. Whoever turns one on becomes the person its runs act as. Templates and project settings take effect as soon as they are applied.",
+      "landsOff": "Schedules, triggers and workflows are created switched off. Whoever turns one on becomes the person its runs act as. Templates, project settings, methodologies and agents take effect as soon as they are applied.",
       "openAgents": "Turn them on in Agents",
       "openWorkflows": "Turn them on in Workflows",
       "openTemplates": "See them in Templates",
@@ -2415,7 +2415,9 @@
         "connector-drift-check": "Drift check",
         "workflow-draft": "Workflow",
         "page-template": "Template",
-        "project-setting": "Project setting"
+        "project-setting": "Project setting",
+        "methodology-link": "Methodology",
+        "custom-agent": "Agent"
       },
       "states": {
         "pending": "Pending",
@@ -2431,13 +2433,14 @@
       "unavailable": {
         "already-configured": "Already configured this way.",
         "agent-unsupported": "This agent cannot run on a schedule, or cannot be started by this event.",
-        "not-found": "The agent, project or connector it names is not in this workspace.",
+        "not-found": "The agent, project, connector or blueprint it names is not in this workspace.",
         "connector-unsupported": "This connector has no drift check.",
         "schedules-off": "Agent schedules are switched off on this server (AGENT_SCHEDULE_ENABLED).",
         "triggers-off": "Agent triggers are switched off on this server (AGENT_TRIGGERS_ENABLED).",
         "section-off": "Workflows are switched off in this workspace.",
-        "name-taken": "A workflow or template with this name already exists.",
-        "invalid": "A template its graph names is gone or archived."
+        "name-taken": "A workflow, template or agent with this name already exists.",
+        "invalid": "A template its graph names is gone or archived.",
+        "stale": "What this would write is no longer what was proposed: the blueprint or the project changed since. Ask again."
       },
       "settings": {
         "verification": "Freshness thresholds",
@@ -2473,8 +2476,16 @@
         "steps": "Steps",
         "autoStart": "Starts on its own",
         "events": "After",
-        "source": "Source"
-      }
+        "source": "Source",
+        "methodology": "Methodology",
+        "sections": "New sections",
+        "key": "Key",
+        "instructions": "Instructions",
+        "tools": "Tools",
+        "minTier": "Needs"
+      },
+      "seeAgents": "See them in Agents",
+      "openMethodology": "See {project} settings"
     },
     "excludesCalls": "excludes {calls} with no price",
     "chartPoint": "{date}: {tokens} tokens, {calls}",

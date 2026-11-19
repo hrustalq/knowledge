@@ -3,7 +3,8 @@
 Tracking issue [#1250](https://github.com/hrustalq/knowledge/issues/1250). Phase 1 is
 [#1311](https://github.com/hrustalq/knowledge/issues/1311), phase 2
 [#1312](https://github.com/hrustalq/knowledge/issues/1312), phase 3
-[#1313](https://github.com/hrustalq/knowledge/issues/1313). The shape brief is
+[#1313](https://github.com/hrustalq/knowledge/issues/1313), phase 4
+[#1314](https://github.com/hrustalq/knowledge/issues/1314). The shape brief is
 [a comment on it](https://github.com/hrustalq/knowledge/issues/1311#issuecomment-7004482583).
 
 ## What
@@ -16,7 +17,7 @@ are page-level only. The configurator turns a goal into a stored proposal of con
 
 A person reviews the proposal and applies all, some or none of its changes.
 
-It proposes six kinds of change (`CONFIGURATION_CHANGE_KINDS`, contracts):
+It proposes eight kinds of change (`CONFIGURATION_CHANGE_KINDS`, contracts):
 
 | Kind                    | Applied through                                                   | Role on apply                     | Activity recorded          |
 | ----------------------- | ----------------------------------------------------------------- | --------------------------------- | -------------------------- |
@@ -26,9 +27,10 @@ It proposes six kinds of change (`CONFIGURATION_CHANGE_KINDS`, contracts):
 | `workflow-draft`        | `WorkflowsService.create` with `enabled: false` (doc 17)          | admin                             | `workflow.created`         |
 | `page-template`         | `TemplatesService.create` (doc 42)                                | editor for a project's, else admin | `template.created`        |
 | `project-setting`       | the setting's own service (doc 76), see below                     | maintainer; admin for the gates   | lint gate only: `ai.lint-policy.updated` |
+| `methodology-link`      | `ProjectMethodologyService.set` (doc 82), with the sections below | maintainer                        | none, as its route         |
+| `custom-agent`          | `AiAgentsService.create`, copied from a blueprint's `agents`      | admin                             | `ai.agent.created`         |
 
-"Run the sentinel on every PR" is a drift check, not a trigger. The sentinel is not triggerable. A later phase adds
-skills and agents taken from blueprints (#1314).
+"Run the sentinel on every PR" is a drift check, not a trigger. The sentinel is not triggerable.
 
 A `project-setting` change names one of `CONFIGURABLE_PROJECT_SETTINGS` (contracts) and only the keys it sets; a key
 set to null goes back to inheriting:
@@ -41,7 +43,27 @@ set to null goes back to inheriting:
 | `lintPolicy`      | `policy`                                                               | `LintChecksService.setPolicy`                    | admin         |
 
 The capture parent is not one: the configurator reads no pages, so it has no page id to name. The methodology is
-not one either: switching it has its own preview of what moves (doc 82).
+its own kind, `methodology-link`, because linking one has its own preview of what moves (doc 82).
+
+The last two kinds (#1314) carry **references only**: a blueprint key, plus a project or an agent key. An agent's
+instructions are trusted prompt text, so the model never writes them; `readChanges` refuses a change that carries
+any field beyond the references. What the change writes is read from the blueprint when it is assessed:
+
+- **`methodology-link`** links a project to any blueprint `GET /v1/blueprints` offers, as the project settings
+  screen does, and creates the sections that screen ticks: every section the project lacks on a first link, none on
+  a switch. The diff names the methodology before and after and lists those sections. Sections are matched in the
+  drafter's language (`spec.locale`) against every page (`systemScope`), so the diff does not depend on who
+  applies it. Linking the methodology it already has is `already-configured`.
+- **`custom-agent`** copies one agent a blueprint declares into a workspace custom agent: same key, name,
+  description, instructions, tools and `minTier` (the route's DTO has no `minTier`; the service takes it for this
+  copy). It owns no `blueprint_id`, so it stays when the methodology changes. A key already taken is
+  `name-taken`; the same agent already copied is `already-configured`.
+
+Apply reads both again and compares the fresh diff with the reviewed one. If the blueprint or the project changed
+in between, the change lands `stale` and nothing is written: trusted text nobody reviewed never lands.
+
+A skill kind is not offered. The only skill-shaped thing a blueprint declares is its styleguide, and linking the
+methodology already brings that to the project (doc 82).
 
 ## How
 
@@ -52,7 +74,9 @@ not one either: switching it has its own preview of what moves (doc 82).
   That write creates or replaces the proposal row and nothing else. The executor answers only those names, and it
   checks them on execution. Tool output is wrapped as untrusted. Trigger notes, owners and webhooks are never read
   out. Phase 2 adds `list_workflows` and `list_templates`, workspace-wide rows only: a project's definitions and
-  templates stay out, as the templates gallery keeps them.
+  templates stay out, as the templates gallery keeps them. Phase 4 adds `list_blueprints`: each offered blueprint's
+  key, name, whether it is a methodology, its level names, and its agents' keys, names and descriptions, never their
+  instructions.
 - **One parse.** `readChanges` (`configurator/configuration-changes.ts`, zod, API-side) narrows each change on its
   own:
   - A bad change is dropped and reported back to the model, so it can call again.
@@ -79,7 +103,8 @@ not one either: switching it has its own preview of what moves (doc 82).
   - `AGENT_SCHEDULE_ENABLED` / `AGENT_TRIGGERS_ENABLED` is off;
   - the workspace has the `workflows` section off (`section-off`, workflow drafts and templates both);
   - a workflow or template of that name exists where it would land (`name-taken`);
-  - a workflow draft no longer compiles (`invalid`): a template its graph names went away, which `templateIssues` asks.
+  - a workflow draft no longer compiles (`invalid`): a template its graph names went away, which `templateIssues` asks;
+  - a methodology link or a custom agent would write something other than what was reviewed (`stale`, apply only).
 
   A project setting's diff (`ProjectSettingChanges`, `configurator/project-setting-changes.ts`) reads each key through
   its route's own service. `before`/`after` are the project's own value (null = inherits). `applies` holds what takes
@@ -94,7 +119,7 @@ not one either: switching it has its own preview of what moves (doc 82).
 - **Apply is a person's act.** `ConfigurationApplyService`:
   1. Checks the role each picked change requires before writing anything, by `requiresFor(spec)` — the rule of the
      change's own route, read from the spec, never from the stored `requires`. A project's page template needs editor
-     (`templates.controller.ts`). A project's thresholds and handoff rules need its maintainer, through
+     (`templates.controller.ts`). A project's thresholds, handoff rules and methodology need its maintainer, through
      `PermissionService.requireProjectManage` (doc 76: an admin, or an editor holding a `manage` grant). Its two merge
      gates and every other kind need workspace admin. An editor who picks a change beyond their role gets 403 and
      nothing is written.
@@ -109,7 +134,7 @@ not one either: switching it has its own preview of what moves (doc 82).
   is a row with its kind, target, the model's reason and a *today → proposed* table (a template's source is cut to
   its first 400 characters). A project setting's row shows the project's own value with what applies beneath it,
   and names any hold. Applied rows link to Agents, Workflows or Templates, wherever they are switched on or
-  seen. Below that is the history. Only the changes the person may apply can be ticked: a maintainer's rows ask the project's own
+  seen; an applied methodology link links to that project's settings. An agent's instructions are shown in full. Below that is the history. Only the changes the person may apply can be ticked: a maintainer's rows ask the project's own
   `project:manage-settings` answer (`GET /v1/projects/:id`). When some need someone else, the panel says so. Applied
   project settings link to that project's Policies page. Model text is plain text only.
 

@@ -22,16 +22,23 @@ import {
   WORK_ITEM_ISSUE_RULES,
   WORK_ITEM_VERIFICATION_RULES,
   WORKFLOW_STEP_KINDS,
+  LEARNING_TARGETS,
   agentTriggerEventsFor,
+  blueprintText,
   builtInTemplateRef,
   driftCheckMode,
+  isMethodology,
   isTriggerableAgent,
   type AgentTriggerFilter,
+  type Blueprint,
+  type BlueprintAgent,
   type ConfigurationChange,
   type ConfigurationChangeSpec,
   type ConfigurationDiffRow,
   type ConfigurationProposal,
   type ConfigurationUnavailableReason,
+  type CustomAgentChangeSpec,
+  type MethodologyLinkChangeSpec,
   type ProposeConfigurationResponse,
 } from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
@@ -52,7 +59,10 @@ import { TemplatesService } from '../templates/templates.service.js';
 import { templateIssues } from '../workflows/workflow-templates.js';
 import { wrapUntrusted } from '../common/untrusted.js';
 import { t } from '../i18n/t.js';
-import { canSeeProject } from '../permissions/access-scope.js';
+import { canSeeProject, systemScope } from '../permissions/access-scope.js';
+import { BlueprintsService } from '../blueprints/blueprints.service.js';
+import { ProjectMethodologyService } from '../projects/project-methodology.service.js';
+import type { MissingSection } from '../projects/methodology-preview.js';
 import { WORKFLOW_EVENTS, readChanges, type DroppedChange, type ReadChange } from './configuration-changes.js';
 import { ProjectSettingChanges } from './project-setting-changes.js';
 
@@ -79,6 +89,7 @@ const TOOLS: ChatCompletionFunctionTool[] = [
   tool('list_connectors', 'Repository connectors that have a drift check, with their current mode.'),
   tool('list_workflows', 'Workspace-wide workflow definitions: name, description and whether each is on.'),
   tool('list_templates', 'Workspace-wide page templates and built-ins: ref, name and the category of page each writes.'),
+  tool('list_blueprints', 'Blueprints a project can link as its methodology: key, name, whether it is a methodology, its levels and the agents it declares.'),
   {
     type: 'function',
     function: {
@@ -114,14 +125,15 @@ const TOOLS: ChatCompletionFunctionTool[] = [
               properties: {
                 kind: { type: 'string', enum: [...CONFIGURATION_CHANGE_KINDS] },
                 reason: { type: 'string', description: 'One line: why the goal needs this change.' },
-                agentKey: { type: 'string', description: 'agent-schedule, agent-trigger' },
+                agentKey: { type: 'string', description: 'agent-schedule, agent-trigger; custom-agent: an agent key from list_blueprints' },
+                blueprintKey: { type: 'string', description: 'methodology-link, custom-agent: a blueprint key from list_blueprints' },
                 scheduleKind: { type: 'string', enum: ['interval', 'daily', 'weekly'], description: 'agent-schedule' },
                 scheduleMinutes: { type: 'integer', description: 'agent-schedule, interval: minutes between runs (15–20160)' },
                 scheduleTime: { type: 'string', description: 'agent-schedule, daily/weekly: HH:MM, 24-hour' },
                 scheduleWeekdays: { type: 'array', items: { type: 'integer' }, description: 'agent-schedule, weekly: 0 = Sunday … 6 = Saturday' },
                 scheduleTimezone: { type: 'string', description: 'agent-schedule: IANA zone; omit to use the person\'s' },
                 event: { type: 'string', enum: [...AGENT_TRIGGER_EVENTS], description: 'agent-trigger' },
-                projectId: { type: 'string', description: 'agent-trigger, workflow-draft, page-template: only this project; omit for every project (a workspace-wide template needs an admin to apply). project-setting: required' },
+                projectId: { type: 'string', description: 'agent-trigger, workflow-draft, page-template: only this project; omit for every project (a workspace-wide template needs an admin to apply). project-setting, methodology-link: required' },
                 setting: {
                   type: 'string',
                   enum: [...CONFIGURABLE_PROJECT_SETTINGS],
@@ -220,6 +232,8 @@ export class ConfiguratorService {
     private readonly features: FeaturesService,
     private readonly templates: TemplatesService,
     private readonly projectSettings: ProjectSettingChanges,
+    private readonly blueprints: BlueprintsService,
+    private readonly methodology: ProjectMethodologyService,
     config: ConfigService<Env, true>,
   ) {
     this.schedulesOn = config.get('AGENT_SCHEDULE_ENABLED', { infer: true }) === true;
@@ -255,7 +269,7 @@ export class ConfiguratorService {
       async (name, args) => {
         // Answered on execution, whatever the model was offered.
         if (name === PROPOSE_TOOL) {
-          const read = readChanges(args.changes, timezone);
+          const read = readChanges(args.changes, timezone, principal.locale);
           const { changes, dropped } = await this.visibleProjects(read, workspaceId, principal);
           const assessed = await this.assess(workspaceId, changes);
           // Nothing accepted writes nothing: an empty proposal is a history row with nothing to review.
@@ -457,25 +471,99 @@ export class ConfiguratorService {
         const unavailable = read.diff.every((d) => same(d.before, d.after)) ? 'already-configured' : null;
         return { ...read, unavailable, normalized: spec };
       }
+
+      case 'methodology-link': {
+        const plan = await this.linkPlan(workspaceId, spec);
+        if (!plan) return { target: spec.projectId, diff: [], unavailable: 'not-found', normalized: spec };
+        const sections = plan.sections.map((s) => (s.parentTitle ? `${s.parentTitle} › ${s.title}` : s.title));
+        return {
+          target: plan.projectName,
+          diff: [
+            { field: 'methodology', before: plan.linked ? blueprintText(plan.linked.name, spec.locale) : null, after: blueprintText(plan.blueprint.name, spec.locale) },
+            ...(sections.length ? [{ field: 'sections', before: null, after: sections }] : []),
+          ],
+          unavailable: plan.linked?.key === spec.blueprintKey ? 'already-configured' : null,
+          normalized: spec,
+        };
+      }
+
+      case 'custom-agent': {
+        const declared = await this.declaredAgent(workspaceId, spec);
+        if (!declared) return { target: spec.agentKey, diff: [], unavailable: 'not-found', normalized: spec };
+        const row = await this.prisma.aiAgent.findUnique({ where: { workspaceId_key: { workspaceId, key: spec.agentKey } } });
+        const unavailable =
+          row?.instructions === declared.instructions && !row.blueprintId ? 'already-configured'
+          : row || (LEARNING_TARGETS as readonly string[]).includes(spec.agentKey) ? 'name-taken'
+          : null;
+        return {
+          target: declared.name,
+          diff: created({
+            key: spec.agentKey,
+            name: declared.name,
+            description: declared.description ?? null,
+            instructions: declared.instructions,
+            tools: declared.tools ?? [],
+            minTier: declared.minTier ?? null,
+          }),
+          unavailable,
+          normalized: spec,
+        };
+      }
     }
   }
 
   /**
-   * A project setting names a project the person drafting it may open: its
-   * diff reads the project's settings, which their own settings route would
-   * not show them otherwise. One that does not is dropped as unknown.
+   * What linking `spec` would do (#1314): the project, the methodology it links
+   * today, and the sections the project settings screen would tick — every
+   * missing one on a first link, none on a switch. Matched against every page,
+   * so the diff does not depend on who drafts or applies it. Null when the
+   * project or the blueprint is not there.
+   */
+  async linkPlan(
+    workspaceId: string,
+    spec: MethodologyLinkChangeSpec,
+  ): Promise<{ projectName: string; blueprint: Blueprint; linked: { key: string; name: Blueprint['name'] } | null; sections: MissingSection[] } | null> {
+    const project = await this.prisma.project.findFirst({ where: { id: spec.projectId, workspaceId }, select: { name: true } });
+    const blueprint = project && (await this.blueprintOf(workspaceId, spec.blueprintKey));
+    if (!project || !blueprint) return null;
+    const { methodology: linked } = await this.methodology.get(spec.projectId);
+    const sections = linked ? [] : await this.methodology.missing(spec.projectId, systemScope(workspaceId), blueprint.tree, spec.locale);
+    return { projectName: project.name, blueprint, linked, sections };
+  }
+
+  /** The blueprint's own declaration of the agent a custom-agent change copies. Null when either is gone. */
+  async declaredAgent(workspaceId: string, spec: CustomAgentChangeSpec): Promise<BlueprintAgent | null> {
+    return (await this.blueprintOf(workspaceId, spec.blueprintKey))?.agents?.find((a) => a.key === spec.agentKey) ?? null;
+  }
+
+  /** As `GET /v1/blueprints` offers it; null for a hidden or unknown key. */
+  private blueprintOf(workspaceId: string, key: string): Promise<Blueprint | null> {
+    return this.blueprints.resolve(workspaceId, key).catch((e: unknown) => {
+      if (e instanceof NotFoundException) return null;
+      throw e;
+    });
+  }
+
+  /**
+   * A project setting or a methodology link names a project the person
+   * drafting it may open: its diff reads the project's settings, which their
+   * own settings route would not show them otherwise. One that does not is
+   * dropped as unknown.
    */
   private async visibleProjects(
     read: { changes: ReadChange[]; dropped: DroppedChange[] },
     workspaceId: string,
     principal: Principal,
   ): Promise<{ changes: ReadChange[]; dropped: DroppedChange[] }> {
-    if (!read.changes.some((c) => c.spec.kind === 'project-setting')) return read;
+    const projectOf = (spec: ConfigurationChangeSpec) =>
+      spec.kind === 'project-setting' || spec.kind === 'methodology-link' ? spec.projectId : null;
+    if (!read.changes.some((c) => projectOf(c.spec))) return read;
     const visible = await this.visibleProjectIds(workspaceId, principal);
     const changes: ReadChange[] = [];
     const dropped = [...read.dropped];
     read.changes.forEach((c, index) => {
-      if (c.spec.kind === 'project-setting' && !visible.has(c.spec.projectId)) dropped.push({ index, error: 'projectId: not a project from list_projects' });
+      const projectId = projectOf(c.spec);
+      if (projectId && !visible.has(projectId)) dropped.push({ index, error: 'projectId: not a project from list_projects' });
       else changes.push(c);
     });
     return { changes, dropped };
@@ -560,6 +648,15 @@ export class ConfiguratorService {
           orderBy: { name: 'asc' },
           select: { name: true, description: true, enabled: true },
         });
+      case 'list_blueprints':
+        return (await this.blueprints.list(workspaceId)).blueprints.map(({ key, blueprint: b }) => ({
+          key,
+          name: blueprintText(b.name, principal.locale),
+          description: blueprintText(b.description, principal.locale) || null,
+          methodology: isMethodology(b),
+          levels: (b.levels ?? []).map((l) => blueprintText(l.name, principal.locale)),
+          agents: (b.agents ?? []).map((a) => ({ key: a.key, name: a.name, description: a.description ?? null })),
+        }));
       case 'list_templates':
         return (await this.templates.list({ workspaceId })).templates.map((tpl) => ({
           ref: tpl.ref,
@@ -592,14 +689,16 @@ export class ConfiguratorService {
 
 /**
  * The role applying a change needs, by its writer's route: a project's page
- * template is `editor` (`templates.controller.ts`); a project setting is its
- * maintainer's (`requireProjectManage`) except the two merge gates, which stay
- * `@Access('admin')`; everything else workspace `admin`. Asked again at apply,
+ * template is `editor` (`templates.controller.ts`); a project setting and a
+ * methodology link are its maintainer's (`requireProjectManage`) except the
+ * two merge gates, which stay `@Access('admin')`; everything else, a custom
+ * agent included, workspace `admin`. Asked again at apply,
  * from the spec, never from the stored row.
  */
 export function requiresFor(spec: ConfigurationChangeSpec): ConfigurationChange['requires'] {
   if (spec.kind === 'page-template' && spec.projectId) return 'editor';
   if (spec.kind === 'project-setting') return spec.setting === 'breakingChanges' || spec.setting === 'lintPolicy' ? 'admin' : 'maintainer';
+  if (spec.kind === 'methodology-link') return 'maintainer';
   return 'admin';
 }
 

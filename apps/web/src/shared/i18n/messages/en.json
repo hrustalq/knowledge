@@ -2398,8 +2398,8 @@
       "applied": "Applied {count} change | Applied {count} changes",
       "appliedAt": "Applied {when}",
       "dismissRest": "Dismiss the rest",
-      "adminApplies": "A workspace admin applies the workspace-wide changes.",
-      "landsOff": "Schedules, triggers and workflows are created switched off. Whoever turns one on becomes the person its runs act as. Templates are offered as soon as they are applied.",
+      "adminApplies": "Some changes need a workspace admin, or the maintainer of their project.",
+      "landsOff": "Schedules, triggers and workflows are created switched off. Whoever turns one on becomes the person its runs act as. Templates and project settings take effect as soon as they are applied.",
       "openAgents": "Turn them on in Agents",
       "openWorkflows": "Turn them on in Workflows",
       "openTemplates": "See them in Templates",
@@ -2414,7 +2414,8 @@
         "agent-trigger": "Trigger",
         "connector-drift-check": "Drift check",
         "workflow-draft": "Workflow",
-        "page-template": "Template"
+        "page-template": "Template",
+        "project-setting": "Project setting"
       },
       "states": {
         "pending": "Pending",
@@ -2438,6 +2439,20 @@
         "name-taken": "A workflow or template with this name already exists.",
         "invalid": "A template its graph names is gone or archived."
       },
+      "settings": {
+        "verification": "Freshness thresholds",
+        "workItems": "Tracker handoff rules",
+        "breakingChanges": "Breaking-API gate",
+        "lintPolicy": "Style lint gate"
+      },
+      "inherits": "Inherits",
+      "applies": "Applies: {value}, {source}",
+      "appliesHeld": "Applies: {value}, {source} — {held}",
+      "held": {
+        "ceiling": "held at the server’s ceiling",
+        "agent-off": "the style linter is switched off"
+      },
+      "openPolicies": "See {project} policies",
       "fields": {
         "scheduleKind": "Repeats",
         "scheduleMinutes": "Every (minutes)",

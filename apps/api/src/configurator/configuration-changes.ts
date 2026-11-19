@@ -3,11 +3,16 @@ import {
   AGENT_SCHEDULE_KINDS,
   AGENT_SCHEDULE_TIME_PATTERN,
   AGENT_TRIGGER_EVENTS,
+  API_BREAKING_CHANGE_POLICIES,
   CONFIGURATION_CHANGE_KINDS,
   DOCUMENT_CATEGORIES,
   DRIFT_CHECK_MODES,
   KNOWN_EVENT_TYPES,
+  LINT_POLICIES,
   REPO_EVENT_TYPES,
+  WORK_ITEM_CONFLICT_RULES,
+  WORK_ITEM_ISSUE_RULES,
+  WORK_ITEM_VERIFICATION_RULES,
   isValidTimezone,
   type ConfigurationChangeSpec,
   type WorkflowGraph,
@@ -15,6 +20,7 @@ import {
 import { validateGraph } from '@knowledge/workflow';
 import { readWorkflowSteps } from '../workflows/workflow-draft.service.js';
 import { parseTemplateSource, TemplateSourceError } from '../templates/template-source.js';
+import { MAX_INTERVAL_DAYS } from '../verification/verification.dto.js';
 
 /**
  * The one parse of a proposed change (#1250): what the model handed
@@ -98,7 +104,39 @@ const template = z.strictObject({
   reason,
 });
 
-const change = z.discriminatedUnion('kind', [schedule, trigger, drift, workflow, template]);
+/**
+ * A project setting (#1313), one shape per setting: the bounds and vocabularies
+ * of its own route's DTO. Null on a key goes back to inheriting; a key left out
+ * is not touched.
+ */
+const days = z.number().int().min(0).max(MAX_INTERVAL_DAYS).nullable().optional();
+const projectSetting = <S extends string>(setting: S) => ({ kind: z.literal('project-setting'), projectId: uuid, setting: z.literal(setting), reason });
+const someKey = (keys: string[]) => (s: Record<string, unknown>) => keys.some((k) => s[k] !== undefined);
+const VERIFICATION_KEYS = ['reviewIntervalDays', 'remindBeforeDays', 'inactiveAfterDays', 'emptyMaxChars'];
+const WORK_ITEM_KEYS = ['workItemIssues', 'workItemConflicts', 'workItemVerification'];
+const settings = z.discriminatedUnion('setting', [
+  z
+    .strictObject({
+      ...projectSetting('verification'),
+      reviewIntervalDays: days,
+      remindBeforeDays: days,
+      inactiveAfterDays: days,
+      emptyMaxChars: z.number().int().min(0).max(100_000).nullable().optional(),
+    })
+    .refine(someKey(VERIFICATION_KEYS), `name at least one of ${VERIFICATION_KEYS.join(', ')}`),
+  z
+    .strictObject({
+      ...projectSetting('workItems'),
+      workItemIssues: z.enum(WORK_ITEM_ISSUE_RULES).nullable().optional(),
+      workItemConflicts: z.enum(WORK_ITEM_CONFLICT_RULES).nullable().optional(),
+      workItemVerification: z.enum(WORK_ITEM_VERIFICATION_RULES).nullable().optional(),
+    })
+    .refine(someKey(WORK_ITEM_KEYS), `name at least one of ${WORK_ITEM_KEYS.join(', ')}`),
+  z.strictObject({ ...projectSetting('breakingChanges'), policy: z.enum(API_BREAKING_CHANGE_POLICIES).nullable() }),
+  z.strictObject({ ...projectSetting('lintPolicy'), policy: z.enum(LINT_POLICIES).nullable() }),
+]);
+
+const change = z.discriminatedUnion('kind', [schedule, trigger, drift, workflow, template, settings]);
 
 export interface ReadChange {
   spec: ConfigurationChangeSpec;
@@ -202,7 +240,25 @@ function toSpec(c: z.infer<typeof change>, timezone: string | null): Configurati
     }
     case 'page-template':
       return { kind: c.kind, name: c.name, description: c.description, projectId: c.projectId ?? null, source: c.source };
+    case 'project-setting': {
+      const { kind, projectId } = c;
+      switch (c.setting) {
+        case 'verification':
+          return { kind, projectId, setting: c.setting, values: given({ reviewIntervalDays: c.reviewIntervalDays, remindBeforeDays: c.remindBeforeDays, inactiveAfterDays: c.inactiveAfterDays, emptyMaxChars: c.emptyMaxChars }) };
+        case 'workItems':
+          return { kind, projectId, setting: c.setting, values: given({ issues: c.workItemIssues, conflicts: c.workItemConflicts, verification: c.workItemVerification }) };
+        case 'breakingChanges':
+          return { kind, projectId, setting: c.setting, values: { policy: c.policy } };
+        case 'lintPolicy':
+          return { kind, projectId, setting: c.setting, values: { policy: c.policy } };
+      }
+    }
   }
+}
+
+/** Only the keys the model named: a key left out stays as it is, so it must not reach the writer as null. */
+function given<T extends Record<string, unknown>>(values: T): { [K in keyof T]?: Exclude<T[K], undefined> } {
+  return Object.fromEntries(Object.entries(values).filter(([, v]) => v !== undefined)) as { [K in keyof T]?: Exclude<T[K], undefined> };
 }
 
 /**

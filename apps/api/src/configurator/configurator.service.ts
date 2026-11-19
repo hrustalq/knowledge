@@ -5,6 +5,8 @@ import type { ConfigurationProposal as ProposalRow, Prisma } from '@prisma/clien
 import type { ChatCompletionFunctionTool } from 'openai/resources/chat/completions';
 import {
   AGENT_TRIGGER_EVENTS,
+  API_BREAKING_CHANGE_POLICIES,
+  CONFIGURABLE_PROJECT_SETTINGS,
   CONFIGURATION_CHANGE_KINDS,
   AUTHORABLE_RELATION_TYPES,
   BUILT_IN_TEMPLATE_KEYS,
@@ -12,9 +14,13 @@ import {
   DOCUMENT_CATEGORIES,
   DRIFT_CHECK_CONFIG_KEY,
   DRIFT_CHECK_MODES,
+  LINT_POLICIES,
   RUNNABLE_AGENTS,
   SYSTEM_PLACEHOLDERS,
   TEMPLATE_PLACEHOLDER_KINDS,
+  WORK_ITEM_CONFLICT_RULES,
+  WORK_ITEM_ISSUE_RULES,
+  WORK_ITEM_VERIFICATION_RULES,
   WORKFLOW_STEP_KINDS,
   agentTriggerEventsFor,
   builtInTemplateRef,
@@ -46,7 +52,9 @@ import { TemplatesService } from '../templates/templates.service.js';
 import { templateIssues } from '../workflows/workflow-templates.js';
 import { wrapUntrusted } from '../common/untrusted.js';
 import { t } from '../i18n/t.js';
-import { WORKFLOW_EVENTS, readChanges, type ReadChange } from './configuration-changes.js';
+import { canSeeProject } from '../permissions/access-scope.js';
+import { WORKFLOW_EVENTS, readChanges, type DroppedChange, type ReadChange } from './configuration-changes.js';
+import { ProjectSettingChanges } from './project-setting-changes.js';
 
 /** Proposals listed at once, newest first. Older ones are history nobody reviews. */
 const LIST_LIMIT = 20;
@@ -57,6 +65,7 @@ const DRIFT_KINDS: ReadonlySet<string> = new Set(
 );
 
 const PROPOSE_TOOL = 'propose_configuration';
+const PROJECT_SETTINGS_TOOL = 'get_project_settings';
 
 /**
  * The configurator's tools — this service's contract, not the agent's
@@ -70,6 +79,21 @@ const TOOLS: ChatCompletionFunctionTool[] = [
   tool('list_connectors', 'Repository connectors that have a drift check, with their current mode.'),
   tool('list_workflows', 'Workspace-wide workflow definitions: name, description and whether each is on.'),
   tool('list_templates', 'Workspace-wide page templates and built-ins: ref, name and the category of page each writes.'),
+  {
+    type: 'function',
+    function: {
+      name: PROJECT_SETTINGS_TOOL,
+      description:
+        "One project's settings: for each key, the project's own value (`own`, null = inherits), what applies (`value`), " +
+        'the level that decides it (`source`) and whether a server ceiling or a switched-off linter holds it (`held`).',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['projectId'],
+        properties: { projectId: { type: 'string', description: 'from list_projects' } },
+      },
+    },
+  },
   {
     type: 'function',
     function: {
@@ -97,7 +121,22 @@ const TOOLS: ChatCompletionFunctionTool[] = [
                 scheduleWeekdays: { type: 'array', items: { type: 'integer' }, description: 'agent-schedule, weekly: 0 = Sunday … 6 = Saturday' },
                 scheduleTimezone: { type: 'string', description: 'agent-schedule: IANA zone; omit to use the person\'s' },
                 event: { type: 'string', enum: [...AGENT_TRIGGER_EVENTS], description: 'agent-trigger' },
-                projectId: { type: 'string', description: 'agent-trigger, workflow-draft, page-template: only this project; omit for every project (a workspace-wide template needs an admin to apply)' },
+                projectId: { type: 'string', description: 'agent-trigger, workflow-draft, page-template: only this project; omit for every project (a workspace-wide template needs an admin to apply). project-setting: required' },
+                setting: {
+                  type: 'string',
+                  enum: [...CONFIGURABLE_PROJECT_SETTINGS],
+                  description:
+                    'project-setting: verification = freshness thresholds; workItems = tracker handoff rules; breakingChanges and ' +
+                    'lintPolicy = merge gates (an admin applies those). Name only the keys the goal changes; a key set to null goes back to inheriting.',
+                },
+                reviewIntervalDays: { type: 'integer', description: 'project-setting verification: days a verification holds, 0 = never expires' },
+                remindBeforeDays: { type: 'integer', description: 'project-setting verification: days before expiry to remind the owner' },
+                inactiveAfterDays: { type: 'integer', description: 'project-setting verification: days without an edit before a page reads as inactive, 0 = off' },
+                emptyMaxChars: { type: 'integer', description: 'project-setting verification: a page shorter than this reads as empty' },
+                workItemIssues: { type: 'string', enum: [...WORK_ITEM_ISSUE_RULES], description: 'project-setting workItems: which reported issues become tickets' },
+                workItemConflicts: { type: 'string', enum: [...WORK_ITEM_CONFLICT_RULES], description: 'project-setting workItems: whether knowledge conflicts become tickets' },
+                workItemVerification: { type: 'string', enum: [...WORK_ITEM_VERIFICATION_RULES], description: 'project-setting workItems: which verification flags become tickets' },
+                policy: { type: 'string', enum: [...new Set([...API_BREAKING_CHANGE_POLICIES, ...LINT_POLICIES])], description: 'project-setting breakingChanges, lintPolicy' },
                 categories: { type: 'array', items: { type: 'string' }, description: `agent-trigger, workflow-draft: only pages of these categories (workflow-draft: ${DOCUMENT_CATEGORIES.join(', ')})` },
                 connectorIds: { type: 'array', items: { type: 'string' }, description: 'agent-trigger: only these connectors' },
                 branch: { type: 'string', description: 'agent-trigger: only this branch' },
@@ -180,6 +219,7 @@ export class ConfiguratorService {
     private readonly connectors: ConnectorsService,
     private readonly features: FeaturesService,
     private readonly templates: TemplatesService,
+    private readonly projectSettings: ProjectSettingChanges,
     config: ConfigService<Env, true>,
   ) {
     this.schedulesOn = config.get('AGENT_SCHEDULE_ENABLED', { infer: true }) === true;
@@ -215,7 +255,8 @@ export class ConfiguratorService {
       async (name, args) => {
         // Answered on execution, whatever the model was offered.
         if (name === PROPOSE_TOOL) {
-          const { changes, dropped } = readChanges(args.changes, timezone);
+          const read = readChanges(args.changes, timezone);
+          const { changes, dropped } = await this.visibleProjects(read, workspaceId, principal);
           const assessed = await this.assess(workspaceId, changes);
           // Nothing accepted writes nothing: an empty proposal is a history row with nothing to review.
           if (assessed.length) proposalId = (await this.write(proposalId, workspaceId, goal, assessed, principal.userId)).id;
@@ -226,7 +267,7 @@ export class ConfiguratorService {
             }),
           };
         }
-        const read = await this.read(name, workspaceId, principal);
+        const read = await this.read(name, workspaceId, principal, args);
         return read === null
           ? { content: JSON.stringify({ error: `Unknown tool ${name}` }), ok: false }
           : { content: wrapUntrusted(JSON.stringify(read), 'configurator', 'document') };
@@ -409,7 +450,41 @@ export class ConfiguratorService {
           normalized: spec,
         };
       }
+
+      case 'project-setting': {
+        const read = await this.projectSettings.diff(workspaceId, spec);
+        if (!read) return { target: spec.projectId, diff: [], unavailable: 'not-found', normalized: spec };
+        const unavailable = read.diff.every((d) => same(d.before, d.after)) ? 'already-configured' : null;
+        return { ...read, unavailable, normalized: spec };
+      }
     }
+  }
+
+  /**
+   * A project setting names a project the person drafting it may open: its
+   * diff reads the project's settings, which their own settings route would
+   * not show them otherwise. One that does not is dropped as unknown.
+   */
+  private async visibleProjects(
+    read: { changes: ReadChange[]; dropped: DroppedChange[] },
+    workspaceId: string,
+    principal: Principal,
+  ): Promise<{ changes: ReadChange[]; dropped: DroppedChange[] }> {
+    if (!read.changes.some((c) => c.spec.kind === 'project-setting')) return read;
+    const visible = await this.visibleProjectIds(workspaceId, principal);
+    const changes: ReadChange[] = [];
+    const dropped = [...read.dropped];
+    read.changes.forEach((c, index) => {
+      if (c.spec.kind === 'project-setting' && !visible.has(c.spec.projectId)) dropped.push({ index, error: 'projectId: not a project from list_projects' });
+      else changes.push(c);
+    });
+    return { changes, dropped };
+  }
+
+  private async visibleProjectIds(workspaceId: string, principal: Principal): Promise<Set<string>> {
+    const scope = await this.permissions.scopeFor(principal, workspaceId);
+    const rows = await this.prisma.project.findMany({ where: { workspaceId }, select: { id: true, restricted: true } });
+    return new Set(rows.filter((p) => canSeeProject(scope, p)).map((p) => p.id));
   }
 
   private async projectIn(workspaceId: string, projectId: string | null): Promise<boolean> {
@@ -421,8 +496,14 @@ export class ConfiguratorService {
   }
 
   /** The read tools. Null for a name that is not one. */
-  private async read(name: string, workspaceId: string, principal: Principal): Promise<unknown> {
+  private async read(name: string, workspaceId: string, principal: Principal, args: Record<string, unknown>): Promise<unknown> {
     switch (name) {
+      case PROJECT_SETTINGS_TOOL: {
+        const projectId = typeof args.projectId === 'string' ? args.projectId : '';
+        // The settings route's own read: anyone who may open the project.
+        if (!(await this.visibleProjectIds(workspaceId, principal)).has(projectId)) return { error: 'not a project from list_projects' };
+        return this.projectSettings.snapshot(workspaceId, projectId);
+      }
       case 'list_agents': {
         const [agents, rows] = await Promise.all([
           this.agents.list(workspaceId),
@@ -511,11 +592,15 @@ export class ConfiguratorService {
 
 /**
  * The role applying a change needs, by its writer's route: a project's page
- * template is `editor` (`templates.controller.ts`), everything else workspace
- * `admin`. Asked again at apply, from the spec, never from the stored row.
+ * template is `editor` (`templates.controller.ts`); a project setting is its
+ * maintainer's (`requireProjectManage`) except the two merge gates, which stay
+ * `@Access('admin')`; everything else workspace `admin`. Asked again at apply,
+ * from the spec, never from the stored row.
  */
-export function requiresFor(spec: ConfigurationChangeSpec): 'admin' | 'editor' {
-  return spec.kind === 'page-template' && spec.projectId ? 'editor' : 'admin';
+export function requiresFor(spec: ConfigurationChangeSpec): ConfigurationChange['requires'] {
+  if (spec.kind === 'page-template' && spec.projectId) return 'editor';
+  if (spec.kind === 'project-setting') return spec.setting === 'breakingChanges' || spec.setting === 'lintPolicy' ? 'admin' : 'maintainer';
+  return 'admin';
 }
 
 /** A change that creates something: every field it sets, against nothing today. */

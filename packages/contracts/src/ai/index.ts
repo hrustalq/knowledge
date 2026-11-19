@@ -5,14 +5,16 @@ import type {
   AssistantSource,
   AssistantToolCall,
   AssistantWebSource,
+  ScopedSetting,
   SourceVerificationState,
 } from '@knowledge/contracts/core';
 import type { RelationInput } from '@knowledge/contracts/documents';
 import type { AiActionId } from '@knowledge/contracts/content';
-import type { ApiDriftSpec } from '@knowledge/contracts/api';
+import type { ApiBreakingChangePolicy, ApiDriftSpec } from '@knowledge/contracts/api';
+import type { WorkItemConflictRule, WorkItemIssueRule, WorkItemVerificationRule } from '@knowledge/contracts/connectors';
 import type { FlowAnswer, FlowKey } from '@knowledge/contracts/flows';
 import type { WorkspaceFeature, WorkspaceUse } from '@knowledge/contracts/identity';
-import type { ReviewThreadAnchor } from '@knowledge/contracts/reviews';
+import type { LintPolicy, ReviewThreadAnchor } from '@knowledge/contracts/reviews';
 import type { WorkflowGraph, WorkflowTrigger } from '@knowledge/contracts/workflows';
 
 // (docs/features/09 follow-up). The chat is an append-only intent log; the
@@ -2602,6 +2604,7 @@ export const CONFIGURATION_CHANGE_KINDS = [
   'connector-drift-check',
   'workflow-draft',
   'page-template',
+  'project-setting',
 ] as const;
 export type ConfigurationChangeKind = (typeof CONFIGURATION_CHANGE_KINDS)[number];
 
@@ -2661,12 +2664,39 @@ export interface PageTemplateChangeSpec {
   source: string;
 }
 
+/**
+ * The project settings (docs/features/76) a proposal may set (#1313), a subset
+ * of `PROJECT_SETTING_KEYS`. Not the capture parent: the configurator reads no
+ * pages, so it has no page id to name. Not the methodology: switching one has
+ * its own preview of what moves.
+ */
+export const CONFIGURABLE_PROJECT_SETTINGS = ['verification', 'workItems', 'breakingChanges', 'lintPolicy'] as const;
+export type ConfigurableProjectSetting = (typeof CONFIGURABLE_PROJECT_SETTINGS)[number];
+
+/**
+ * Override one project setting through its own writer (#1313). `values` names
+ * only the keys the change sets; a key set to null goes back to inheriting.
+ */
+export type ProjectSettingChangeSpec = { kind: 'project-setting'; projectId: string } & (
+  | {
+      setting: 'verification';
+      values: Partial<{ reviewIntervalDays: number | null; remindBeforeDays: number | null; inactiveAfterDays: number | null; emptyMaxChars: number | null }>;
+    }
+  | {
+      setting: 'workItems';
+      values: Partial<{ issues: WorkItemIssueRule | null; conflicts: WorkItemConflictRule | null; verification: WorkItemVerificationRule | null }>;
+    }
+  | { setting: 'breakingChanges'; values: { policy: ApiBreakingChangePolicy | null } }
+  | { setting: 'lintPolicy'; values: { policy: LintPolicy | null } }
+);
+
 export type ConfigurationChangeSpec =
   | AgentScheduleChangeSpec
   | AgentTriggerChangeSpec
   | ConnectorDriftCheckChangeSpec
   | WorkflowDraftChangeSpec
-  | PageTemplateChangeSpec;
+  | PageTemplateChangeSpec
+  | ProjectSettingChangeSpec;
 
 /**
  * `unavailable` is decided when the proposal is written and never offered for
@@ -2698,13 +2728,28 @@ export const CONFIGURATION_UNAVAILABLE_REASONS = [
 ] as const;
 export type ConfigurationUnavailableReason = (typeof CONFIGURATION_UNAVAILABLE_REASONS)[number];
 
+/**
+ * What applies at one side of a project-setting change (#1313): the value, the
+ * level that decides it, and what holds it below the levels' ask. `held` is
+ * `ceiling` when the deployment's env clamps it (`STYLE_LINT_POLICY`,
+ * `WORK_ITEM_AUTOCREATE_MAX_PER_TICK`), `agent-off` when the style linter is
+ * switched off — never a silent clamp.
+ */
+export interface ConfigurationAppliedValue {
+  value: unknown;
+  source: ScopedSetting<unknown>['source'];
+  held: 'ceiling' | 'agent-off' | null;
+}
+
 /** One field of a change: what it is today and what applying makes it. */
 export interface ConfigurationDiffRow {
   /** The spec's field name (`scheduleTime`, `event`, `mode`, …). */
   field: string;
-  /** Null when nothing is set today (a new trigger has no before). */
+  /** Null when nothing is set today (a new trigger has no before). A project setting: the project's own value, null = inherits. */
   before: unknown;
   after: unknown;
+  /** A project setting only: what applies today and once applied, beside the project's own value. */
+  applies?: { before: ConfigurationAppliedValue; after: ConfigurationAppliedValue };
 }
 
 export interface ConfigurationChange {
@@ -2718,8 +2763,12 @@ export interface ConfigurationChange {
   diff: ConfigurationDiffRow[];
   state: ConfigurationChangeState;
   unavailable: ConfigurationUnavailableReason | null;
-  /** The role apply requires on execution: `editor` only for a project's page template. */
-  requires: 'admin' | 'editor';
+  /**
+   * The role apply requires on execution: `editor` for a project's page
+   * template, `maintainer` (`requireProjectManage`) for a project setting that
+   * is not a merge gate, else workspace `admin`.
+   */
+  requires: 'admin' | 'editor' | 'maintainer';
   appliedAt: string | null;
   appliedBy: string | null;
   /** What applying created or changed: the trigger, agent, connector, workflow or template id. */

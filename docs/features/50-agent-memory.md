@@ -307,7 +307,7 @@ The hook does exactly this:
   matched against a closed alphabet first.
 - "The session made edits" comes from the marker alone. The transcript is not
   parsed.
-- **`ticket` / `ticket-prompt`** (kit v3, #1196) nudge the model to call
+- **`ticket` / `ticket-prompt`** (kit v3, #1196; v4 reads every ticket of a chained command, #1340) nudge the model to call
   `knowledge_context` ([81](81-ticket-context.md)) once per ticket per
   session. `ticket` fires after a shell `gh|glab|jira issue view …` or a
   tracker MCP tool (name mentions Jira, Linear, Atlassian, issue or ticket)
@@ -333,7 +333,7 @@ kit's entries in, first dropping any earlier entry whose JSON mentions
 `jq`, it prints the entries for the person to add. The kit's own skill lists
 the workspaces and projects the caller may capture into, with the key's pin
 applied, and names no person, so a team can commit it. `CAPTURE_KIT_VERSION`
-(currently 3) is printed in every installed script. Bump it when a vendor
+(currently 4) is printed in every installed script. Bump it when a vendor
 changes its hook contract; re-fetching is how a kit updates.
 
 `knowledge_whoami` returns `apiKey.projectIds`, and the generated skill's key

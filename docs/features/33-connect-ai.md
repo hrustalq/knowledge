@@ -285,6 +285,7 @@ server as not connected. #1341 tracks the cause.
 
 The hook gap (#1340): `gh issue view 128; gh issue view 131` in one command nudges only for the first ticket. Separate
 commands nudge correctly, and a ticket pasted as the prompt (`ORION-140 — …`) got its one `UserPromptSubmit` nudge.
+Kit v4 reads every `issue view` in a command (doc 81); the row above stays as run until it is re-checked live.
 
 The wizard's "Context when a ticket starts" block was checked on the Skill step in en and ru (Claude Code, "I build
 software").

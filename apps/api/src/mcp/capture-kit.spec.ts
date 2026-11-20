@@ -135,6 +135,15 @@ describe('the hook script', () => {
     expect(nudged(run('ticket', bash('s-2', 'gh issue view 123')))).toContain('Ticket 123');
   });
 
+  it('nudges for every ticket a chained command reads (#1340)', () => {
+    install('claude-code');
+    expect(nudged(run('ticket', bash('s-1', 'gh issue view 128')))).toContain('Ticket 128');
+    expect(nudged(run('ticket', bash('s-1', 'gh issue view 128; echo ---; gh issue view 131')))).toMatch(/^Ticket 131: /);
+    expect(nudged(run('ticket', bash('s-1', 'gh issue view 140 && glab issue view 141 | head')))).toMatch(/^Ticket 140, 141: /);
+    expect(nudged(run('ticket', bash('s-1', 'gh issue view 150\ngh issue view https://github.com/o/r/issues/151')))).toMatch(/^Ticket 150, 151: /);
+    expect(run('ticket', bash('s-1', 'gh issue view 131 || gh issue view 141'))).toBe('');
+  });
+
   it('reads a tracker MCP tool’s input, never its output', () => {
     install('claude-code');
     const call = { session_id: 's-1', tool_name: 'mcp__atlassian__getJiraIssue', tool_response: { text: 'blocks OTHER-9' }, tool_input: { issueIdOrKey: 'PROJ-7' } };

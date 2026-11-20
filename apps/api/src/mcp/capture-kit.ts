@@ -26,7 +26,7 @@ import type { CaptureKitClient, CaptureKitFile, CaptureKitResponse } from '@know
  * CAPTURE_KIT_VERSION: an installed kit names its version, and re-fetching is
  * how it updates.
  */
-export const CAPTURE_KIT_VERSION = 3;
+export const CAPTURE_KIT_VERSION = 4;
 
 /** The marker the installer looks for when it merges hook entries — and the script's file name. */
 const HOOK_FILE = 'knowledge-capture.sh';
@@ -286,7 +286,7 @@ function hookScript(input: CaptureKitInput, client: CaptureKitClient): string {
   const claude = client === 'claude-code';
   // About 40 tokens, no double quotes: printed into a JSON string as is.
   const nudge =
-    'Ticket %s: before you start, call knowledge_context once with query = the ticket title and key terms, ' +
+    'Ticket %s: before you start, call knowledge_context once per ticket with query = the ticket title and key terms, ' +
     'repo = git remote get-url origin, exclude = ids already shown. Open a page only if the task needs it.';
   const emitNudge = (event: string) =>
     claude
@@ -316,6 +316,7 @@ function hookScript(input: CaptureKitInput, client: CaptureKitClient): string {
     # From the prompt on: the paths and ids before it are not the person's words.
     case "$in" in *'"prompt"'*) ;; *) exit 0 ;; esac
     nudge "$(ticket "\${in#*'"prompt"'}")"
+    tell
     ${emitNudge('UserPromptSubmit')}
     ;;
 `;
@@ -345,10 +346,16 @@ ticket() {
   printf '%s' "$k" | tr -cd 'A-Za-z0-9_-' | cut -c 1-64
 }
 # Once per ticket per session: mkdir is atomic, so a second read of the same ticket is silent.
+# Collects the new keys; tell then words one nudge naming all of them, or exits.
+keys=
 nudge() {
-  [ -n "$1" ] || exit 0
-  mkdir "$dir/$id.ticket.$1" 2>/dev/null || exit 0
-  msg=$(printf '${nudge}' "$1")
+  [ -n "$1" ] || return 0
+  mkdir "$dir/$id.ticket.$1" 2>/dev/null || return 0
+  keys="\${keys:+$keys, }$1"
+}
+tell() {
+  [ -n "$keys" ] || exit 0
+  msg=$(printf '${nudge}' "$keys")
 }
 
 case "\${1:-}" in
@@ -361,18 +368,25 @@ case "\${1:-}" in
     args=\${args%%'"tool_output"'*}
     case "$tool" in
       Bash | Shell)
-        cmd=$(printf '%s' "$args" | grep -oE '(gh|glab|jira) issue view [^"]*' | head -n 1)
-        [ -n "$cmd" ] || exit 0
-        k=$(ticket "$cmd")
-        [ -n "$k" ] || k=$(printf '%s' "$cmd" | sed -n 's/^[a-z]* issue view \\([0-9][0-9]*\\).*/\\1/p')
+        # Every read in the command, each ending at a shell separator or an escape
+        # (a JSON \\n): \`gh issue view 1; gh issue view 2\` reads two tickets.
+        # A here-document, not a pipe, so the loop's nudges stay in this shell.
+        while IFS= read -r cmd; do
+          k=$(ticket "$cmd")
+          [ -n "$k" ] || k=$(printf '%s' "$cmd" | sed -n 's/^[a-z]* issue view \\([0-9][0-9]*\\).*/\\1/p')
+          nudge "$k"
+        done <<KNOWLEDGE_CMDS
+$(printf '%s' "$args" | grep -oE '(gh|glab|jira) issue view [^"\\;&|]*')
+KNOWLEDGE_CMDS
         ;;
       *)
         printf '%s' "$tool" | grep -qiE 'jira|linear|atlassian|issue|ticket' || exit 0
         k=$(ticket "$args")
         [ -n "$k" ] || k=$(printf '%s' "$args" | grep -oE '"(issue_number|issueNumber|issue_id|issueId|iid|number)"[[:space:]]*:[[:space:]]*"?[0-9]+' | head -n 1 | grep -oE '[0-9]+$')
+        nudge "$k"
         ;;
     esac
-    nudge "$k"
+    tell
     ${emitNudge('PostToolUse')}
     ;;
 ${claude ? promptCase : ''}  edited)

@@ -49,6 +49,15 @@ in the pull request that introduces them — see
   throttled mobile profile, bandwidth is the limit and load times are unchanged. Share links and published sites
   are left as they were: there, the preloads delayed the first paint on a slow phone.
 
+### Fixed
+
+- **The ticket nudge names every ticket a command reads (#1340).** When an agent read two tickets in one shell
+  command (`gh issue view 128; gh issue view 131`), the capture hook took only the first. If that ticket had already
+  been nudged, it stayed silent, and the agent was never asked to call `knowledge_context` for the second one. The
+  hook now reads every `gh|glab|jira issue view` in the command, split at `;`, `&`, `|` and newlines. Each new ticket
+  gets its once-per-session nudge, and two new tickets share one nudge that names both. The capture kit is now v4:
+  re-run the hook installer (Settings → AI → Connect AI) to update a repository's hook in place.
+
 ## [0.61.0] — 2026-11-19
 
 ### Changed

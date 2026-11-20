@@ -199,7 +199,7 @@ else
   put "$dir/knowledge-graph/SKILL.md" knowledge-graph <<'KNOWLEDGE_SKILL_EOF'
 ---
 name: knowledge-graph
-description: Use when asking what depends on a service or component, what a change would break, how two things are connected, or how the knowledge base stood at an earlier date or release, in the Knowledge platform at kb.example.com, through the \`knowledge\` MCP server. Part of the knowledge skill stack; \`knowledge-core\` has the connection, your workspaces and the rules.
+description: "Use when asking what depends on a service or component, what a change would break, how two things are connected, or how the knowledge base stood at an earlier date or release, in the Knowledge platform at kb.example.com, through the \`knowledge\` MCP server. Part of the knowledge skill stack; \`knowledge-core\` has the connection, your workspaces and the rules."
 ---
 
 # Knowledge platform: Dependencies and impact

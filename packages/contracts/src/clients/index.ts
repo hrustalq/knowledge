@@ -244,7 +244,12 @@ function clientTable(input: McpClientInput): Omit<McpClientGuide, 'projectConfig
       config: {
         path: '~/.pi/agent/mcp.json',
         lang: 'json',
-        code: json({ mcpServers: { [name]: { url, ...header(`\${${KEY_ENV}}`) } } }),
+        // pi defers MCP tools behind its search; the two a ticket starts with stay in view (#1362).
+        code: json({
+          mcpServers: {
+            [name]: { url, ...header(`\${${KEY_ENV}}`), toolExposure: { knowledge_whoami: 'direct', knowledge_context: 'direct' } },
+          },
+        }),
       },
       skillDir: SKILL_DIRS.agents,
       usesEnv: auth,

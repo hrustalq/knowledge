@@ -32,6 +32,15 @@ in the pull request that introduces them — see
 
 ### Changed
 
+- **AI clients without the capture kit's hook are told to start a ticket with `knowledge_context` (#1362).** Most
+  clients read a skill's description and the server instructions, never the skill body, so Codex without the kit, pi,
+  Gemini CLI and Qwen Code skipped the "Starting a ticket" step or called `knowledge_context` without `repo`. The
+  `knowledge-core` description now covers starting work on a ticket, and the server instructions name
+  `knowledge_context` with `repo` from `git remote get-url origin`. Both appear only where the tool is offered. The skill
+  now tells a model whose client loads tools on demand (Hermes, pi) to search for the knowledge tools before it
+  calls the server not connected. pi's config snippet keeps `knowledge_whoami` and `knowledge_context` out of its
+  tool search (`toolExposure: "direct"`). Installed skills read as stale until reinstalled.
+
 - **The Connect wizard's client notes say what the client checks found (#1351).** Every headless client was run
   against production with the wizard's own output: Claude Code, Codex, Gemini CLI, Qwen Code, opencode, pi, Oh My Pi,
   Hermes Agent and DeepSeek Harness. The notes now name the step each one needs that the config cannot carry, such as

@@ -25,6 +25,9 @@ export function mcpInstructions(has: (tool: string) => boolean, authoring: Autho
     'Knowledge platform: a versioned documentation store with semantic search and a relation graph.',
     'Workspace > Project > Document. Every content tool takes a workspaceId — call knowledge_whoami first to get yours.',
     'Answer from the knowledge base with knowledge_search, and cite the document ids and titles it returns.',
+    // #1362: most clients load only descriptions and these lines, never the skill body.
+    has('knowledge_context') &&
+      'Starting work on a ticket or issue in a repository: before anything else, call knowledge_context once with query = its title and key terms and repo = the output of `git remote get-url origin`.',
     [
       has('knowledge_feedback') && 'Rate an answer you built from knowledge_search with knowledge_feedback (quote its traceId).',
       has('knowledge_report_issue') &&

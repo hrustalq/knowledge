@@ -186,6 +186,10 @@ bearer_token_env_var = "KNOWLEDGE_API_KEY"",
       "url": "https://kb.test/v1/mcp",
       "headers": {
         "Authorization": "Bearer \${KNOWLEDGE_API_KEY}"
+      },
+      "toolExposure": {
+        "knowledge_whoami": "direct",
+        "knowledge_context": "direct"
       }
     }
   }
@@ -204,6 +208,10 @@ bearer_token_env_var = "KNOWLEDGE_API_KEY"",
       "url": "https://kb.test/v1/mcp",
       "headers": {
         "Authorization": "Bearer \${KNOWLEDGE_API_KEY}"
+      },
+      "toolExposure": {
+        "knowledge_whoami": "direct",
+        "knowledge_context": "direct"
       }
     }
   }
@@ -754,6 +762,10 @@ bearer_token_env_var = "KNOWLEDGE_API_KEY"",
       "url": "https://kb.test/v1/mcp",
       "headers": {
         "Authorization": "Bearer \${KNOWLEDGE_API_KEY}"
+      },
+      "toolExposure": {
+        "knowledge_whoami": "direct",
+        "knowledge_context": "direct"
       }
     }
   }
@@ -772,6 +784,10 @@ bearer_token_env_var = "KNOWLEDGE_API_KEY"",
       "url": "https://kb.test/v1/mcp",
       "headers": {
         "Authorization": "Bearer \${KNOWLEDGE_API_KEY}"
+      },
+      "toolExposure": {
+        "knowledge_whoami": "direct",
+        "knowledge_context": "direct"
       }
     }
   }
@@ -1302,7 +1318,11 @@ url = "https://kb.test/v1/mcp"",
       "code": "{
   "mcpServers": {
     "knowledge": {
-      "url": "https://kb.test/v1/mcp"
+      "url": "https://kb.test/v1/mcp",
+      "toolExposure": {
+        "knowledge_whoami": "direct",
+        "knowledge_context": "direct"
+      }
     }
   }
 }",
@@ -1317,7 +1337,11 @@ url = "https://kb.test/v1/mcp"",
       "code": "{
   "mcpServers": {
     "knowledge": {
-      "url": "https://kb.test/v1/mcp"
+      "url": "https://kb.test/v1/mcp",
+      "toolExposure": {
+        "knowledge_whoami": "direct",
+        "knowledge_context": "direct"
+      }
     }
   }
 }",

@@ -6,6 +6,7 @@ export {
   captureKitInstallCommand,
   KEY_ENV,
   mcpClients,
+  setupInstallCommand,
   SKILL_NAME,
   skillDirGuides,
   skillInstallCommand,

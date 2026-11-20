@@ -1,13 +1,14 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { CAPTURE_KIT_CLIENTS, MCP_LEARNING_TARGET, SKILL_DIRS, SKILL_DIR_KEYS, type CaptureKitClient, type SkillDirKey } from '@knowledge/contracts';
+import { CAPTURE_KIT_CLIENTS, MCP_LEARNING_TARGET, SKILL_DIRS, SKILL_DIR_KEYS, mcpClients, type CaptureKitClient, type SkillDirKey } from '@knowledge/contracts';
 import type { CaptureKitResponse, McpToolSummary, SkillStackResponse, WorkspaceFeature, WorkspaceRole } from '@knowledge/contracts';
 import { t } from '../i18n/t.js';
 import { DEV_PRINCIPAL, type Principal } from '../auth/principal.js';
 import { CAPTURE_TOOLS, MCP_SERVER_NAME, authoringOf, featureOfTool, instructionsFor, isOffered, settleTools, trackTools } from './mcp-tools.js';
 import { publishModeOf } from '../auth/editing-policy.service.js';
 import { renderCaptureKit, renderCaptureKitInstaller } from './capture-kit.js';
+import { renderSetupInstaller, type SetupInput } from './setup.js';
 import {
   SKILL_STACK_VERSION,
   renderMcpLearnings,
@@ -308,7 +309,7 @@ export class McpService extends McpServices {
         reason: 'capture-kit-client',
       });
     }
-    if (![...CAPTURE_TOOLS].some((name) => isOffered(name, principal))) {
+    if (!this.capturesOffered(principal)) {
       throw new ForbiddenException({ statusCode: 403, message: t('error.capture.kitNotOffered'), reason: 'capture-not-offered' });
     }
     const whoami = await this.whoami(principal);
@@ -330,6 +331,53 @@ export class McpService extends McpServices {
   /** The same kit as a shell script that installs it — `curl … | sh`. */
   async captureKitInstallerFor(principal: Principal, client: string): Promise<string> {
     return renderCaptureKitInstaller(await this.captureKitFor(principal, client), `${this.publicUrl()}/capture-kit/install`);
+  }
+
+  private capturesOffered(principal: Principal): boolean {
+    return [...CAPTURE_TOOLS].some((name) => isOffered(name, principal));
+  }
+
+  /**
+   * One setup script for `clientId` (#1347) — see setup.ts. It composes the
+   * skill and capture-kit installers rather than restating them; the kit step
+   * is absent for a credential offered no capture tool, as the kit route
+   * refuses it. `skill: 'single'` and `kit: 'no'` follow the wizard's answers.
+   */
+  async setupInstallerFor(
+    principal: Principal,
+    clientId: string,
+    opts: { skill?: string; kit?: string } = {},
+    extras: McpExtras = {},
+  ): Promise<string> {
+    const auth = this.config.get('AUTH_MODE') === 'api-key';
+    const clients = mcpClients({ url: this.publicUrl(), serverName: MCP_SERVER_NAME, auth, key: null });
+    const client = clients.find((c) => c.id === clientId);
+    if (!client) {
+      throw new BadRequestException({
+        statusCode: 400,
+        message: t('error.capture.setupClient', { client: clientId, clients: clients.map((c) => c.id).join(', ') }),
+        reason: 'setup-client',
+      });
+    }
+    const stackDir = opts.skill === 'single' ? undefined : SKILL_DIR_KEYS.find((k) => SKILL_DIRS[k] === client.skillDir);
+    const kit: SetupInput['kit'] = !client.captureKit
+      ? { skipped: 'no-kit' }
+      : opts.kit === 'no'
+        ? { skipped: 'declined' }
+        : !this.capturesOffered(principal)
+          ? { skipped: 'not-offered' }
+          : { installer: await this.captureKitInstallerFor(principal, client.captureKit) };
+    const query = new URLSearchParams({ client: clientId, ...opts });
+    return renderSetupInstaller({
+      client,
+      url: this.publicUrl(),
+      serverName: MCP_SERVER_NAME,
+      auth,
+      skillStack: stackDir ? await this.skillStackInstallerFor(principal, stackDir, extras) : null,
+      skill: !stackDir && client.skillDir ? await this.skillFor(principal, undefined, extras) : null,
+      kit,
+      sourceUrl: `${this.publicUrl()}/setup/install?${query}`,
+    });
   }
 
   /** `$API_PUBLIC_URL/v1/mcp` — what every generated config points at. */

@@ -5411,7 +5411,7 @@
       "download": "Download SKILL.md",
       "installFor": "{client} → {path}",
       "manage": {
-        "title": "Install or update the skill",
+        "title": "Set up a client again",
         "dirLegend": "Where your client reads skills",
         "single": "One SKILL.md → {path}",
         "stack": "A stack of skills → {path}",
@@ -5421,6 +5421,16 @@
       "alsoServed": "The same skill is served by the MCP server itself — as the resource knowledge://skill and the prompt “guide” — so any client can load it without installing a file.",
       "stackFor": "Or as a stack for {client}, into {path}",
       "stackHint": "A core skill plus one per toolset you are offered. The client loads each only when the task matches, so answering a question does not load the testing or repository playbooks. Run it again to update; it removes a skill you are no longer offered and never touches a folder it did not write."
+    },
+    "setup": {
+      "label": "One command: registers {client}, installs the skill",
+      "labelKit": "One command: registers {client}, installs the skill and the capture hook",
+      "hint": "Safe to run again: it updates what it wrote, leaves everything else alone and never prints your key.",
+      "kitHint": "Run it inside the repository the agent works in to get the capture hook.",
+      "separate": "Separate commands",
+      "manageHint": "One command registers the server with your client and installs the skill and, inside a repository, the capture hook. Run it again on a new machine, or after you join a workspace.",
+      "manageLabel": "Set up or update",
+      "client": "Client"
     },
     "capture": {
       "title": "Capture what sessions learn",

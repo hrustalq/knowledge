@@ -4162,6 +4162,16 @@
     },
     {
       "method": "GET",
+      "path": "/v1/mcp/setup/install",
+      "tag": "mcp",
+      "summary": "One POSIX shell script that registers the MCP server with a client, installs the skill and, inside a git repository, the capture kit",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/mcp/skill",
       "tag": "mcp",
       "summary": "SKILL.md for an AI agent using this knowledge base over MCP, generated for the caller (workspaces, projects, offered tools)",

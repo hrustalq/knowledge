@@ -17,13 +17,23 @@ in the pull request that introduces them — see
 
 ### Added
 
+- **One command sets up a coding agent (#1347).** Connecting a client took up to three pastes: the command that
+  registers the MCP server, the skill installer and the capture hook installer, repeated on every machine.
+  `GET /v1/mcp/setup/install?client=<id>` now returns one script that does all three: it registers the server (it runs
+  `claude mcp add` for Claude Code when the server is not already there, and prints the command or config for every
+  other client), installs the skill stack or single `SKILL.md`, and installs the capture hook when you run it inside a
+  git repository and your key may capture. It reads the key from `KNOWLEDGE_API_KEY`, refuses to start without it,
+  never prints it, and running it again reports each step as unchanged. The setup wizard's skill step and **Settings →
+  AI → Connect AI** lead with this command; the separate commands are under "Separate commands". The skill and capture
+  hook installers now also report `unchanged` for a file that did not change, and a `.claude/settings.json` that `jq`
+  cannot parse gets the entries printed instead of a silent skip.
 - **Skill commands on the Connect AI page (#1343).** The commands that install the agent skill were shown only at the
   end of the guided setup, so refreshing the skill after joining a workspace, or installing it on a second machine,
-  meant walking the setup again. **Settings → AI → Connect AI** now has an "Install or update the skill" section:
-  choose where your client reads skills from (`~/.claude/skills`, `~/.agents/skills`, `~/.qwen/skills`,
-  `~/.hermes/skills`, each listing its clients) and copy the single `SKILL.md` command, the skill stack installer
-  where there is one, and the capture hook installer for Claude Code or Cursor. The commands read the key from
-  `KNOWLEDGE_API_KEY`; the page does not show or create a key.
+  meant walking the setup again. **Settings → AI → Connect AI** now has a "Set up a client again" section; under
+  "Separate commands" choose where your client reads skills from (`~/.claude/skills`, `~/.agents/skills`,
+  `~/.qwen/skills`, `~/.hermes/skills`, each listing its clients) and copy the single `SKILL.md` command, the skill
+  stack installer where there is one, and the capture hook installer for Claude Code or Cursor. The commands read the
+  key from `KNOWLEDGE_API_KEY`; the page does not show or create a key.
 
 ### Changed
 

@@ -45103,6 +45103,90 @@
         ]
       }
     },
+    "/v1/mcp/setup/install": {
+      "get": {
+        "operationId": "McpController_setupInstaller",
+        "parameters": [
+          {
+            "name": "client",
+            "required": true,
+            "in": "query",
+            "description": "A client id from the Connect AI table (claude-code, codex, cursor, …)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "skill",
+            "required": false,
+            "in": "query",
+            "description": "single installs one SKILL.md where a stack is available; stack is the default",
+            "schema": {
+              "enum": [
+                "stack",
+                "single"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "kit",
+            "required": false,
+            "in": "query",
+            "description": "no leaves the capture kit out; yes is the default",
+            "schema": {
+              "enum": [
+                "yes",
+                "no"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "One POSIX shell script that registers the MCP server with a client, installs the skill and, inside a git repository, the capture kit",
+        "tags": [
+          "mcp"
+        ]
+      }
+    },
     "/v1/mcp/capture-kit": {
       "get": {
         "operationId": "McpController_captureKit",

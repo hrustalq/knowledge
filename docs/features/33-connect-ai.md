@@ -170,6 +170,37 @@ capture tool gets 403 `capture-not-offered`. The installer never overwrites
 `jq`, or prints them when `jq` is missing. The exact hook behaviour is in
 [50 §The capture kit](50-agent-memory.md#the-capture-kit).
 
+**One setup command** (#1347). `GET /v1/mcp/setup/install?client=<id>` returns
+one POSIX script for a client in the table: it registers the server, installs the
+skill and, inside a git repository, the capture kit. It composes the two installers
+above, each in its own subshell, rather than restating them
+(`apps/api/src/mcp/setup.ts`); `skill=single` and `kit=no` carry the wizard's
+answers, and an unknown client is 400 `setup-client`. The script refuses to start,
+before writing anything, when the server takes keys and `KNOWLEDGE_API_KEY` is
+empty. It reads the whole body into a function before running, so a command that
+reads stdin cannot swallow the rest of a `curl | sh`, and it never prints the key
+(`set +x`; `claude mcp get` output goes only to `grep`).
+
+- **Register.** A vendor CLI is run only where the script can ask it whether the
+  server is already there, which today is Claude Code (`claude mcp get <name>`
+  printing the same URL means unchanged; another URL is left as it is and the
+  person is told how to replace it). Every other CLI command, and every config
+  file, is printed with the file it belongs in. The script never edits a
+  user-level config it did not write. A check for another CLI belongs in
+  `registerCheck` once someone has run that CLI ([§Client checks](#client-checks)).
+- **Skill.** The stack where the client's skills directory has one
+  (`~/.claude/skills`, `~/.agents/skills`), else one `SKILL.md`, else a line
+  saying the client reads none.
+- **Kit.** Only when the client has a kit and the caller is offered a capture
+  tool, the same predicate the kit route's 403 reads. A read key's script has no
+  kit step. Outside a git repository the step is skipped with a reason and the
+  exit code stays 0.
+
+Every installer writes a file through one `put` helper (`PUT_FN`, `apps/api/src/mcp/installer-shell.ts`)
+that compares first, so a second run reports `unchanged` for each step. The
+wizard's skill step and the manage page lead with this command and keep the
+separate commands behind a disclosure.
+
 **Ticket context** ([81](81-ticket-context.md)). Since kit v3 the same hook
 also nudges the model to call `knowledge_context` once per ticket it reads,
 and the skill carries a "Starting a ticket" step for every other client. The
@@ -220,7 +251,8 @@ drops it in a later release.
 | Tool set, guard, whoami, skill wiring                  | `apps/api/src/mcp/mcp.service.ts`                                           |
 | Write list, annotations, read-key filter, instructions | `apps/api/src/mcp/mcp-tools.ts`                                             |
 | SKILL.md renderer                                      | `apps/api/src/mcp/skill.ts`                                                 |
-| HTTP transport + `/connection` + `/skill` + `/capture-kit` | `apps/api/src/mcp/mcp.controller.ts`                                    |
+| HTTP transport + `/connection` + `/skill` + `/capture-kit` + `/setup/install` | `apps/api/src/mcp/mcp.controller.ts`                    |
+| One setup command: register step + composed installers | `apps/api/src/mcp/setup.ts`                                                 |
 | Capture kit renderers + installer                      | `apps/api/src/mcp/capture-kit.ts`                                           |
 | Draft tools (HTTP only)                                | `apps/api/src/mcp/draft-tools.ts`, `collab/collab-draft-tools.service.ts`   |
 | Module split: core / stdio / HTTP                      | `mcp-core.module.ts`, `mcp.module.ts`, `mcp-http.module.ts`                 |

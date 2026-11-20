@@ -32,8 +32,14 @@ and work in its knowledge base **as the person who connected it**:
 - **Settings → AI → Connect AI** (`/settings/ai/connect`; it was its own settings row
   at `/settings/connect` until issue #182, and that URL — printed in every SKILL.md
   already handed out — redirects) is the manage side: the endpoint, your keys (revoke,
-  last used, captures), the offered tools and the llms.txt URLs. `?client=` on either
-  URL opens the wizard on that client.
+  last used, captures), the skill commands, the offered tools and the llms.txt URLs.
+  `?client=` on either URL opens the wizard on that client.
+  The skill commands (#1343) are the wizard's own, chosen by skills directory instead of
+  by client (`skillDirGuides` groups the client table by `skillDir`): the single
+  `SKILL.md`, the stack where the server has one for that directory, and the capture kit
+  for a client that has one, only while the caller is offered a capture tool. They read
+  the key from `$KNOWLEDGE_API_KEY`; the page never shows or mints one. A client with no
+  skills directory is not listed here and loads `knowledge://skill`.
 - **The skill.** A `SKILL.md` generated per caller at `GET /v1/mcp/skill`: the
   workspaces and project ids that credential reaches, the tools it is offered,
   and the playbooks — answer with citations, change a page only through a merge

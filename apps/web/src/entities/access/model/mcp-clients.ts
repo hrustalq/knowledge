@@ -372,6 +372,27 @@ export function mcpClients(input: McpClientInput): McpClientGuide[] {
   ]
 }
 
+export interface SkillDirGuide {
+  dir: string
+  /** Names of the clients that read skills from this directory. */
+  clients: string[]
+  /** Those of them with a capture kit. */
+  kits: { client: CaptureKitClient; name: string }[]
+}
+
+/** The skills directories the clients read, each with who reads it, in table order (#1343). */
+export function skillDirGuides(clients: McpClientGuide[]): SkillDirGuide[] {
+  const out = new Map<string, SkillDirGuide>()
+  for (const c of clients) {
+    if (!c.skillDir) continue
+    const guide = out.get(c.skillDir) ?? { dir: c.skillDir, clients: [], kits: [] }
+    guide.clients.push(c.name)
+    if (c.captureKit) guide.kits.push({ client: c.captureKit, name: c.name })
+    out.set(c.skillDir, guide)
+  }
+  return [...out.values()]
+}
+
 /**
  * Fetch the skill straight into a client's skills directory. Fetched rather
  * than pasted so that re-running it later picks up new workspaces and tools.

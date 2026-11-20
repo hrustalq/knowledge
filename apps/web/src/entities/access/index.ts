@@ -7,6 +7,7 @@ export {
   KEY_ENV,
   mcpClients,
   SKILL_NAME,
+  skillDirGuides,
   skillInstallCommand,
   skillStackInstallCommand,
   type McpClientGuide,

@@ -15,6 +15,16 @@ in the pull request that introduces them — see
 
 ## [Unreleased]
 
+### Added
+
+- **Skill commands on the Connect AI page (#1343).** The commands that install the agent skill were shown only at the
+  end of the guided setup, so refreshing the skill after joining a workspace, or installing it on a second machine,
+  meant walking the setup again. **Settings → AI → Connect AI** now has an "Install or update the skill" section:
+  choose where your client reads skills from (`~/.claude/skills`, `~/.agents/skills`, `~/.qwen/skills`,
+  `~/.hermes/skills`, each listing its clients) and copy the single `SKILL.md` command, the skill stack installer
+  where there is one, and the capture hook installer for Claude Code or Cursor. The commands read the key from
+  `KNOWLEDGE_API_KEY`; the page does not show or create a key.
+
 ### Changed
 
 - **Recent pages show each page's state (#1293).** On the workspace home and the project page, a recently updated

@@ -3,6 +3,7 @@ import { pageText } from '../../common/page-text.js';
 import type { UntrustedOrigin } from '../../common/untrusted.js';
 import type { AnalyticsCaller } from '../../analytics/analytics.recorder.js';
 import type { Principal } from '../../auth/principal.js';
+import type { McpSkillStamp } from '@knowledge/contracts';
 import type { McpWhoami, StackSkill } from '../skill.js';
 import type { McpServices } from '../mcp-services.js';
 
@@ -23,6 +24,8 @@ export interface McpToolContext {
   whoami(): Promise<McpWhoami>;
   /** The caller's SKILL.md, for the skill resource and the guide prompt. */
   skill(): Promise<string>;
+  /** The stamp that SKILL.md would carry now (#1349), for knowledge_whoami. */
+  skillStamp(): Promise<McpSkillStamp>;
   /** The same playbooks as a stack of skills (#945), for the per-skill resources. */
   stack(): Promise<StackSkill[]>;
   /** Whether this caller is offered the tool: what decides which stack resources are listed. */

@@ -2,12 +2,12 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CAPTURE_KIT_CLIENTS, MCP_LEARNING_TARGET, SKILL_DIRS, SKILL_DIR_KEYS, mcpClients, type CaptureKitClient, type SkillDirKey } from '@knowledge/contracts';
-import type { CaptureKitResponse, McpToolSummary, SkillStackResponse, WorkspaceFeature, WorkspaceRole } from '@knowledge/contracts';
+import type { CaptureKitResponse, McpSkillStamp, McpToolSummary, SkillStackResponse, WorkspaceFeature, WorkspaceRole } from '@knowledge/contracts';
 import { t } from '../i18n/t.js';
 import { DEV_PRINCIPAL, type Principal } from '../auth/principal.js';
 import { CAPTURE_TOOLS, MCP_SERVER_NAME, authoringOf, featureOfTool, instructionsFor, isOffered, settleTools, trackTools } from './mcp-tools.js';
 import { publishModeOf } from '../auth/editing-policy.service.js';
-import { renderCaptureKit, renderCaptureKitInstaller } from './capture-kit.js';
+import { CAPTURE_KIT_VERSION, renderCaptureKit, renderCaptureKitInstaller } from './capture-kit.js';
 import { renderSetupInstaller, type SetupInput } from './setup.js';
 import {
   SKILL_STACK_VERSION,
@@ -15,6 +15,7 @@ import {
   renderSkill,
   renderSkillStack,
   renderSkillStackInstaller,
+  skillStamp,
   type McpLearningGroup,
   type McpWhoami,
   type SkillInput,
@@ -210,6 +211,7 @@ export class McpService extends McpServices {
       svc: this,
       whoami: () => this.whoami(principal),
       skill: () => this.skillFor(principal, undefined, extras),
+      skillStamp: () => this.skillStampFor(principal, extras),
       stack: () => this.skillStackOf(principal, extras),
       offered: (tool) => isOffered(tool, principal, extras.offSections),
     };
@@ -244,6 +246,11 @@ export class McpService extends McpServices {
   /** The SKILL.md for `principal` — see skill.ts. `url` overrides the endpoint it names. */
   async skillFor(principal: Principal, url?: string, extras: McpExtras = {}): Promise<string> {
     return renderSkill(await this.skillInput(principal, url, extras));
+  }
+
+  /** What a skill generated for `principal` now would carry (#1349): knowledge_whoami and the connection page. */
+  async skillStampFor(principal: Principal, extras: McpExtras = {}): Promise<McpSkillStamp> {
+    return { stamp: skillStamp(await this.skillInput(principal, undefined, extras)), kitVersion: CAPTURE_KIT_VERSION };
   }
 
   /** The same playbooks as a stack: a core skill and one per offered toolset that has one (#945). */

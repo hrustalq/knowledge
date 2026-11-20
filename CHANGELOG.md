@@ -17,6 +17,16 @@ in the pull request that introduces them — see
 
 ### Added
 
+- **An agent says when its installed knowledge skill is out of date (#1349).** The skill is generated per person and
+  installed as files, so it went stale silently when the person joined a workspace, a section was switched off, a key
+  was narrowed or a release rewrote a playbook. Every skill now carries a short content stamp (the single SKILL.md in a
+  new "Keeping this skill current" section, each stack skill in its marker line), `knowledge_whoami` returns
+  `skill: { stamp, kitVersion }` for what the server would generate now, and the skill tells the agent to compare the two,
+  tell the person once and name the command that refreshes it. A skill installed before this release carries no stamp
+  and reads as stale on its first `knowledge_whoami`, which is the point: re-run the setup or skill command once.
+  **Settings → AI → Connect AI** shows the current stamp under the setup command. The server version is not part of the
+  stamp, so a release that changes no playbook or tool description leaves installed skills current.
+
 - **A repository can carry its own MCP setup (#1348).** Each teammate had to register the server by hand, so a clone
   of a repository that uses the knowledge base was not connected to it. `GET /v1/mcp/setup/install?client=<id>&scope=project`,
   run inside a git repository, writes that client's project-level config (`.mcp.json` for Claude Code,

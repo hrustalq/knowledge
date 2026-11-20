@@ -5437,6 +5437,8 @@
       "label": "One command: registers {client}, installs the skill",
       "labelKit": "One command: registers {client}, installs the skill and the capture hook",
       "hint": "Safe to run again: it updates what it wrote, leaves everything else alone and never prints your key.",
+      "stampLabel": "Skill stamp now:",
+      "stampHint": "An installed skill that names another stamp is out of date: run the command again. Your agent notices too, from knowledge_whoami.",
       "kitHint": "Run it inside the repository the agent works in to get the capture hook.",
       "separate": "Separate commands",
       "manageHint": "One command registers the server with your client and installs the skill and, inside a repository, the capture hook. Run it again on a new machine, or after you join a workspace.",

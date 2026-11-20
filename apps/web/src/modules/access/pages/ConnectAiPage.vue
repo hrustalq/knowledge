@@ -335,6 +335,12 @@ const canManageFeatures = usePermission('workspace:admin')
             <p v-else class="kn-measure text-caption text-muted-foreground">
               {{ setupKit ? `${t('connect.setup.hint')} ${t('connect.setup.kitHint')}` : t('connect.setup.hint') }}
             </p>
+            <!-- #1349: what a skill installed now carries, to compare with an installed one by eye. -->
+            <p class="kn-measure text-caption text-muted-foreground">
+              {{ t('connect.setup.stampLabel') }}
+              <code class="rounded bg-muted px-1 font-mono text-foreground">{{ connection.skill.stamp }}</code>.
+              {{ t('connect.setup.stampHint') }}
+            </p>
           </div>
 
           <div v-if="skillDir" class="min-w-0">

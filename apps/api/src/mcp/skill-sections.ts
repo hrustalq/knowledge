@@ -1,4 +1,4 @@
-import type { McpToolset } from '@knowledge/contracts';
+import { SKILL_DIRS, captureKitInstallCommand, skillStackInstallCommand, type McpToolset } from '@knowledge/contracts';
 import { renderCapturePlaybook } from './capture-kit.js';
 import type { Authoring } from './mcp-tools.js';
 
@@ -17,6 +17,10 @@ export interface SkillSectionContext {
   workspaces: { workspaceId: string; name: string }[];
   /** How the reachable workspaces publish a person's edit (#958). */
   authoring: Authoring;
+  /** The content stamp this skill carries (#1349); empty while the stamp itself is computed. */
+  stamp: string;
+  /** One SKILL.md, or the core of the stack: which command refreshes it. */
+  form: 'single' | 'stack';
 }
 
 /**
@@ -498,7 +502,40 @@ Over MCP the same text is the resources \`knowledge://documents/<documentId>.md\
 \`knowledge://workspaces/<workspaceId>/llms.txt\` and \`knowledge://projects/<projectId>/llms.txt\`.`,
   });
 
+  // #1349: the stale check. The stamp is the agent's to compare — no hook or file knows the server's current one.
+  if (c.has('knowledge_whoami')) out.push({ toolset: 'core', text: renderStaleStep(c) });
+
   return out.map((s) => ({ ...s, text: s.text.trimEnd() }));
+}
+
+function renderStaleStep(c: SkillSectionContext): string {
+  const auth = c.authMode === 'api-key';
+  const header = auth ? ' -H "Authorization: Bearer $KNOWLEDGE_API_KEY"' : '';
+  const refresh =
+    c.form === 'stack'
+      ? `\`\`\`bash
+${skillStackInstallCommand(c.url, SKILL_DIRS.claude, auth)}
+\`\`\`
+
+That is for skills under \`~/.claude/skills\`; for \`~/.agents/skills\` the same command ends \`dir=agents\`.`
+      : `\`\`\`bash
+curl -fsSL${header} "${c.url}/skill" -o <the path of this SKILL.md>
+\`\`\``;
+  const kit = c.canCapture
+    ? `
+
+\`skill.kitVersion\` is the current capture kit. If this repository has the kit and its hook script's header names an
+older \`capture kit v<N>\`, say so too and name the command that refreshes it, run from the repository root: \`${captureKitInstallCommand(`${c.url}/capture-kit`, 'claude-code', auth).replace(' \\\n  ', ' ')}\`
+(or \`client=cursor\`).`
+    : '';
+  return `## Keeping this skill current
+
+This skill was generated with stamp \`${c.stamp}\`. ${c.ref('knowledge_whoami')} returns \`skill.stamp\`, the stamp the server
+would generate for you now. If the two differ, something changed since it was installed: a workspace you joined or
+left, a section or tool switched off, a playbook rewritten. Tell the person once, then carry on with this file. Do not
+fetch it yourself. The command that refreshes it:
+
+${refresh}${kit}`;
 }
 
 /** The sections as one run of markdown, a blank line between two. */

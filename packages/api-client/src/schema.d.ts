@@ -16197,6 +16197,11 @@ export interface components {
                 toolset: components["schemas"]["McpToolset"];
                 reason: components["schemas"]["McpToolsetOffReason"];
             }[];
+            skill: components["schemas"]["McpSkillStamp"];
+        };
+        McpSkillStamp: {
+            stamp: string;
+            kitVersion: number;
         };
         McpToolSummary: {
             name: string;

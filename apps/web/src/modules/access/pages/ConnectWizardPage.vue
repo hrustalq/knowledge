@@ -59,7 +59,9 @@ const workspaces = useWorkspacesStore()
 const since = Date.now()
 const connection = ref<McpConnectionInfo | null>(null)
 const loading = ref(true)
-const needsKey = computed(() => connection.value?.authMode === 'api-key')
+const auth = computed(() => connection.value?.authMode === 'api-key')
+/** A client that signs in through the browser (#1352) gets its own grant there: no key step. */
+const needsKey = computed(() => auth.value && !client.value?.oauth)
 
 onMounted(async () => {
   workspaces.ensureLoaded()
@@ -111,8 +113,9 @@ const clients = computed(() =>
     ? mcpClients({
         url: connection.value.url,
         serverName: connection.value.serverName,
-        auth: needsKey.value,
+        auth: auth.value,
         key: fresh.value?.apiKey ?? null,
+        oauth: connection.value.oauth,
         anyClientName: t('connect.wizard.client.anyName'),
       })
     : [],

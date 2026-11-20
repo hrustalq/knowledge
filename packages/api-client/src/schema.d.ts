@@ -8387,6 +8387,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/oauth/requests/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A pending MCP client sign-in, as the consent screen shows it */
+        get: operations["OAuthController_view"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/oauth/requests/{id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve an MCP client sign-in: what it may do, then the redirect back to it */
+        post: operations["OAuthController_approve"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/oauth/requests/{id}/deny": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Refuse an MCP client sign-in: the redirect back to it, carrying access_denied */
+        post: operations["OAuthController_deny"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/analytics/overview": {
         parameters: {
             query?: never;
@@ -11889,6 +11940,24 @@ export interface components {
              */
             parentDocumentId: string | null;
         };
+        ApproveOAuthDto: {
+            /**
+             * @description 'read' caps every workspace at the viewer role. 'capture' reads like 'read' and may also propose agent-session captures as merge requests, never write or merge. Omitted means 'write' (the owner's own role).
+             * @enum {string}
+             */
+            scope?: "read" | "capture" | "write";
+            /**
+             * Format: uuid
+             * @description Pin the key to one workspace; omit for all of yours.
+             */
+            workspaceId?: string;
+            /** @description Pin a 'capture' key to these projects (at most 20); omit for every project. Refused on any other scope. */
+            projectIds?: string[];
+            /** @description Limit the key to these MCP toolsets ('core' is always added); omit for every toolset. A key with a list works over MCP only: it is refused on REST routes, the git remote and plain-markdown URLs. */
+            toolsets?: ("core" | "authoring" | "quality" | "review" | "graph" | "conflicts" | "captures" | "qa" | "api-reference" | "code" | "connectors" | "workflows" | "agents" | "insights" | "memos" | "sharing" | "embeds" | "chat" | "projects" | "drafts")[];
+            /** @description Days until the grant ends (1–365); omitted means 90. */
+            expiresInDays?: number;
+        };
         UpdateAnalyticsSettingsDto: {
             /** Format: uuid */
             workspaceId: string;
@@ -13111,6 +13180,7 @@ export interface components {
             workspaceId: string | null;
             projectIds: string[] | null;
             toolsets: components["schemas"]["McpToolset"][] | null;
+            oauth: boolean;
             expiresAt: string | null;
             lastUsedAt: string | null;
             createdAt: string;
@@ -16191,6 +16261,7 @@ export interface components {
             serverName: string;
             /** @enum {string} */
             authMode: "none" | "api-key";
+            oauth: boolean;
             version: string;
             tools: components["schemas"]["McpToolSummary"][];
             notOffered: {
@@ -16702,6 +16773,19 @@ export interface components {
                 job: number;
                 source: number;
             };
+        };
+        OAuthDecisionResponse: {
+            redirect: string;
+        };
+        OAuthRequestView: {
+            client: {
+                name: string;
+                /** @enum {string} */
+                kind: "dcr" | "cimd";
+                domain: string | null;
+            };
+            redirectTo: string;
+            expiresAt: string;
         };
         OidcProviderConfig: {
             issuer: string;
@@ -18913,7 +18997,7 @@ export interface operations {
         parameters: {
             query: {
                 /** @description One AUDIT_ACTIONS value */
-                action?: "graph.query" | "acl.bypass" | "acl.update" | "acl.request" | "acl.request.approve" | "acl.request.deny" | "ai-readable.llms-full" | "api.try" | "feedback.export" | "analytics.export" | "merge-request.lint-override" | "auth.login" | "auth.login_failed" | "auth.logout" | "auth.session_revoked" | "sso.provider_created" | "sso.provider_updated" | "sso.provider_deleted" | "sso.jit_user_created" | "sso.identity_linked" | "auth.account_claimed" | "sso.group_mapping_created" | "sso.group_mapping_deleted" | "role_sync.applied" | "role_sync.blocked_last_admin" | "sso.domain_claimed" | "sso.domain_verified" | "sso.domain_enforced" | "sso.domain_updated" | "sso.domain_removed" | "sso.policy_updated" | "auth.sso_bypassed" | "scim.user_created" | "scim.user_updated" | "scim.user_deactivated" | "scim.user_deleted" | "scim.group_created" | "scim.group_updated" | "scim.group_deleted" | "scim.token_created" | "scim.token_revoked" | "scim.settings_updated" | "chat.search_enabled" | "chat.search_disabled" | "chat.listen_enabled" | "chat.listen_disabled" | "chat.auto_harvest_enabled" | "chat.auto_harvest_disabled" | "member.capabilities_changed" | "workspace.deleted" | "workspace.renamed" | "workspace.editing_policy_updated" | "memory.bank_created" | "memory.bank_deleted" | "memory.bank_updated" | "memory.retained" | "memory.files_uploaded" | "memory.file_changed" | "memory.graph_changed" | "memory.memories_deleted" | "memory.document_updated" | "memory.document_deleted" | "memory.observations_cleared" | "memory.consolidation_requested" | "memory.alias_changed" | "memory.template_imported" | "memory.exported" | "memory.imported" | "memory.cloned" | "memory.mental_model_changed" | "memory.directive_changed" | "memory.operation_cancelled" | "memory.promoted" | "user.created" | "user.renamed" | "user.admin_granted" | "user.admin_revoked" | "user.disabled" | "user.enabled" | "user.password_set" | "member.added" | "member.updated" | "member.removed" | "workspace.created" | "workspace.features_updated" | "workspace.purpose_updated" | "publishing.settings_updated" | "api-key.created" | "api-key.revoked" | "audit.exported" | "ai.settings.updated" | "ai.provider.created" | "ai.provider.updated" | "ai.provider.deleted" | "ai.agent.created" | "ai.agent.updated" | "ai.agent.deleted" | "ai.agent.reset" | "ai.agent.trigger.created" | "ai.agent.trigger.updated" | "ai.agent.trigger.deleted" | "ai.agent.recipe.applied" | "ai.plugin.created" | "ai.plugin.updated" | "ai.plugin.deleted" | "ai.skill.created" | "ai.skill.updated" | "ai.skill.deleted" | "ai.skill.imported" | "ai.styleguide.updated" | "ai.styleguide.deleted" | "ai.lint-policy.updated" | "connector.created" | "connector.updated" | "connector.deleted" | "connector.link.removed" | "workflow.created" | "workflow.updated" | "workflow.deleted" | "template.created" | "template.updated" | "template.archived" | "template.unarchived" | "template.reset" | "glossary.term.created" | "glossary.term.updated" | "glossary.term.deleted";
+                action?: "graph.query" | "acl.bypass" | "acl.update" | "acl.request" | "acl.request.approve" | "acl.request.deny" | "ai-readable.llms-full" | "api.try" | "feedback.export" | "analytics.export" | "merge-request.lint-override" | "auth.login" | "auth.login_failed" | "auth.logout" | "auth.session_revoked" | "sso.provider_created" | "sso.provider_updated" | "sso.provider_deleted" | "sso.jit_user_created" | "sso.identity_linked" | "auth.account_claimed" | "sso.group_mapping_created" | "sso.group_mapping_deleted" | "role_sync.applied" | "role_sync.blocked_last_admin" | "sso.domain_claimed" | "sso.domain_verified" | "sso.domain_enforced" | "sso.domain_updated" | "sso.domain_removed" | "sso.policy_updated" | "auth.sso_bypassed" | "scim.user_created" | "scim.user_updated" | "scim.user_deactivated" | "scim.user_deleted" | "scim.group_created" | "scim.group_updated" | "scim.group_deleted" | "scim.token_created" | "scim.token_revoked" | "scim.settings_updated" | "chat.search_enabled" | "chat.search_disabled" | "chat.listen_enabled" | "chat.listen_disabled" | "chat.auto_harvest_enabled" | "chat.auto_harvest_disabled" | "member.capabilities_changed" | "workspace.deleted" | "workspace.renamed" | "workspace.editing_policy_updated" | "memory.bank_created" | "memory.bank_deleted" | "memory.bank_updated" | "memory.retained" | "memory.files_uploaded" | "memory.file_changed" | "memory.graph_changed" | "memory.memories_deleted" | "memory.document_updated" | "memory.document_deleted" | "memory.observations_cleared" | "memory.consolidation_requested" | "memory.alias_changed" | "memory.template_imported" | "memory.exported" | "memory.imported" | "memory.cloned" | "memory.mental_model_changed" | "memory.directive_changed" | "memory.operation_cancelled" | "memory.promoted" | "user.created" | "user.renamed" | "user.admin_granted" | "user.admin_revoked" | "user.disabled" | "user.enabled" | "user.password_set" | "member.added" | "member.updated" | "member.removed" | "workspace.created" | "workspace.features_updated" | "workspace.purpose_updated" | "publishing.settings_updated" | "api-key.created" | "api-key.revoked" | "oauth.granted" | "oauth.revoked" | "audit.exported" | "ai.settings.updated" | "ai.provider.created" | "ai.provider.updated" | "ai.provider.deleted" | "ai.agent.created" | "ai.agent.updated" | "ai.agent.deleted" | "ai.agent.reset" | "ai.agent.trigger.created" | "ai.agent.trigger.updated" | "ai.agent.trigger.deleted" | "ai.agent.recipe.applied" | "ai.plugin.created" | "ai.plugin.updated" | "ai.plugin.deleted" | "ai.skill.created" | "ai.skill.updated" | "ai.skill.deleted" | "ai.skill.imported" | "ai.styleguide.updated" | "ai.styleguide.deleted" | "ai.lint-policy.updated" | "connector.created" | "connector.updated" | "connector.deleted" | "connector.link.removed" | "workflow.created" | "workflow.updated" | "workflow.deleted" | "template.created" | "template.updated" | "template.archived" | "template.unarchived" | "template.reset" | "glossary.term.created" | "glossary.term.updated" | "glossary.term.deleted";
                 /** @description Derived from the action (auditCategoryOf) */
                 category?: "sign-in" | "people" | "access" | "workspace" | "ai" | "integrations" | "content" | "memory" | "data";
                 /** @description users.id, or a synthetic actor such as "dev" or "anonymous" */
@@ -18973,7 +19057,7 @@ export interface operations {
         parameters: {
             query: {
                 /** @description One AUDIT_ACTIONS value */
-                action?: "graph.query" | "acl.bypass" | "acl.update" | "acl.request" | "acl.request.approve" | "acl.request.deny" | "ai-readable.llms-full" | "api.try" | "feedback.export" | "analytics.export" | "merge-request.lint-override" | "auth.login" | "auth.login_failed" | "auth.logout" | "auth.session_revoked" | "sso.provider_created" | "sso.provider_updated" | "sso.provider_deleted" | "sso.jit_user_created" | "sso.identity_linked" | "auth.account_claimed" | "sso.group_mapping_created" | "sso.group_mapping_deleted" | "role_sync.applied" | "role_sync.blocked_last_admin" | "sso.domain_claimed" | "sso.domain_verified" | "sso.domain_enforced" | "sso.domain_updated" | "sso.domain_removed" | "sso.policy_updated" | "auth.sso_bypassed" | "scim.user_created" | "scim.user_updated" | "scim.user_deactivated" | "scim.user_deleted" | "scim.group_created" | "scim.group_updated" | "scim.group_deleted" | "scim.token_created" | "scim.token_revoked" | "scim.settings_updated" | "chat.search_enabled" | "chat.search_disabled" | "chat.listen_enabled" | "chat.listen_disabled" | "chat.auto_harvest_enabled" | "chat.auto_harvest_disabled" | "member.capabilities_changed" | "workspace.deleted" | "workspace.renamed" | "workspace.editing_policy_updated" | "memory.bank_created" | "memory.bank_deleted" | "memory.bank_updated" | "memory.retained" | "memory.files_uploaded" | "memory.file_changed" | "memory.graph_changed" | "memory.memories_deleted" | "memory.document_updated" | "memory.document_deleted" | "memory.observations_cleared" | "memory.consolidation_requested" | "memory.alias_changed" | "memory.template_imported" | "memory.exported" | "memory.imported" | "memory.cloned" | "memory.mental_model_changed" | "memory.directive_changed" | "memory.operation_cancelled" | "memory.promoted" | "user.created" | "user.renamed" | "user.admin_granted" | "user.admin_revoked" | "user.disabled" | "user.enabled" | "user.password_set" | "member.added" | "member.updated" | "member.removed" | "workspace.created" | "workspace.features_updated" | "workspace.purpose_updated" | "publishing.settings_updated" | "api-key.created" | "api-key.revoked" | "audit.exported" | "ai.settings.updated" | "ai.provider.created" | "ai.provider.updated" | "ai.provider.deleted" | "ai.agent.created" | "ai.agent.updated" | "ai.agent.deleted" | "ai.agent.reset" | "ai.agent.trigger.created" | "ai.agent.trigger.updated" | "ai.agent.trigger.deleted" | "ai.agent.recipe.applied" | "ai.plugin.created" | "ai.plugin.updated" | "ai.plugin.deleted" | "ai.skill.created" | "ai.skill.updated" | "ai.skill.deleted" | "ai.skill.imported" | "ai.styleguide.updated" | "ai.styleguide.deleted" | "ai.lint-policy.updated" | "connector.created" | "connector.updated" | "connector.deleted" | "connector.link.removed" | "workflow.created" | "workflow.updated" | "workflow.deleted" | "template.created" | "template.updated" | "template.archived" | "template.unarchived" | "template.reset" | "glossary.term.created" | "glossary.term.updated" | "glossary.term.deleted";
+                action?: "graph.query" | "acl.bypass" | "acl.update" | "acl.request" | "acl.request.approve" | "acl.request.deny" | "ai-readable.llms-full" | "api.try" | "feedback.export" | "analytics.export" | "merge-request.lint-override" | "auth.login" | "auth.login_failed" | "auth.logout" | "auth.session_revoked" | "sso.provider_created" | "sso.provider_updated" | "sso.provider_deleted" | "sso.jit_user_created" | "sso.identity_linked" | "auth.account_claimed" | "sso.group_mapping_created" | "sso.group_mapping_deleted" | "role_sync.applied" | "role_sync.blocked_last_admin" | "sso.domain_claimed" | "sso.domain_verified" | "sso.domain_enforced" | "sso.domain_updated" | "sso.domain_removed" | "sso.policy_updated" | "auth.sso_bypassed" | "scim.user_created" | "scim.user_updated" | "scim.user_deactivated" | "scim.user_deleted" | "scim.group_created" | "scim.group_updated" | "scim.group_deleted" | "scim.token_created" | "scim.token_revoked" | "scim.settings_updated" | "chat.search_enabled" | "chat.search_disabled" | "chat.listen_enabled" | "chat.listen_disabled" | "chat.auto_harvest_enabled" | "chat.auto_harvest_disabled" | "member.capabilities_changed" | "workspace.deleted" | "workspace.renamed" | "workspace.editing_policy_updated" | "memory.bank_created" | "memory.bank_deleted" | "memory.bank_updated" | "memory.retained" | "memory.files_uploaded" | "memory.file_changed" | "memory.graph_changed" | "memory.memories_deleted" | "memory.document_updated" | "memory.document_deleted" | "memory.observations_cleared" | "memory.consolidation_requested" | "memory.alias_changed" | "memory.template_imported" | "memory.exported" | "memory.imported" | "memory.cloned" | "memory.mental_model_changed" | "memory.directive_changed" | "memory.operation_cancelled" | "memory.promoted" | "user.created" | "user.renamed" | "user.admin_granted" | "user.admin_revoked" | "user.disabled" | "user.enabled" | "user.password_set" | "member.added" | "member.updated" | "member.removed" | "workspace.created" | "workspace.features_updated" | "workspace.purpose_updated" | "publishing.settings_updated" | "api-key.created" | "api-key.revoked" | "oauth.granted" | "oauth.revoked" | "audit.exported" | "ai.settings.updated" | "ai.provider.created" | "ai.provider.updated" | "ai.provider.deleted" | "ai.agent.created" | "ai.agent.updated" | "ai.agent.deleted" | "ai.agent.reset" | "ai.agent.trigger.created" | "ai.agent.trigger.updated" | "ai.agent.trigger.deleted" | "ai.agent.recipe.applied" | "ai.plugin.created" | "ai.plugin.updated" | "ai.plugin.deleted" | "ai.skill.created" | "ai.skill.updated" | "ai.skill.deleted" | "ai.skill.imported" | "ai.styleguide.updated" | "ai.styleguide.deleted" | "ai.lint-policy.updated" | "connector.created" | "connector.updated" | "connector.deleted" | "connector.link.removed" | "workflow.created" | "workflow.updated" | "workflow.deleted" | "template.created" | "template.updated" | "template.archived" | "template.unarchived" | "template.reset" | "glossary.term.created" | "glossary.term.updated" | "glossary.term.deleted";
                 /** @description Derived from the action (auditCategoryOf) */
                 category?: "sign-in" | "people" | "access" | "workspace" | "ai" | "integrations" | "content" | "memory" | "data";
                 /** @description users.id, or a synthetic actor such as "dev" or "anonymous" */
@@ -19028,7 +19112,7 @@ export interface operations {
         parameters: {
             query?: {
                 /** @description One AUDIT_ACTIONS value */
-                action?: "graph.query" | "acl.bypass" | "acl.update" | "acl.request" | "acl.request.approve" | "acl.request.deny" | "ai-readable.llms-full" | "api.try" | "feedback.export" | "analytics.export" | "merge-request.lint-override" | "auth.login" | "auth.login_failed" | "auth.logout" | "auth.session_revoked" | "sso.provider_created" | "sso.provider_updated" | "sso.provider_deleted" | "sso.jit_user_created" | "sso.identity_linked" | "auth.account_claimed" | "sso.group_mapping_created" | "sso.group_mapping_deleted" | "role_sync.applied" | "role_sync.blocked_last_admin" | "sso.domain_claimed" | "sso.domain_verified" | "sso.domain_enforced" | "sso.domain_updated" | "sso.domain_removed" | "sso.policy_updated" | "auth.sso_bypassed" | "scim.user_created" | "scim.user_updated" | "scim.user_deactivated" | "scim.user_deleted" | "scim.group_created" | "scim.group_updated" | "scim.group_deleted" | "scim.token_created" | "scim.token_revoked" | "scim.settings_updated" | "chat.search_enabled" | "chat.search_disabled" | "chat.listen_enabled" | "chat.listen_disabled" | "chat.auto_harvest_enabled" | "chat.auto_harvest_disabled" | "member.capabilities_changed" | "workspace.deleted" | "workspace.renamed" | "workspace.editing_policy_updated" | "memory.bank_created" | "memory.bank_deleted" | "memory.bank_updated" | "memory.retained" | "memory.files_uploaded" | "memory.file_changed" | "memory.graph_changed" | "memory.memories_deleted" | "memory.document_updated" | "memory.document_deleted" | "memory.observations_cleared" | "memory.consolidation_requested" | "memory.alias_changed" | "memory.template_imported" | "memory.exported" | "memory.imported" | "memory.cloned" | "memory.mental_model_changed" | "memory.directive_changed" | "memory.operation_cancelled" | "memory.promoted" | "user.created" | "user.renamed" | "user.admin_granted" | "user.admin_revoked" | "user.disabled" | "user.enabled" | "user.password_set" | "member.added" | "member.updated" | "member.removed" | "workspace.created" | "workspace.features_updated" | "workspace.purpose_updated" | "publishing.settings_updated" | "api-key.created" | "api-key.revoked" | "audit.exported" | "ai.settings.updated" | "ai.provider.created" | "ai.provider.updated" | "ai.provider.deleted" | "ai.agent.created" | "ai.agent.updated" | "ai.agent.deleted" | "ai.agent.reset" | "ai.agent.trigger.created" | "ai.agent.trigger.updated" | "ai.agent.trigger.deleted" | "ai.agent.recipe.applied" | "ai.plugin.created" | "ai.plugin.updated" | "ai.plugin.deleted" | "ai.skill.created" | "ai.skill.updated" | "ai.skill.deleted" | "ai.skill.imported" | "ai.styleguide.updated" | "ai.styleguide.deleted" | "ai.lint-policy.updated" | "connector.created" | "connector.updated" | "connector.deleted" | "connector.link.removed" | "workflow.created" | "workflow.updated" | "workflow.deleted" | "template.created" | "template.updated" | "template.archived" | "template.unarchived" | "template.reset" | "glossary.term.created" | "glossary.term.updated" | "glossary.term.deleted";
+                action?: "graph.query" | "acl.bypass" | "acl.update" | "acl.request" | "acl.request.approve" | "acl.request.deny" | "ai-readable.llms-full" | "api.try" | "feedback.export" | "analytics.export" | "merge-request.lint-override" | "auth.login" | "auth.login_failed" | "auth.logout" | "auth.session_revoked" | "sso.provider_created" | "sso.provider_updated" | "sso.provider_deleted" | "sso.jit_user_created" | "sso.identity_linked" | "auth.account_claimed" | "sso.group_mapping_created" | "sso.group_mapping_deleted" | "role_sync.applied" | "role_sync.blocked_last_admin" | "sso.domain_claimed" | "sso.domain_verified" | "sso.domain_enforced" | "sso.domain_updated" | "sso.domain_removed" | "sso.policy_updated" | "auth.sso_bypassed" | "scim.user_created" | "scim.user_updated" | "scim.user_deactivated" | "scim.user_deleted" | "scim.group_created" | "scim.group_updated" | "scim.group_deleted" | "scim.token_created" | "scim.token_revoked" | "scim.settings_updated" | "chat.search_enabled" | "chat.search_disabled" | "chat.listen_enabled" | "chat.listen_disabled" | "chat.auto_harvest_enabled" | "chat.auto_harvest_disabled" | "member.capabilities_changed" | "workspace.deleted" | "workspace.renamed" | "workspace.editing_policy_updated" | "memory.bank_created" | "memory.bank_deleted" | "memory.bank_updated" | "memory.retained" | "memory.files_uploaded" | "memory.file_changed" | "memory.graph_changed" | "memory.memories_deleted" | "memory.document_updated" | "memory.document_deleted" | "memory.observations_cleared" | "memory.consolidation_requested" | "memory.alias_changed" | "memory.template_imported" | "memory.exported" | "memory.imported" | "memory.cloned" | "memory.mental_model_changed" | "memory.directive_changed" | "memory.operation_cancelled" | "memory.promoted" | "user.created" | "user.renamed" | "user.admin_granted" | "user.admin_revoked" | "user.disabled" | "user.enabled" | "user.password_set" | "member.added" | "member.updated" | "member.removed" | "workspace.created" | "workspace.features_updated" | "workspace.purpose_updated" | "publishing.settings_updated" | "api-key.created" | "api-key.revoked" | "oauth.granted" | "oauth.revoked" | "audit.exported" | "ai.settings.updated" | "ai.provider.created" | "ai.provider.updated" | "ai.provider.deleted" | "ai.agent.created" | "ai.agent.updated" | "ai.agent.deleted" | "ai.agent.reset" | "ai.agent.trigger.created" | "ai.agent.trigger.updated" | "ai.agent.trigger.deleted" | "ai.agent.recipe.applied" | "ai.plugin.created" | "ai.plugin.updated" | "ai.plugin.deleted" | "ai.skill.created" | "ai.skill.updated" | "ai.skill.deleted" | "ai.skill.imported" | "ai.styleguide.updated" | "ai.styleguide.deleted" | "ai.lint-policy.updated" | "connector.created" | "connector.updated" | "connector.deleted" | "connector.link.removed" | "workflow.created" | "workflow.updated" | "workflow.deleted" | "template.created" | "template.updated" | "template.archived" | "template.unarchived" | "template.reset" | "glossary.term.created" | "glossary.term.updated" | "glossary.term.deleted";
                 /** @description Derived from the action (auditCategoryOf) */
                 category?: "sign-in" | "people" | "access" | "workspace" | "ai" | "integrations" | "content" | "memory" | "data";
                 /** @description users.id, or a synthetic actor such as "dev" or "anonymous" */
@@ -19087,7 +19171,7 @@ export interface operations {
         parameters: {
             query: {
                 /** @description One AUDIT_ACTIONS value */
-                action?: "graph.query" | "acl.bypass" | "acl.update" | "acl.request" | "acl.request.approve" | "acl.request.deny" | "ai-readable.llms-full" | "api.try" | "feedback.export" | "analytics.export" | "merge-request.lint-override" | "auth.login" | "auth.login_failed" | "auth.logout" | "auth.session_revoked" | "sso.provider_created" | "sso.provider_updated" | "sso.provider_deleted" | "sso.jit_user_created" | "sso.identity_linked" | "auth.account_claimed" | "sso.group_mapping_created" | "sso.group_mapping_deleted" | "role_sync.applied" | "role_sync.blocked_last_admin" | "sso.domain_claimed" | "sso.domain_verified" | "sso.domain_enforced" | "sso.domain_updated" | "sso.domain_removed" | "sso.policy_updated" | "auth.sso_bypassed" | "scim.user_created" | "scim.user_updated" | "scim.user_deactivated" | "scim.user_deleted" | "scim.group_created" | "scim.group_updated" | "scim.group_deleted" | "scim.token_created" | "scim.token_revoked" | "scim.settings_updated" | "chat.search_enabled" | "chat.search_disabled" | "chat.listen_enabled" | "chat.listen_disabled" | "chat.auto_harvest_enabled" | "chat.auto_harvest_disabled" | "member.capabilities_changed" | "workspace.deleted" | "workspace.renamed" | "workspace.editing_policy_updated" | "memory.bank_created" | "memory.bank_deleted" | "memory.bank_updated" | "memory.retained" | "memory.files_uploaded" | "memory.file_changed" | "memory.graph_changed" | "memory.memories_deleted" | "memory.document_updated" | "memory.document_deleted" | "memory.observations_cleared" | "memory.consolidation_requested" | "memory.alias_changed" | "memory.template_imported" | "memory.exported" | "memory.imported" | "memory.cloned" | "memory.mental_model_changed" | "memory.directive_changed" | "memory.operation_cancelled" | "memory.promoted" | "user.created" | "user.renamed" | "user.admin_granted" | "user.admin_revoked" | "user.disabled" | "user.enabled" | "user.password_set" | "member.added" | "member.updated" | "member.removed" | "workspace.created" | "workspace.features_updated" | "workspace.purpose_updated" | "publishing.settings_updated" | "api-key.created" | "api-key.revoked" | "audit.exported" | "ai.settings.updated" | "ai.provider.created" | "ai.provider.updated" | "ai.provider.deleted" | "ai.agent.created" | "ai.agent.updated" | "ai.agent.deleted" | "ai.agent.reset" | "ai.agent.trigger.created" | "ai.agent.trigger.updated" | "ai.agent.trigger.deleted" | "ai.agent.recipe.applied" | "ai.plugin.created" | "ai.plugin.updated" | "ai.plugin.deleted" | "ai.skill.created" | "ai.skill.updated" | "ai.skill.deleted" | "ai.skill.imported" | "ai.styleguide.updated" | "ai.styleguide.deleted" | "ai.lint-policy.updated" | "connector.created" | "connector.updated" | "connector.deleted" | "connector.link.removed" | "workflow.created" | "workflow.updated" | "workflow.deleted" | "template.created" | "template.updated" | "template.archived" | "template.unarchived" | "template.reset" | "glossary.term.created" | "glossary.term.updated" | "glossary.term.deleted";
+                action?: "graph.query" | "acl.bypass" | "acl.update" | "acl.request" | "acl.request.approve" | "acl.request.deny" | "ai-readable.llms-full" | "api.try" | "feedback.export" | "analytics.export" | "merge-request.lint-override" | "auth.login" | "auth.login_failed" | "auth.logout" | "auth.session_revoked" | "sso.provider_created" | "sso.provider_updated" | "sso.provider_deleted" | "sso.jit_user_created" | "sso.identity_linked" | "auth.account_claimed" | "sso.group_mapping_created" | "sso.group_mapping_deleted" | "role_sync.applied" | "role_sync.blocked_last_admin" | "sso.domain_claimed" | "sso.domain_verified" | "sso.domain_enforced" | "sso.domain_updated" | "sso.domain_removed" | "sso.policy_updated" | "auth.sso_bypassed" | "scim.user_created" | "scim.user_updated" | "scim.user_deactivated" | "scim.user_deleted" | "scim.group_created" | "scim.group_updated" | "scim.group_deleted" | "scim.token_created" | "scim.token_revoked" | "scim.settings_updated" | "chat.search_enabled" | "chat.search_disabled" | "chat.listen_enabled" | "chat.listen_disabled" | "chat.auto_harvest_enabled" | "chat.auto_harvest_disabled" | "member.capabilities_changed" | "workspace.deleted" | "workspace.renamed" | "workspace.editing_policy_updated" | "memory.bank_created" | "memory.bank_deleted" | "memory.bank_updated" | "memory.retained" | "memory.files_uploaded" | "memory.file_changed" | "memory.graph_changed" | "memory.memories_deleted" | "memory.document_updated" | "memory.document_deleted" | "memory.observations_cleared" | "memory.consolidation_requested" | "memory.alias_changed" | "memory.template_imported" | "memory.exported" | "memory.imported" | "memory.cloned" | "memory.mental_model_changed" | "memory.directive_changed" | "memory.operation_cancelled" | "memory.promoted" | "user.created" | "user.renamed" | "user.admin_granted" | "user.admin_revoked" | "user.disabled" | "user.enabled" | "user.password_set" | "member.added" | "member.updated" | "member.removed" | "workspace.created" | "workspace.features_updated" | "workspace.purpose_updated" | "publishing.settings_updated" | "api-key.created" | "api-key.revoked" | "oauth.granted" | "oauth.revoked" | "audit.exported" | "ai.settings.updated" | "ai.provider.created" | "ai.provider.updated" | "ai.provider.deleted" | "ai.agent.created" | "ai.agent.updated" | "ai.agent.deleted" | "ai.agent.reset" | "ai.agent.trigger.created" | "ai.agent.trigger.updated" | "ai.agent.trigger.deleted" | "ai.agent.recipe.applied" | "ai.plugin.created" | "ai.plugin.updated" | "ai.plugin.deleted" | "ai.skill.created" | "ai.skill.updated" | "ai.skill.deleted" | "ai.skill.imported" | "ai.styleguide.updated" | "ai.styleguide.deleted" | "ai.lint-policy.updated" | "connector.created" | "connector.updated" | "connector.deleted" | "connector.link.removed" | "workflow.created" | "workflow.updated" | "workflow.deleted" | "template.created" | "template.updated" | "template.archived" | "template.unarchived" | "template.reset" | "glossary.term.created" | "glossary.term.updated" | "glossary.term.deleted";
                 /** @description Derived from the action (auditCategoryOf) */
                 category?: "sign-in" | "people" | "access" | "workspace" | "ai" | "integrations" | "content" | "memory" | "data";
                 /** @description users.id, or a synthetic actor such as "dev" or "anonymous" */
@@ -46713,7 +46797,7 @@ export interface operations {
     McpController_captureKit: {
         parameters: {
             query: {
-                client: "claude-code" | "cursor";
+                client: "claude-code" | "cursor" | "codex";
             };
             header?: {
                 /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
@@ -46755,7 +46839,7 @@ export interface operations {
     McpController_captureKitInstaller: {
         parameters: {
             query: {
-                client: "claude-code" | "cursor";
+                client: "claude-code" | "cursor" | "codex";
             };
             header?: {
                 /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
@@ -46771,6 +46855,136 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    OAuthController_view: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthRequestView"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    OAuthController_approve: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApproveOAuthDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthDecisionResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    OAuthController_deny: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthDecisionResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {

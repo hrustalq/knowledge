@@ -270,6 +270,8 @@
                 "publishing.settings_updated",
                 "api-key.created",
                 "api-key.revoked",
+                "oauth.granted",
+                "oauth.revoked",
                 "audit.exported",
                 "ai.settings.updated",
                 "ai.provider.created",
@@ -563,6 +565,8 @@
                 "publishing.settings_updated",
                 "api-key.created",
                 "api-key.revoked",
+                "oauth.granted",
+                "oauth.revoked",
                 "audit.exported",
                 "ai.settings.updated",
                 "ai.provider.created",
@@ -840,6 +844,8 @@
                 "publishing.settings_updated",
                 "api-key.created",
                 "api-key.revoked",
+                "oauth.granted",
+                "oauth.revoked",
                 "audit.exported",
                 "ai.settings.updated",
                 "ai.provider.created",
@@ -1124,6 +1130,8 @@
                 "publishing.settings_updated",
                 "api-key.created",
                 "api-key.revoked",
+                "oauth.granted",
+                "oauth.revoked",
                 "audit.exported",
                 "ai.settings.updated",
                 "ai.provider.created",
@@ -45211,7 +45219,8 @@
             "schema": {
               "enum": [
                 "claude-code",
-                "cursor"
+                "cursor",
+                "codex"
               ],
               "type": "string"
             }
@@ -45279,7 +45288,8 @@
             "schema": {
               "enum": [
                 "claude-code",
-                "cursor"
+                "cursor",
+                "codex"
               ],
               "type": "string"
             }
@@ -45326,6 +45336,208 @@
         "summary": "The capture kit as a POSIX shell script that installs it into the git repository it runs in",
         "tags": [
           "mcp"
+        ]
+      }
+    },
+    "/v1/oauth/requests/{id}": {
+      "get": {
+        "operationId": "OAuthController_view",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthRequestView"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A pending MCP client sign-in, as the consent screen shows it",
+        "tags": [
+          "oauth"
+        ]
+      }
+    },
+    "/v1/oauth/requests/{id}/approve": {
+      "post": {
+        "operationId": "OAuthController_approve",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApproveOAuthDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthDecisionResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Approve an MCP client sign-in: what it may do, then the redirect back to it",
+        "tags": [
+          "oauth"
+        ]
+      }
+    },
+    "/v1/oauth/requests/{id}/deny": {
+      "post": {
+        "operationId": "OAuthController_deny",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthDecisionResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Refuse an MCP client sign-in: the redirect back to it, carrying access_denied",
+        "tags": [
+          "oauth"
         ]
       }
     },
@@ -47116,7 +47328,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.61.0",
+    "version": "0.62.0",
     "contact": {}
   },
   "tags": [],
@@ -55432,6 +55644,66 @@
           "parentDocumentId"
         ]
       },
+      "ApproveOAuthDto": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "type": "string",
+            "enum": [
+              "read",
+              "capture",
+              "write"
+            ],
+            "description": "'read' caps every workspace at the viewer role. 'capture' reads like 'read' and may also propose agent-session captures as merge requests, never write or merge. Omitted means 'write' (the owner's own role)."
+          },
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Pin the key to one workspace; omit for all of yours."
+          },
+          "projectIds": {
+            "description": "Pin a 'capture' key to these projects (at most 20); omit for every project. Refused on any other scope.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "toolsets": {
+            "type": "array",
+            "description": "Limit the key to these MCP toolsets ('core' is always added); omit for every toolset. A key with a list works over MCP only: it is refused on REST routes, the git remote and plain-markdown URLs.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "core",
+                "authoring",
+                "quality",
+                "review",
+                "graph",
+                "conflicts",
+                "captures",
+                "qa",
+                "api-reference",
+                "code",
+                "connectors",
+                "workflows",
+                "agents",
+                "insights",
+                "memos",
+                "sharing",
+                "embeds",
+                "chat",
+                "projects",
+                "drafts"
+              ]
+            }
+          },
+          "expiresInDays": {
+            "type": "number",
+            "description": "Days until the grant ends (1–365); omitted means 90."
+          }
+        }
+      },
       "UpdateAnalyticsSettingsDto": {
         "type": "object",
         "properties": {
@@ -60658,6 +60930,9 @@
             ],
             "nullable": true
           },
+          "oauth": {
+            "type": "boolean"
+          },
           "expiresAt": {
             "type": "string",
             "nullable": true
@@ -60678,6 +60953,7 @@
           "workspaceId",
           "projectIds",
           "toolsets",
+          "oauth",
           "expiresAt",
           "lastUsedAt",
           "createdAt"
@@ -74081,6 +74357,9 @@
               "api-key"
             ]
           },
+          "oauth": {
+            "type": "boolean"
+          },
           "version": {
             "type": "string"
           },
@@ -74116,6 +74395,7 @@
           "url",
           "serverName",
           "authMode",
+          "oauth",
           "version",
           "tools",
           "notOffered",
@@ -76335,6 +76615,57 @@
           "workspaceId",
           "count",
           "counts"
+        ]
+      },
+      "OAuthDecisionResponse": {
+        "type": "object",
+        "properties": {
+          "redirect": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "redirect"
+        ]
+      },
+      "OAuthRequestView": {
+        "type": "object",
+        "properties": {
+          "client": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "dcr",
+                  "cimd"
+                ]
+              },
+              "domain": {
+                "type": "string",
+                "nullable": true
+              }
+            },
+            "required": [
+              "name",
+              "kind",
+              "domain"
+            ]
+          },
+          "redirectTo": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "client",
+          "redirectTo",
+          "expiresAt"
         ]
       },
       "OidcProviderConfig": {

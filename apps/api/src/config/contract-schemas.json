@@ -5044,6 +5044,9 @@
         ],
         "nullable": true
       },
+      "oauth": {
+        "type": "boolean"
+      },
       "expiresAt": {
         "type": "string",
         "nullable": true
@@ -5064,6 +5067,7 @@
       "workspaceId",
       "projectIds",
       "toolsets",
+      "oauth",
       "expiresAt",
       "lastUsedAt",
       "createdAt"
@@ -18467,6 +18471,9 @@
           "api-key"
         ]
       },
+      "oauth": {
+        "type": "boolean"
+      },
       "version": {
         "type": "string"
       },
@@ -18502,6 +18509,7 @@
       "url",
       "serverName",
       "authMode",
+      "oauth",
       "version",
       "tools",
       "notOffered",
@@ -20721,6 +20729,57 @@
       "workspaceId",
       "count",
       "counts"
+    ]
+  },
+  "OAuthDecisionResponse": {
+    "type": "object",
+    "properties": {
+      "redirect": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "redirect"
+    ]
+  },
+  "OAuthRequestView": {
+    "type": "object",
+    "properties": {
+      "client": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "dcr",
+              "cimd"
+            ]
+          },
+          "domain": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "name",
+          "kind",
+          "domain"
+        ]
+      },
+      "redirectTo": {
+        "type": "string"
+      },
+      "expiresAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "client",
+      "redirectTo",
+      "expiresAt"
     ]
   },
   "OidcProviderConfig": {

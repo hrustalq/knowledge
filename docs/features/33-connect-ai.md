@@ -285,6 +285,78 @@ shows a `knowledge_whoami` curl and what each reply means (no reply, 401, 403, 4
 the previous image still authenticates after a rollback — the contract step
 drops it in a later release.
 
+## OAuth for MCP clients (#1352)
+
+A client that speaks the MCP authorization flow connects to `/v1/mcp` by signing
+the person in through the browser: no key minted by hand, no `mcp-remote`. The
+design was agreed on #1352 before any code; this is what shipped.
+
+- **Spec.** Built to the 2025-11-25 authorization spec (what Claude implements:
+  2025-03-26, 2025-06-18, 2025-11-25) and complete for 2026-07-28, which only
+  deprecates dynamic registration. Protected-resource metadata (RFC 9728),
+  authorization-server metadata (RFC 8414), PKCE S256 only, Client ID Metadata
+  Documents (CIMD), dynamic registration (RFC 7591), refresh rotation,
+  revocation (RFC 7009).
+- **A grant is an `api_keys` row.** The consent screen writes it through
+  `ApiKeysService.createGrant` with the key form's checks, cap and audit
+  (`oauth.granted`), plus `oauth_client_id` and the approving session's sign-in
+  method and provider. It has no bearer of its own (`key_hash` is null). Its
+  tokens live in `oauth_tokens`, hashed: `ko_` access (1 h, never past the
+  grant) and `kor_` refresh (rotated on every use; a spent one presented again
+  ends the grant, as does a replayed code). `TokenAuthService.resolveOAuth`
+  turns a `ko_` token into the same `principal.apiKey` the row would give as a
+  key, with `oauth` added. So `requireRole` narrowing, toolsets, `isOffered`,
+  audit, `isCurrent` and revocation (`DELETE /v1/me/api-keys/:id`, the same
+  button on this page) all apply unchanged.
+- **Audience.** A `ko_` token is MCP-only by the same rule as a toolset-limited
+  key: refused wherever `@McpKeyOk` is not said, which today is everything but
+  `McpController`.
+- **Enforced SSO judges the sign-in, not the key.** `policyFailure` sends an
+  OAuth principal down the session branch, so `allowApiKeys` never lets a
+  password sign-in through. A grant from another IdP is `foreign-provider`, and
+  the workspace age cap counts from consent. Approving with a workspace pin asks
+  `requireRole` first, so the screen refuses before a grant exists.
+- **A token never makes or extends a grant.** Approving is `@SessionOnly` and
+  `createGrant` requires a `ks_` session. A grant ends a fixed time after
+  consent (chosen on the screen, 90 days by default), and refreshing never
+  moves that date.
+- **The protocol is the MCP SDK's** (`@modelcontextprotocol/sdk/server/auth`
+  handlers): redirect matching (exact, loopback port relaxed per RFC 8252), PKCE
+  verification, error shapes. `OAuthService` implements its
+  `OAuthServerProvider` for storage and decisions. `mount.ts` puts the handlers
+  on the API's Express instance, with the house Redis limiter in place of the
+  SDK's in-memory one. The SDK's `mcpAuthRouter` is not used: its metadata
+  cannot advertise CIMD.
+- **CIMD** is resolved inside `getClient`. An `https` client id with a path is
+  fetched through `safeFetch` (5 KB, 5 s, no redirects). The document must name
+  itself, list redirect URIs and be a public client. It is cached in
+  `oauth_clients` for its `max-age` (24 h at most), and a stale copy serves while
+  the client's host is down. Checked against Claude Code's real document
+  (`https://claude.ai/oauth/claude-code-client-metadata`).
+- **Dynamic registration is an unauthenticated write.** It is held to 20 per IP
+  per hour (fails closed without Redis), and a client is always registered
+  public. Never-granted registrations are pruned after 24 h, and over 1 000 of
+  them answers `temporarily_unavailable`.
+- **Discovery.** The issuer is `API_PUBLIC_URL`'s origin, so the documents are
+  at `/.well-known/oauth-protected-resource/<api path>/v1/mcp` and
+  `/.well-known/oauth-authorization-server`, and the proxy sends `/.well-known/oauth-*`
+  to the API (Caddyfile). The endpoints are `$API_PUBLIC_URL/oauth/{authorize,token,register,revoke}`.
+  A 401 from the MCP controller carries
+  `WWW-Authenticate: Bearer resource_metadata="…"`, and Claude honours that
+  pointer only on a 401.
+- **Consent screen.** `/oauth/authorize?request=` in the member app (`meta.focus`).
+  Signed out, it goes to `/login` first. It shows the client's name, who vouches
+  for it (a CIMD domain, or a warning that a registered name is unverified) and
+  where the browser returns, then offers the key form's access, workspace,
+  expiry and toolset choices. The request lasts 10 minutes and the code 2.
+- **Wizard.** With OAuth on, `McpConnectionInfo.oauth` is true and Claude
+  Desktop's guide becomes "paste the URL as a custom connector", with no key step.
+- **Stateless HTTP stays.** Each `/v1/mcp` call resolves its bearer like a key
+  does. Nothing about the transport keeps state.
+
+Not done: a project pin on the consent screen (keys only), OAuth for the
+memory-bank MCP and REST, and checking clients other than Claude live.
+
 ## Where it lives
 
 | Piece                                                  | File                                                                        |
@@ -304,13 +376,20 @@ drops it in a later release.
 | Manage page                                            | `apps/web/src/modules/access/pages/ConnectAiPage.vue`                                      |
 | Setup wizard + its steps                               | `apps/web/src/modules/access/pages/ConnectWizardPage.vue`, `components/connect/`           |
 | What the answers mean                                  | `apps/web/src/entities/access/model/connect-plan.ts`                                       |
-| Tests                                                  | `apps/api/test/mcp-http.spec.ts`                                            |
+| OAuth: protocol mount, provider, consent API           | `apps/api/src/oauth/` (`mount.ts`, `oauth.service.ts`, `oauth.controller.ts`) |
+| OAuth: token resolution, URLs, SSO rule                | `token-auth.service.ts`, `auth/oauth-urls.ts`, `policyFailure`              |
+| OAuth consent screen                                   | `apps/web/src/modules/access/pages/OAuthConsentPage.vue`                    |
+| Tests                                                  | `apps/api/test/mcp-http.spec.ts`, `apps/api/test/mcp-oauth.spec.ts`         |
 
 ## Configuration
 
 `API_PUBLIC_URL` — already required for the GitHub App's OAuth callback — is now
 also the base of the MCP URL every snippet contains (`$API_PUBLIC_URL/v1/mcp`).
 Behind the production Caddyfile that is `https://<host>/api`.
+
+`MCP_OAUTH_ENABLED` (default `false`, needs `AUTH_MODE=api-key`) turns on OAuth
+for MCP clients. It is a ceiling: off means the discovery documents and
+endpoints 404, a 401 carries no pointer, and existing grants stop resolving.
 
 ## Client checks
 
@@ -392,10 +471,6 @@ software").
 
 ## Not done
 
-- **OAuth.** Clients that only speak OAuth for remote servers (Claude Desktop's
-  native connectors, claude.ai) connect through `mcp-remote` for now. An OAuth
-  authorization server would let them connect natively and is the obvious next
-  step.
 - **Per-tool key lists.** A key can be limited to chosen toolsets, and is then
   valid over MCP only ([78](78-mcp-toolsets.md)). A list finer than a toolset
   is not expressible.

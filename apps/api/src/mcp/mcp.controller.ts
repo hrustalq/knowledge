@@ -12,6 +12,7 @@ import { CollabDraftToolsService } from '../collab/collab-draft-tools.service.js
 import { McpService, type McpExtras } from './mcp.service.js';
 import { PRODUCT_VERSION } from '../config/version.js';
 import { Returns } from '../common/returns.decorator.js';
+import { oauthEnabled } from '../auth/oauth-urls.js';
 
 /**
  * MCP over Streamable HTTP (docs/features/33): the stdio server's tool set,
@@ -97,6 +98,7 @@ export class McpController {
       url: this.mcp.publicUrl(),
       serverName: MCP_SERVER_NAME,
       authMode: this.config.get('AUTH_MODE') === 'api-key' ? 'api-key' : 'none',
+      oauth: oauthEnabled(this.config),
       version: PRODUCT_VERSION,
       tools: this.mcp.toolsFor(principal, extras),
       notOffered: toolsetsNotOffered(principal, offSections),

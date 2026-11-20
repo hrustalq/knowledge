@@ -58,14 +58,21 @@ const NO_POLICY: WorkspaceAuthPolicySettings = {
  */
 export function policyFailure(principal: Principal, policy: WorkspaceAuthPolicyApplied & { providers: { id: string }[] }, now = Date.now()): AuthPolicyFailure | null {
   if (principal.mode === 'dev') return null;
-  if (principal.apiKey) return policy.ssoEnforced && !policy.allowApiKeys ? 'api-key' : null;
-  if (!principal.sessionId) return null;
+  // An OAuth grant (#1352) is judged as the sign-in that approved it, never as a
+  // key: `allowApiKeys` does not let a password sign-in through a client's token.
+  const grant = principal.apiKey?.oauth;
+  if (principal.apiKey && !grant) return policy.ssoEnforced && !policy.allowApiKeys ? 'api-key' : null;
+  if (!grant && !principal.sessionId) return null;
+  const signIn = grant
+    ? { method: grant.signInMethod, providerId: grant.signInProviderId, at: grant.grantedAt }
+    : { method: principal.authMethod, providerId: principal.providerId, at: principal.sessionCreatedAt };
   if (policy.ssoEnforced) {
-    if (!principal.authMethod || principal.authMethod === 'password' || !principal.providerId) return 'password-session';
-    if (!policy.providers.some((p) => p.id === principal.providerId)) return 'foreign-provider';
+    if (!signIn.method || signIn.method === 'password' || !signIn.providerId) return 'password-session';
+    if (!policy.providers.some((p) => p.id === signIn.providerId)) return 'foreign-provider';
   }
-  if (policy.sessionMaxAgeHours && principal.sessionCreatedAt) {
-    const age = now - Date.parse(principal.sessionCreatedAt);
+  // A grant's age counts from consent, as agreed on #1352.
+  if (policy.sessionMaxAgeHours && signIn.at) {
+    const age = now - Date.parse(signIn.at);
     if (age > policy.sessionMaxAgeHours * 3_600_000) return 'session-too-old';
   }
   return null;

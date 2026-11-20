@@ -46,6 +46,7 @@ import { RedisModule } from '../redis/redis.module.js';
   // counts its routes the way a password login does.
   // PermissionsCoreModule: role sync (SsoModule) tells a person their standing
   // moved (`AclEventsService.permissionsChanged`, #1297).
-  exports: [AuthCoreModule, AuthTokensModule, PermissionsCoreModule, AuthFlowService, PublicRateLimiter, AuthRateLimitGuard],
+  // ApiKeysService: the OAuth consent screen (#1352) writes its grants through it.
+  exports: [AuthCoreModule, AuthTokensModule, PermissionsCoreModule, AuthFlowService, PublicRateLimiter, AuthRateLimitGuard, ApiKeysService],
 })
 export class AuthModule {}

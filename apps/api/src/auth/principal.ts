@@ -72,6 +72,12 @@ export interface Principal {
      * refuses it at every door that does not say it is the MCP endpoint.
      */
     toolsets?: McpToolset[] | null;
+    /**
+     * Set when the bearer was a `ko_` OAuth access token (#1352): the row is a
+     * grant a person approved on the consent screen, not a key. MCP-only like a
+     * toolset list, and judged by enforced SSO as the sign-in that approved it.
+     */
+    oauth?: { clientId: string; signInMethod: AuthMethod | null; signInProviderId: string | null; grantedAt: string };
   };
 }
 

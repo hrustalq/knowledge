@@ -37,6 +37,8 @@ export interface McpClientInput {
   key: string | null
   /** The generic client's name in the reader's language. */
   anyClientName?: string
+  /** The server signs clients in with OAuth (#1352): a client that can is shown that way, with no key. */
+  oauth?: boolean
 }
 
 export interface McpClientGuide {
@@ -56,6 +58,8 @@ export interface McpClientGuide {
   docs: string
   /** The config a repository can commit (#1348), or why this client has none. */
   projectConfig: ProjectConfig | { refused: ProjectRefusal }
+  /** Signs in through the browser (#1352): no key step, the client gets its own grant. */
+  oauth?: true
 }
 
 /**
@@ -323,7 +327,22 @@ function clientTable(input: McpClientInput): Omit<McpClientGuide, 'projectConfig
       note: 'vscode',
       docs: 'https://code.visualstudio.com/docs/copilot/customization/mcp-servers',
     },
-    {
+    // With OAuth on (#1352), Desktop connects natively as a custom connector and
+    // signs the person in through the browser: no key, no mcp-remote.
+    input.oauth
+      ? {
+          id: 'claude-desktop',
+          name: 'Claude Desktop',
+          command: null,
+          config: { path: 'Settings → Connectors → Add custom connector', lang: 'yaml', code: url },
+          skillDir: null,
+          usesEnv: false,
+          captureKit: null,
+          note: 'claudeDesktopOauth',
+          docs: 'https://claude.com/docs/connectors/building',
+          oauth: true,
+        }
+      : {
       id: 'claude-desktop',
       name: 'Claude Desktop',
       command: null,

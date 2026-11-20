@@ -950,6 +950,17 @@ export const envSchema = z.object({
   API_PUBLIC_URL: z.string().default('http://localhost:3000'),
 
   /**
+   * OAuth for MCP clients (#1352, docs/features/33): an authorization server so
+   * a client that speaks the MCP authorization flow (Claude Desktop's and
+   * claude.ai's connectors) signs the person in through the browser instead of
+   * being handed a key. A ceiling: off, the discovery documents and endpoints
+   * 404, `/v1/mcp` sends no `WWW-Authenticate` pointer and existing grants stop
+   * resolving. Discovery lives at the origin root, so the proxy must send
+   * `/.well-known/oauth-*` to the API (see Caddyfile).
+   */
+  MCP_OAUTH_ENABLED: boolish(false),
+
+  /**
    * A private Figma OAuth app for the `figma` connector (#557, docs/features/64).
    * Empty client id is the off switch: the setup offers only the personal
    * access token, exactly as before. The redirect URI to register on the app is

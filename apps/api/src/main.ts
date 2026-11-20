@@ -15,6 +15,7 @@ import { createOpenApiDocument } from './config/swagger.js';
 import { createRootLogger, envLogLevel } from '@knowledge/observability';
 import { traceMiddleware } from '@knowledge/observability/express';
 import { PinoNestLogger } from './observability/nest-logger.js';
+import { mountOAuth } from './oauth/mount.js';
 
 async function bootstrap() {
   // Built before Nest so boot-time records are structured too. LOG_LEVEL is read
@@ -66,6 +67,9 @@ async function bootstrap() {
   // ETag stays on as the fallback for routes with no cheap validator; a route
   // that sets its ETag (notModified) is left alone by it.
   app.useGlobalInterceptors(new HttpCacheInterceptor(app.get(Reflector)));
+
+  // OAuth for MCP (#1352): the SDK's protocol handlers, ahead of Nest's router. Off unless MCP_OAUTH_ENABLED.
+  mountOAuth(app);
 
   SwaggerModule.setup('docs', app, createOpenApiDocument(app));
 

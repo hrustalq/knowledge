@@ -432,10 +432,10 @@ Pass \`projectId\` (and a \`note\` for a page with no subpages) and nothing is a
     out.push({
       toolset: 'captures',
       text: `${renderCapturePlaybook()}
-For Claude Code and Cursor, a hook can remind the model to do this once per session. Install it from the repository
+For Claude Code, Cursor and Codex, a hook can remind the model to do this once per session. Install it from the repository
 root: \`curl -fsSL${c.authMode === 'api-key' ? ' -H "Authorization: Bearer $KNOWLEDGE_API_KEY"' : ''} "${
         c.url
-      }/capture-kit/install?client=claude-code" | sh\` (or \`client=cursor\`).`,
+      }/capture-kit/install?client=claude-code" | sh\` (or \`client=cursor\`, \`client=codex\`).`,
     });
 
   // #636: every project is a git remote. The key reaches git through a

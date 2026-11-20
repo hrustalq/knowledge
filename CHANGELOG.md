@@ -17,6 +17,16 @@ in the pull request that introduces them — see
 
 ### Added
 
+- **Codex gets the capture kit (#1350).** Until now only Claude Code and Cursor had one. A Codex session depended
+  entirely on the skill text to remember to propose what it learned and to call `knowledge_context` when a ticket
+  started. `GET /v1/mcp/capture-kit/install?client=codex` (and the setup command and Connect wizard for Codex) now
+  installs `.agents/skills/knowledge-capture/SKILL.md`, a hook script and entries merged into `.codex/hooks.json`:
+  one capture reminder per session after a file edit, and one `knowledge_context` nudge per ticket read through the
+  shell, a tracker MCP tool or the prompt. As with the other kits, the script holds no key and makes no network call.
+  **Codex runs a new hook only once you trust it**, so after installing, open `/hooks` in Codex and trust the four
+  `knowledge-capture.sh` hooks (the installer says so). The kit is now v5. Claude Code and Cursor kits are unchanged
+  apart from the version line, so re-running their installers is optional.
+
 - **An agent says when its installed knowledge skill is out of date (#1349).** The skill is generated per person and
   installed as files, so it went stale silently when the person joined a workspace, a section was switched off, a key
   was narrowed or a release rewrote a playbook. Every skill now carries a short content stamp (the single SKILL.md in a

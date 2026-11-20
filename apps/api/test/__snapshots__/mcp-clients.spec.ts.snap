@@ -43,7 +43,7 @@ exports[`client table snapshot > renders every client — auth, minted key 1`] =
     "usesEnv": true,
   },
   {
-    "captureKit": null,
+    "captureKit": "codex",
     "command": "codex mcp add kb --url https://kb.test/v1/mcp --bearer-token-env-var KNOWLEDGE_API_KEY",
     "config": {
       "code": "[mcp_servers.kb]
@@ -526,6 +526,10 @@ exports[`client table snapshot > renders every client — auth, minted key 2`] =
     "dir": "~/.agents/skills",
     "kits": [
       {
+        "client": "codex",
+        "name": "Codex",
+      },
+      {
         "client": "cursor",
         "name": "Cursor",
       },
@@ -591,7 +595,7 @@ exports[`client table snapshot > renders every client — auth, no key 1`] = `
     "usesEnv": true,
   },
   {
-    "captureKit": null,
+    "captureKit": "codex",
     "command": "codex mcp add knowledge --url https://kb.test/v1/mcp --bearer-token-env-var KNOWLEDGE_API_KEY",
     "config": {
       "code": "[mcp_servers.knowledge]
@@ -1074,6 +1078,10 @@ exports[`client table snapshot > renders every client — auth, no key 2`] = `
     "dir": "~/.agents/skills",
     "kits": [
       {
+        "client": "codex",
+        "name": "Codex",
+      },
+      {
         "client": "cursor",
         "name": "Cursor",
       },
@@ -1133,7 +1141,7 @@ exports[`client table snapshot > renders every client — no auth 1`] = `
     "usesEnv": false,
   },
   {
-    "captureKit": null,
+    "captureKit": "codex",
     "command": "codex mcp add knowledge --url https://kb.test/v1/mcp",
     "config": {
       "code": "[mcp_servers.knowledge]
@@ -1558,6 +1566,10 @@ exports[`client table snapshot > renders every client — no auth 2`] = `
     ],
     "dir": "~/.agents/skills",
     "kits": [
+      {
+        "client": "codex",
+        "name": "Codex",
+      },
       {
         "client": "cursor",
         "name": "Cursor",

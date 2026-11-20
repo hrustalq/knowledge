@@ -294,14 +294,14 @@ export interface BulkRejectCapturesResponse {
  * hooks can hand the model a follow-up when a turn ends. Every other client
  * still captures through the tools and the skill's playbook.
  */
-export const CAPTURE_KIT_CLIENTS = ['claude-code', 'cursor'] as const;
+export const CAPTURE_KIT_CLIENTS = ['claude-code', 'cursor', 'codex'] as const;
 export type CaptureKitClient = (typeof CAPTURE_KIT_CLIENTS)[number];
 
 /**
  * One file of the kit, at a path relative to the repository root.
  *
  * `merge` is a config file the client already owns (`.claude/settings.json`,
- * `.cursor/hooks.json`): its `content` is the entries to add, never a file to
+ * `.cursor/hooks.json`, `.codex/hooks.json`): its `content` is the entries to add, never a file to
  * write over the person's own settings.
  */
 export interface CaptureKitFile {

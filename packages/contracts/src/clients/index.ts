@@ -152,7 +152,7 @@ function clientTable(input: McpClientInput): Omit<McpClientGuide, 'projectConfig
       },
       skillDir: SKILL_DIRS.agents,
       usesEnv: auth,
-      captureKit: null,
+      captureKit: 'codex',
       note: 'codex',
       docs: 'https://developers.openai.com/codex/mcp',
     },

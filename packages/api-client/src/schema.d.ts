@@ -13733,7 +13733,7 @@ export interface components {
         /** @enum {string} */
         CaptureKind: "decision" | "gotcha" | "convention" | "howto" | "glossary" | "relation" | "answer";
         /** @enum {string} */
-        CaptureKitClient: "claude-code" | "cursor";
+        CaptureKitClient: "claude-code" | "cursor" | "codex";
         CaptureKitFile: {
             path: string;
             content: string;

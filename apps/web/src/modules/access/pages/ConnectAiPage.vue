@@ -31,6 +31,7 @@ import {
   captureKitInstallCommand,
   mcpClients,
   setupInstallCommand,
+  hasProjectConfig,
   skillDirGuides,
   skillInstallCommand,
   skillStackInstallCommand,
@@ -43,6 +44,7 @@ import { Button } from '@knowledge/ui/button'
 import { Badge } from '@knowledge/ui/badge'
 import { Skeleton } from '@knowledge/ui/skeleton'
 import { Collapse } from '@knowledge/ui/collapse'
+import { Checkbox } from '@knowledge/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@knowledge/ui/select'
 import {
   AlertDialog,
@@ -144,8 +146,15 @@ const clients = computed(() =>
 const skillDirs = computed(() => skillDirGuides(clients.value))
 /** The one command (#1347) for the client picked here; the separate commands sit behind a disclosure. */
 const setupClient = ref('claude-code')
-const setupCommand = computed(() => (connection.value ? setupInstallCommand(connection.value.url, setupClient.value, needsKey.value) : ''))
-const setupKit = computed(() => !!clients.value.find((c) => c.id === setupClient.value)?.captureKit && capturesOffered.value)
+const setupGuide = computed(() => clients.value.find((c) => c.id === setupClient.value) ?? null)
+/** "For this repository" (#1348): offered only for a client with a committable config; the server refuses the rest. */
+const setupProjectPath = computed(() => (setupGuide.value && hasProjectConfig(setupGuide.value) ? setupGuide.value.projectConfig.path : null))
+const setupForRepo = ref(false)
+const setupProject = computed(() => setupForRepo.value && !!setupProjectPath.value)
+const setupCommand = computed(() =>
+  connection.value ? setupInstallCommand(connection.value.url, setupClient.value, needsKey.value, { project: setupProject.value }) : '',
+)
+const setupKit = computed(() => !!setupGuide.value?.captureKit && capturesOffered.value)
 const separate = ref(false)
 const skillDirOptions = computed(() => skillDirs.value.map((g) => ({ value: g.dir, label: g.dir, hint: g.clients.join(', ') })))
 const pickedDir = ref<string | null>(null)
@@ -312,11 +321,18 @@ const canManageFeatures = usePermission('workspace:admin')
                 <SelectItem v-for="c in clients" :key="c.id" :value="c.id">{{ c.name }}</SelectItem>
               </SelectContent>
             </Select>
+            <label v-if="setupProjectPath" class="inline-flex min-h-8 items-center gap-2 text-xs">
+              <Checkbox :model-value="setupForRepo" @update:model-value="setupForRepo = $event === true" />
+              {{ t('connect.setup.forRepo', { path: setupProjectPath }) }}
+            </label>
           </div>
           <div class="grid min-w-0 gap-2">
             <CopyBlock v-if="needsKey" :code="`export ${KEY_ENV}=<your-api-key>`" :label="t('connect.clients.step.env')" />
             <CopyBlock :code="setupCommand" :label="t('connect.setup.manageLabel')" />
-            <p class="kn-measure text-caption text-muted-foreground">
+            <p v-if="setupProject" class="kn-measure text-caption text-muted-foreground">
+              {{ t('connect.setup.projectHint', { client: setupGuide?.name ?? '' }) }}
+            </p>
+            <p v-else class="kn-measure text-caption text-muted-foreground">
               {{ setupKit ? `${t('connect.setup.hint')} ${t('connect.setup.kitHint')}` : t('connect.setup.hint') }}
             </p>
           </div>

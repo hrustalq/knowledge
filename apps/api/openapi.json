@@ -45143,6 +45143,19 @@
             }
           },
           {
+            "name": "scope",
+            "required": false,
+            "in": "query",
+            "description": "project writes the client's committable config into the git repository it runs in (#1348) instead of registering per user; user is the default",
+            "schema": {
+              "enum": [
+                "user",
+                "project"
+              ],
+              "type": "string"
+            }
+          },
+          {
             "name": "Accept-Language",
             "in": "header",
             "required": false,

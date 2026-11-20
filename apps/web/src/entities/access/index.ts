@@ -4,6 +4,7 @@ export { default as PageAccessDialog } from './components/PageAccessDialog.vue'
 export { default as RequestAccessCard } from './components/RequestAccessCard.vue'
 export {
   captureKitInstallCommand,
+  hasProjectConfig,
   KEY_ENV,
   mcpClients,
   setupInstallCommand,

@@ -342,11 +342,14 @@ export class McpService extends McpServices {
    * skill and capture-kit installers rather than restating them; the kit step
    * is absent for a credential offered no capture tool, as the kit route
    * refuses it. `skill: 'single'` and `kit: 'no'` follow the wizard's answers.
+   * `scope: 'project'` (#1348) writes the client's committable config into the
+   * repository instead; a client with none is refused with the reason, never
+   * given the user-level setup in its place.
    */
   async setupInstallerFor(
     principal: Principal,
     clientId: string,
-    opts: { skill?: string; kit?: string } = {},
+    opts: { skill?: string; kit?: string; scope?: string } = {},
     extras: McpExtras = {},
   ): Promise<string> {
     const auth = this.config.get('AUTH_MODE') === 'api-key';
@@ -359,6 +362,18 @@ export class McpService extends McpServices {
         reason: 'setup-client',
       });
     }
+    if (opts.scope !== undefined && opts.scope !== 'user' && opts.scope !== 'project') {
+      throw new BadRequestException({ statusCode: 400, message: t('error.capture.setupScope', { scope: opts.scope }), reason: 'setup-scope' });
+    }
+    const project = opts.scope === 'project' ? client.projectConfig : null;
+    if (project && 'refused' in project) {
+      throw new BadRequestException({
+        statusCode: 400,
+        message: t(`error.capture.setupProject.${project.refused === 'no-env-in-headers' ? 'noEnv' : 'noFile'}`, { client: client.name }),
+        reason: 'setup-project-unsupported',
+        refused: project.refused,
+      });
+    }
     const stackDir = opts.skill === 'single' ? undefined : SKILL_DIR_KEYS.find((k) => SKILL_DIRS[k] === client.skillDir);
     const kit: SetupInput['kit'] = !client.captureKit
       ? { skipped: 'no-kit' }
@@ -366,7 +381,10 @@ export class McpService extends McpServices {
         ? { skipped: 'declined' }
         : !this.capturesOffered(principal)
           ? { skipped: 'not-offered' }
-          : { installer: await this.captureKitInstallerFor(principal, client.captureKit) };
+          : await this.captureKitFor(principal, client.captureKit).then((k) => ({
+              installer: renderCaptureKitInstaller(k, `${this.publicUrl()}/capture-kit/install`),
+              files: k.files.map((f) => f.path),
+            }));
     const query = new URLSearchParams({ client: clientId, ...opts });
     return renderSetupInstaller({
       client,
@@ -376,6 +394,7 @@ export class McpService extends McpServices {
       skillStack: stackDir ? await this.skillStackInstallerFor(principal, stackDir, extras) : null,
       skill: !stackDir && client.skillDir ? await this.skillFor(principal, undefined, extras) : null,
       kit,
+      project,
       sourceUrl: `${this.publicUrl()}/setup/install?${query}`,
     });
   }

@@ -1,4 +1,4 @@
-import { KEY_ENV, SKILL_NAME, type McpClientGuide } from '@knowledge/contracts';
+import { KEY_ENV, SKILL_NAME, type McpClientGuide, type ProjectConfig } from '@knowledge/contracts';
 import { PUT_FN } from './installer-shell.js';
 
 /**
@@ -25,8 +25,10 @@ export interface SetupInput {
   skillStack: string | null;
   /** The one SKILL.md, for any other skills directory. */
   skill: string | null;
-  /** The capture-kit installer, or why there is no kit step. */
-  kit: { installer: string } | { skipped: 'no-kit' | 'not-offered' | 'declined' };
+  /** The capture-kit installer and the files it writes, or why there is no kit step. */
+  kit: { installer: string; files: string[] } | { skipped: 'no-kit' | 'not-offered' | 'declined' };
+  /** `scope=project` (#1348): the client's committable config, written into the repository instead of registering per user. */
+  project: ProjectConfig | null;
   sourceUrl: string;
 }
 
@@ -83,6 +85,32 @@ function registerStep(input: SetupInput): string {
   ].join('\n');
 }
 
+/**
+ * Write the client's project config at the repository root (#1348). The
+ * capture kit's rule: create it when absent; when present, merge with `jq`
+ * (every other server and setting kept, this server's entry replaced whole),
+ * and print the entry to merge by hand when `jq` is missing or the file is not
+ * JSON. The content holds an env reference, never a key.
+ */
+function projectStep(project: ProjectConfig): string {
+  const dir = project.path.includes('/') ? project.path.slice(0, project.path.lastIndexOf('/')) : '.';
+  const merge =
+    'reduce ($cfg[0] | to_entries[]) as $e (.; .[$e.key] = (if ($e.value | type) == "object" and ((.[$e.key] // {}) | type) == "object" then (.[$e.key] // {}) + $e.value else (.[$e.key] // $e.value) end))';
+  return [
+    `cfg=$(mktemp)`,
+    `cat > "$cfg" ${heredoc(project.code)}`,
+    `if [ ! -f '${project.path}' ]; then`,
+    `  mkdir -p '${dir}' && put '${project.path}' '${project.path}' < "$cfg"`,
+    `elif command -v jq >/dev/null 2>&1 && jq --slurpfile cfg "$cfg" '${merge}' '${project.path}' > "$cfg.out" 2>/dev/null; then`,
+    `  put '${project.path}' 'the server in ${project.path}' < "$cfg.out"`,
+    `else`,
+    `  echo "  ${project.path} exists and could not be merged (jq is missing or the file is not JSON). Merge this into it by hand:"`,
+    `  cat "$cfg"`,
+    `fi`,
+    `rm -f "$cfg" "$cfg.out"`,
+  ].join('\n');
+}
+
 function skillStep(input: SetupInput): string {
   if (input.skillStack) return `(\n${input.skillStack.replace(/\n$/, '')}\n)`;
   if (input.skill && input.client.skillDir) {
@@ -114,9 +142,10 @@ function kitStep(input: SetupInput): string {
 }
 
 export function renderSetupInstaller(input: SetupInput): string {
-  const { client } = input;
+  const { client, project } = input;
+  const commit = project ? [project.path, ...('files' in input.kit ? input.kit.files : [])] : [];
   return `#!/bin/sh
-# Knowledge setup for ${client.name}: registers the ${input.serverName} MCP server, installs the skill and the capture kit.
+# Knowledge setup for ${client.name}: ${project ? `writes the ${input.serverName} MCP server into ${project.path} for the repository` : `registers the ${input.serverName} MCP server`}, installs the skill and the capture kit.
 # Fetched from ${input.sourceUrl}
 # Run it again to update: it replaces only what it wrote, and it never prints the key.
 set -eu
@@ -132,18 +161,38 @@ ${
 fi
 `
     : ''
+}${
+  project
+    ? `root=$(git rev-parse --show-toplevel 2>/dev/null) || { echo "Run this inside the git repository the project config belongs to." >&2; exit 1; }
+cd "$root"
+`
+    : ''
 }${PUT_FN}
 
-echo "1/3 Registering the MCP server with ${client.name}"
+${
+  project
+    ? `echo "1/3 The MCP server for everyone who clones $root"
+${projectStep(project)}
+
+echo "2/3 The skill, for you only"
+echo "  It is generated for your key (your workspaces, your tools), so it is not committed. Each teammate runs this command once for theirs."`
+    : `echo "1/3 Registering the MCP server with ${client.name}"
 ${registerStep(input)}
 
-echo "2/3 The skill"
+echo "2/3 The skill"`
+}
 ${skillStep(input)}
 
 echo "3/3 The capture kit"
 ${kitStep(input)}
 
-echo "Setup done. Start a new ${client.name} session and ask it to call knowledge_whoami."
+${
+  project
+    ? `echo "Setup done. Commit these files (they hold no key):"
+for f in ${commit.map((f) => `'${f}'`).join(' ')}; do [ -e "$f" ] && echo "  $f"; done
+echo "Each teammate exports ${KEY_ENV} with their own key. ${client.name} may ask to approve or trust the project's server the first time."`
+    : `echo "Setup done. Start a new ${client.name} session and ask it to call knowledge_whoami."`
+}
 }
 
 main

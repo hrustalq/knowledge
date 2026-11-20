@@ -159,6 +159,12 @@ export class McpController {
   @ApiQuery({ name: 'client', type: String, description: 'A client id from the Connect AI table (claude-code, codex, cursor, …)' })
   @ApiQuery({ name: 'skill', enum: ['stack', 'single'], required: false, description: 'single installs one SKILL.md where a stack is available; stack is the default' })
   @ApiQuery({ name: 'kit', enum: ['yes', 'no'], required: false, description: 'no leaves the capture kit out; yes is the default' })
+  @ApiQuery({
+    name: 'scope',
+    enum: ['user', 'project'],
+    required: false,
+    description: "project writes the client's committable config into the git repository it runs in (#1348) instead of registering per user; user is the default",
+  })
   @ApiOperation({
     summary: 'One POSIX shell script that registers the MCP server with a client, installs the skill and, inside a git repository, the capture kit',
   })
@@ -167,8 +173,14 @@ export class McpController {
     @Query('client') client: string,
     @Query('skill') skill?: string,
     @Query('kit') kit?: string,
+    @Query('scope') scope?: string,
   ): Promise<string> {
-    return this.mcp.setupInstallerFor(principal, client ?? '', { ...(skill ? { skill } : {}), ...(kit ? { kit } : {}) }, this.extras);
+    return this.mcp.setupInstallerFor(
+      principal,
+      client ?? '',
+      { ...(skill ? { skill } : {}), ...(kit ? { kit } : {}), ...(scope ? { scope } : {}) },
+      this.extras,
+    );
   }
 
   /*

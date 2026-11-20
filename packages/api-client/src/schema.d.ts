@@ -46667,6 +46667,8 @@ export interface operations {
                 skill?: "stack" | "single";
                 /** @description no leaves the capture kit out; yes is the default */
                 kit?: "yes" | "no";
+                /** @description project writes the client's committable config into the git repository it runs in (#1348) instead of registering per user; user is the default */
+                scope?: "user" | "project";
             };
             header?: {
                 /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */

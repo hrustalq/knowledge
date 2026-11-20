@@ -108,7 +108,8 @@ as a client keeps its own tool list. The transport is stateless, so there is no
   (`apps/api/src/mcp/skill-sections.ts`). Each playbook is a section filed under a
   toolset and renders only when its tools are offered; inside a section a step naming a
   tool renders only when that tool is offered. With every toolset offered the document is
-  byte-identical to the one before the split (three snapshots pin it). The Git section
+  byte-identical to the one before the split (three snapshots pin it), apart from the
+  stale-skill section #1349 added on purpose (see "Stale skills" below). The Git section
   follows `GIT_REMOTE_ENABLED` and drops when `git` is off in every reachable workspace.
 - **A new playbook is a section**, never a block in the core template.
 
@@ -173,6 +174,35 @@ of the same name that it did not write.
 `GET /v1/mcp/skill`, `knowledge://skill` and the `guide` prompt are unchanged and remain
 the default; the Connect page offers the stack beside the one-file install for a client
 with a skills directory.
+
+### Stale skills (#1349)
+
+An installed skill is a snapshot: it goes stale when its person joins a workspace, a
+section goes off, a key is narrowed or a release rewrites a playbook. `skillStamp`
+(`skill.ts`) is the one place that says what "the same skill" means: the first 12 hex
+digits of a SHA-256 of the one document rendered with the server version and the stamp
+itself blanked, so a release that changes no playbook, tool description or access row
+leaves it alone. Every input is read in a stable order (workspaces and projects by
+`createdAt`, learnings by `createdAt desc`, tools in registration order); a spec renders
+twice and after a release, and asserts a different stamp after a workspace is joined or a
+section goes off everywhere.
+
+| Carries the stamp | Where |
+| --- | --- |
+| an installed skill | the core section "Keeping this skill current" (one file, and `knowledge-core`); every stack skill's marker line (`knowledge-skill-stack v1 stamp <stamp>`) |
+| the current one | `knowledge_whoami`'s `skill: { stamp, kitVersion }`, `GET /v1/mcp/connection`'s `skill` (`McpSkillStamp`), shown under the setup command on the Connect page |
+
+The stack carries the one document's stamp, since every stack section and tool is in it.
+The core section tells the agent to compare, tell the person once and name the command
+that refreshes the form it was installed as (the stack installer, or a `curl … /skill -o`
+over its own path); with capture tools it also compares the repository's kit header
+with `kitVersion`. `knowledge_whoami`'s description says the same, so a skill installed
+before the stamp existed (none named) reads as stale too.
+
+The check is the agent's. No hook makes it mechanical: the capture kit's hook holds no
+key and makes no call, so nothing local knows the server's current stamp. The stdio
+server registers no draft tools, so it reports a stamp different from a skill installed
+over HTTP with co-editing on.
 
 ## Where it lives
 

@@ -92,13 +92,15 @@ export class McpController {
   @ApiOperation({ summary: 'What an MCP client needs to connect: endpoint URL, auth mode, and the tools it would get' })
   async connection(@CurrentPrincipal() principal: Principal): Promise<McpConnectionInfo> {
     const offSections = await this.offSections(principal);
+    const extras = { ...this.extras, offSections };
     return {
       url: this.mcp.publicUrl(),
       serverName: MCP_SERVER_NAME,
       authMode: this.config.get('AUTH_MODE') === 'api-key' ? 'api-key' : 'none',
       version: PRODUCT_VERSION,
-      tools: this.mcp.toolsFor(principal, { ...this.extras, offSections }),
+      tools: this.mcp.toolsFor(principal, extras),
       notOffered: toolsetsNotOffered(principal, offSections),
+      skill: await this.mcp.skillStampFor(principal, extras),
     };
   }
 

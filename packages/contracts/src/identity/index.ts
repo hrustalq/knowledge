@@ -1105,6 +1105,20 @@ export interface McpConnectionInfo {
   tools: McpToolSummary[];
   /** The toolsets it is not offered at all, each with why (#945). */
   notOffered: { toolset: McpToolset; reason: McpToolsetOffReason }[];
+  /** What a skill generated for this credential now would carry (#1349). */
+  skill: McpSkillStamp;
+}
+
+/**
+ * A skill's content stamp (#1349): a short hash of what the server renders for
+ * one caller, leaving the server version out. An installed skill carries the
+ * stamp it was rendered with; `knowledge_whoami` and the connection page carry
+ * the current one, so a difference means the installed files are stale.
+ */
+export interface McpSkillStamp {
+  stamp: string;
+  /** `CAPTURE_KIT_VERSION`: an installed kit's hook names its version in its header. */
+  kitVersion: number;
 }
 
 /**

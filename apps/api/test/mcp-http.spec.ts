@@ -18,7 +18,8 @@ import { McpService, type McpExtras } from '../src/mcp/mcp.service.js';
 import type { AgentLearning } from '@prisma/client';
 import { CAPTURE_TOOLS, FEATURE_TOOLS, MCP_INSTRUCTIONS, WRITE_TOOLS, authoringOf, instructionsFor, mcpInstructions, settleTools } from '../src/mcp/mcp-tools.js';
 import { choosePromptLearnings } from '../src/ai/agent-learnings.service.js';
-import { STACK_MARKER, renderSkill, renderSkillStack, renderSkillStackInstaller, stackToolsets } from '../src/mcp/skill.js';
+import { STACK_MARKER, renderSkill, renderSkillStack, renderSkillStackInstaller, skillStamp, stackToolsets } from '../src/mcp/skill.js';
+import { CAPTURE_KIT_VERSION } from '../src/mcp/capture-kit.js';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -1552,6 +1553,36 @@ describe('renderSkill', () => {
     tools: service(accessWith('admin')).mcp.toolsFor(keyPrincipal({ id: 'k', scope, workspaceId: null }), { drafts: fakeDrafts(), offSections }),
   });
 
+  describe('the content stamp (#1349)', () => {
+    it('is stable for one caller and leaves the server version out', () => {
+      const input = skillInputFor('write');
+      const stamp = skillStamp(input);
+      expect(stamp).toMatch(/^[0-9a-f]{12}$/);
+      expect(skillStamp(skillInputFor('write'))).toBe(stamp);
+      expect(skillStamp({ ...input, version: '9.9.9' })).toBe(stamp);
+      expect(renderSkill(input)).toBe(renderSkill(skillInputFor('write')));
+    });
+
+    it('changes when the caller joins a workspace or a section goes off everywhere', () => {
+      const input = skillInputFor('write');
+      const joined = { ...input, whoami: { ...input.whoami, workspaces: [...input.whoami.workspaces, { workspaceId: WS_B, name: 'Ops', role: 'viewer' as const, projects: [] }] } };
+      expect(skillStamp(joined)).not.toBe(skillStamp(input));
+      expect(skillStamp(skillInputFor('write', ['qa']))).not.toBe(skillStamp(input));
+    });
+
+    it('is carried by the one document and by every stack skill, with the command that refreshes each', () => {
+      const input = skillInputFor('write');
+      const stamp = skillStamp(input);
+      const one = renderSkill(input);
+      expect(one).toContain(`This skill was generated with stamp \`${stamp}\``);
+      expect(one).toContain('"https://kb.example.com/api/v1/mcp/skill" -o <the path of this SKILL.md>');
+      const stack = renderSkillStack(input);
+      for (const skill of stack) expect(skill.content).toContain(`${STACK_MARKER} v1 stamp ${stamp}:`);
+      expect(stack[0].content).toContain('"https://kb.example.com/api/v1/mcp/skills/install?dir=claude" | sh');
+      expect(stack.filter((s) => s.content.includes('Keeping this skill current')).map((s) => s.name)).toEqual(['knowledge-core']);
+    });
+  });
+
   // Taken from the single template before it was split into toolset sections (#945).
   it.each(['write', 'read', 'capture'] as const)('renders the same document as before the split for a %s key', (scope) => {
     expect(renderSkill(skillInputFor(scope))).toMatchSnapshot();
@@ -2269,12 +2300,16 @@ describe('a key limited to toolsets (#945)', () => {
   it('GET /v1/mcp/connection names the toolsets not offered and why', async () => {
     const { mcp } = service(accessWith('editor'));
     vi.spyOn(mcp, 'sectionsOffFor').mockResolvedValue(['qa']);
+    vi.spyOn(mcp, 'whoami').mockResolvedValue({ userId: 'u', email: 'a@example.com', displayName: 'Ada', mode: 'api-key', apiKey: null, workspaces: [] });
     const controller = new McpController(mcp, { get: () => 'api-key' } as never, fakeDrafts(false) as never);
     const info = await controller.connection(limited('write', ['core', 'graph', 'qa']));
     expect(new Set(info.tools.map((t) => t.toolset))).toEqual(new Set(['core', 'graph']));
     expect(info.notOffered).toContainEqual({ toolset: 'qa', reason: 'section-off' });
     expect(info.notOffered).toContainEqual({ toolset: 'authoring', reason: 'key-toolsets' });
     expect(info.notOffered.map((n) => n.toolset)).not.toContain('graph');
+    // #1349: the stamp the skill route would carry for the same caller.
+    expect(await mcp.skillFor(limited('write', ['core', 'graph', 'qa']), undefined, { offSections: ['qa'] })).toContain(`stamp \`${info.skill.stamp}\``);
+    expect(info.skill.kitVersion).toBe(CAPTURE_KIT_VERSION);
     expect((await controller.connection(keyPrincipal({ id: 'k', scope: 'read', workspaceId: null }))).notOffered).toEqual([{ toolset: 'qa', reason: 'section-off' }]);
   });
 

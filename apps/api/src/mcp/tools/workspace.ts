@@ -113,10 +113,13 @@ export function registerWorkspaceTools(ctx: McpToolContext): void {
     'knowledge_whoami',
     {
       description:
-        'Start here. Who this connection acts as, what its API key is limited to, and every workspace it can reach with your role in it and its projects (ids included). Every other tool takes one of these workspaceIds.',
+        'Start here. Who this connection acts as, what its API key is limited to, and every workspace it can reach with your role in it and its projects (ids included). Every other tool takes one of these workspaceIds. `skill.stamp` is the stamp a knowledge skill generated now would carry: an installed one naming another stamp, or none, is out of date, so tell the person once.',
       inputSchema: {},
     },
-    async () => json(await ctx.whoami()),
+    async () => {
+      const [whoami, skill] = await Promise.all([ctx.whoami(), ctx.skillStamp()]);
+      return json({ ...whoami, skill });
+    },
   );
 
   // ------------------------------------------------------------ templates

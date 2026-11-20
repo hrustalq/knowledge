@@ -74106,6 +74106,9 @@
                 "reason"
               ]
             }
+          },
+          "skill": {
+            "$ref": "#/components/schemas/McpSkillStamp"
           }
         },
         "required": [
@@ -74114,7 +74117,23 @@
           "authMode",
           "version",
           "tools",
-          "notOffered"
+          "notOffered",
+          "skill"
+        ]
+      },
+      "McpSkillStamp": {
+        "type": "object",
+        "properties": {
+          "stamp": {
+            "type": "string"
+          },
+          "kitVersion": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "stamp",
+          "kitVersion"
         ]
       },
       "McpToolSummary": {

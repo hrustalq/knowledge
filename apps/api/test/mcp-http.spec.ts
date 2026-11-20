@@ -1,5 +1,5 @@
 import { NotFoundException } from '@nestjs/common';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
@@ -18,16 +18,17 @@ import { McpService, type McpExtras } from '../src/mcp/mcp.service.js';
 import type { AgentLearning } from '@prisma/client';
 import { CAPTURE_TOOLS, FEATURE_TOOLS, MCP_INSTRUCTIONS, WRITE_TOOLS, authoringOf, instructionsFor, mcpInstructions, settleTools } from '../src/mcp/mcp-tools.js';
 import { choosePromptLearnings } from '../src/ai/agent-learnings.service.js';
-import { STACK_MARKER, renderSkill, renderSkillStack, renderSkillStackInstaller, stackToolsets } from '../src/mcp/skill.js';
-import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { STACK_MARKER, renderSkill, renderSkillStack, renderSkillStackInstaller, skillStamp, stackToolsets } from '../src/mcp/skill.js';
+import { CAPTURE_KIT_VERSION } from '../src/mcp/capture-kit.js';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AiReadableService } from '../src/ai-readable/ai-readable.service.js';
 import { AiReadableController } from '../src/ai-readable/ai-readable.controller.js';
 import { ENFORCING_PROVIDER, enforcingPolicy, noAuthPolicy } from './auth-policy-fakes.js';
 import { ElicitRequestSchema, type ElicitRequest, type ElicitResult } from '@modelcontextprotocol/sdk/types.js';
-import { FLOW_NO_LINK, FLOW_OTHER_KEY, FLOW_SCOPE_SUBTREE, MCP_TOOLSETS, MCP_TOOLSET_KEYS, keyToolsetsOf, toolsetOf, type McpToolset } from '@knowledge/contracts';
+import { FLOW_NO_LINK, FLOW_OTHER_KEY, FLOW_SCOPE_SUBTREE, MCP_TOOLSETS, MCP_TOOLSET_KEYS, hasProjectConfig, keyToolsetsOf, mcpClients, toolsetOf, type McpToolset } from '@knowledge/contracts';
 import { FlowsService } from '../src/flows/flows.service.js';
 import { FeaturesService } from '../src/auth/features.service.js';
 import { TokenAuthService } from '../src/auth/token-auth.service.js';
@@ -1552,6 +1553,36 @@ describe('renderSkill', () => {
     tools: service(accessWith('admin')).mcp.toolsFor(keyPrincipal({ id: 'k', scope, workspaceId: null }), { drafts: fakeDrafts(), offSections }),
   });
 
+  describe('the content stamp (#1349)', () => {
+    it('is stable for one caller and leaves the server version out', () => {
+      const input = skillInputFor('write');
+      const stamp = skillStamp(input);
+      expect(stamp).toMatch(/^[0-9a-f]{12}$/);
+      expect(skillStamp(skillInputFor('write'))).toBe(stamp);
+      expect(skillStamp({ ...input, version: '9.9.9' })).toBe(stamp);
+      expect(renderSkill(input)).toBe(renderSkill(skillInputFor('write')));
+    });
+
+    it('changes when the caller joins a workspace or a section goes off everywhere', () => {
+      const input = skillInputFor('write');
+      const joined = { ...input, whoami: { ...input.whoami, workspaces: [...input.whoami.workspaces, { workspaceId: WS_B, name: 'Ops', role: 'viewer' as const, projects: [] }] } };
+      expect(skillStamp(joined)).not.toBe(skillStamp(input));
+      expect(skillStamp(skillInputFor('write', ['qa']))).not.toBe(skillStamp(input));
+    });
+
+    it('is carried by the one document and by every stack skill, with the command that refreshes each', () => {
+      const input = skillInputFor('write');
+      const stamp = skillStamp(input);
+      const one = renderSkill(input);
+      expect(one).toContain(`This skill was generated with stamp \`${stamp}\``);
+      expect(one).toContain('"https://kb.example.com/api/v1/mcp/skill" -o <the path of this SKILL.md>');
+      const stack = renderSkillStack(input);
+      for (const skill of stack) expect(skill.content).toContain(`${STACK_MARKER} v1 stamp ${stamp}:`);
+      expect(stack[0].content).toContain('"https://kb.example.com/api/v1/mcp/skills/install?dir=claude" | sh');
+      expect(stack.filter((s) => s.content.includes('Keeping this skill current')).map((s) => s.name)).toEqual(['knowledge-core']);
+    });
+  });
+
   // Taken from the single template before it was split into toolset sections (#945).
   it.each(['write', 'read', 'capture'] as const)('renders the same document as before the split for a %s key', (scope) => {
     expect(renderSkill(skillInputFor(scope))).toMatchSnapshot();
@@ -1804,15 +1835,15 @@ describe('renderSkill', () => {
 describe('capture kit (#73)', () => {
   it('refuses a client it has no kit for', async () => {
     const { mcp } = service(accessWith('editor'));
-    await expect(mcp.captureKitFor(keyPrincipal({ id: 'k', scope: 'write', workspaceId: null }), 'codex')).rejects.toMatchObject({
+    await expect(mcp.captureKitFor(keyPrincipal({ id: 'k', scope: 'write', workspaceId: null }), 'gemini')).rejects.toMatchObject({
       status: 400,
       response: { reason: 'capture-kit-client' },
     });
   });
 
-  it('refuses a read-only key, whose kit would describe calls it cannot make', async () => {
+  it.each(['cursor', 'codex'])('refuses a read-only key a %s kit, which would describe calls it cannot make', async (client) => {
     const { mcp } = service(accessWith('editor'));
-    await expect(mcp.captureKitFor(keyPrincipal({ id: 'k', scope: 'read', workspaceId: null }), 'cursor')).rejects.toMatchObject({
+    await expect(mcp.captureKitFor(keyPrincipal({ id: 'k', scope: 'read', workspaceId: null }), client)).rejects.toMatchObject({
       status: 403,
       response: { reason: 'capture-not-offered' },
     });
@@ -1846,6 +1877,237 @@ describe('capture kit (#73)', () => {
     const script = await mcp.captureKitInstallerFor(principal, 'claude-code');
     expect(script.startsWith('#!/bin/sh\n')).toBe(true);
     expect(script).toContain('https://kb.example.com/api/v1/mcp/capture-kit/install?client=claude-code');
+  });
+});
+
+describe('one setup command (#1347)', () => {
+  const whoami = {
+    userId: 'u',
+    email: 'a@example.com',
+    displayName: 'Ada',
+    mode: 'api-key' as const,
+    apiKey: null,
+    workspaces: [{ workspaceId: WS_A, name: 'Eng', role: 'editor' as const, projects: [{ projectId: WS_B, name: 'Billing' }] }],
+  };
+  const writer = keyPrincipal({ id: 'k', scope: 'write', workspaceId: null });
+  async function script(principal: Principal, client: string, opts: { skill?: string; kit?: string; scope?: string } = {}) {
+    const { mcp } = service(accessWith('editor'));
+    vi.spyOn(mcp, 'whoami').mockResolvedValue(whoami);
+    return mcp.setupInstallerFor(principal, client, opts, { offSections: [] });
+  }
+
+  it('refuses a client the table does not name', async () => {
+    const { mcp } = service(accessWith('editor'));
+    await expect(mcp.setupInstallerFor(writer, 'notepad')).rejects.toMatchObject({ status: 400, response: { reason: 'setup-client' } });
+  });
+
+  it('has no kit step for a read key, nor for a key whose toolsets hold no capture tool', async () => {
+    for (const principal of [
+      keyPrincipal({ id: 'k', scope: 'read', workspaceId: null }),
+      keyPrincipal({ id: 'k', scope: 'write', workspaceId: null, toolsets: ['core', 'graph'] }),
+    ]) {
+      const sh = await script(principal, 'claude-code');
+      expect(sh).not.toContain('knowledge-capture.sh');
+      expect(sh).toContain('skipped: this key is offered no capture tool.');
+    }
+    const kit = await script(writer, 'claude-code');
+    expect(kit).toContain('knowledge-capture.sh');
+    expect(await script(writer, 'claude-code', { kit: 'no' })).not.toContain('knowledge-capture.sh');
+  });
+
+  it('prints the command or config for a client whose CLI it cannot check, and runs nothing', async () => {
+    const codex = await script(writer, 'codex');
+    expect(codex).toContain('this script does not run it');
+    expect(codex).not.toMatch(/^\s*codex mcp add .*<\/dev\/null$/m);
+    const cursor = await script(writer, 'cursor');
+    expect(cursor).toContain('Add this to ~/.cursor/mcp.json');
+    expect(cursor).toContain('"Authorization": "Bearer ${env:KNOWLEDGE_API_KEY}"');
+    // A client that cannot read the variable gets a placeholder, never a key.
+    expect(await script(writer, 'zed')).toContain('Replace <your-api-key> with your key');
+  });
+
+  it('installs one SKILL.md where the directory has no stack, or when asked for one', async () => {
+    expect(await script(writer, 'qwen')).toContain('$HOME/.qwen/skills}/knowledge-platform"');
+    const single = await script(writer, 'claude-code', { skill: 'single' });
+    expect(single).not.toContain('knowledge skill stack');
+    expect(single).toContain('$HOME/.claude/skills}/knowledge-platform"');
+    expect(await script(writer, 'claude-desktop')).toContain('reads no skills directory');
+  });
+
+  describe('run', () => {
+    const KEY = 'kn_secret_value_never_printed';
+    let home: string;
+    let repo: string;
+    let bin: string;
+    const run = async (cwd: string, env: Record<string, string>) => {
+      const res = spawnSync('sh', ['-s'], {
+        cwd,
+        input: await script(writer, 'claude-code'),
+        env: { PATH: `${bin}:${process.env.PATH}`, HOME: home, TMPDIR: home, ...env },
+      });
+      return { status: res.status, out: res.stdout.toString() + res.stderr.toString() };
+    };
+
+    beforeEach(() => {
+      home = mkdtempSync(join(tmpdir(), 'kn-setup-home-'));
+      repo = mkdtempSync(join(tmpdir(), 'kn-setup-repo-'));
+      execFileSync('git', ['init', '-q', repo]);
+      // A stand-in for the claude CLI: `get` succeeds once `add` has run, and every add is logged.
+      bin = join(home, 'bin');
+      mkdirSync(bin);
+      writeFileSync(
+        join(bin, 'claude'),
+        `#!/bin/sh
+case "$1 $2" in
+  "mcp get") [ -f "$HOME/.added" ] || exit 1; echo "  URL: https://kb.example.com/api/v1/mcp"; echo "  Authorization: Bearer $KNOWLEDGE_API_KEY" ;;
+  "mcp add") printf '%s\\n' "$*" >> "$HOME/.added" ;;
+esac
+`,
+      );
+      chmodSync(join(bin, 'claude'), 0o755);
+    });
+    afterEach(() => {
+      rmSync(home, { recursive: true, force: true });
+      rmSync(repo, { recursive: true, force: true });
+    });
+
+    it('registers, installs the stack and the kit, then changes nothing on a second run', async () => {
+      const first = await run(repo, { KNOWLEDGE_API_KEY: KEY });
+      expect(first.status, first.out).toBe(0);
+      expect(first.out).toContain('registered knowledge with Claude Code');
+      // The variable is passed by name: the stored header expands it at run time.
+      expect(readFileSync(join(home, '.added'), 'utf8')).toContain('Authorization: Bearer ${KNOWLEDGE_API_KEY}');
+      expect(existsSync(join(home, '.claude/skills/knowledge-core/SKILL.md'))).toBe(true);
+      expect(existsSync(join(repo, '.claude/hooks/knowledge-capture.sh'))).toBe(true);
+
+      const again = await run(repo, { KNOWLEDGE_API_KEY: KEY });
+      expect(again.status, again.out).toBe(0);
+      expect(again.out).toContain('unchanged: knowledge is already registered');
+      expect(again.out).not.toMatch(/ wrote | removed /);
+      expect(readFileSync(join(home, '.added'), 'utf8').trim().split('\n')).toHaveLength(1);
+      expect(first.out + again.out).not.toContain(KEY);
+    });
+
+    it('skips the kit outside a git repository and still succeeds', async () => {
+      const outside = mkdtempSync(join(tmpdir(), 'kn-setup-nogit-'));
+      try {
+        const res = await run(outside, { KNOWLEDGE_API_KEY: KEY });
+        expect(res.status, res.out).toBe(0);
+        expect(res.out).toContain('skipped: not inside a git repository');
+      } finally {
+        rmSync(outside, { recursive: true, force: true });
+      }
+    });
+
+    it('writes nothing when the key is not exported', async () => {
+      const res = await run(repo, {});
+      expect(res.status).toBe(1);
+      expect(res.out).toContain('KNOWLEDGE_API_KEY is empty');
+      expect(existsSync(join(home, '.added'))).toBe(false);
+      expect(existsSync(join(home, '.claude'))).toBe(false);
+      expect(existsSync(join(repo, '.claude'))).toBe(false);
+    });
+  });
+
+  describe('for a repository (#1348)', () => {
+    const KEY = 'kn_live_9f8e7d6c5b4a39281706f5e4d3c2b1a0';
+    const projectClients = mcpClients({ url: 'https://kb.example.com/api/v1/mcp', serverName: 'knowledge', auth: true, key: KEY }).filter(hasProjectConfig);
+
+    it('never puts a key in a project config or its script, for every client that has one', async () => {
+      expect(projectClients.map((c) => c.id)).toEqual(['claude-code', 'kimi', 'pi', 'omp', 'cursor']);
+      for (const c of projectClients) {
+        // Rendered with a real-looking key minted on the page: the project config must still hold only a reference.
+        expect(c.projectConfig.code, c.id).not.toContain(KEY);
+        expect(c.projectConfig.code, c.id).toMatch(/KNOWLEDGE_API_KEY/);
+        const sh = await script(writer, c.id, { scope: 'project' });
+        expect(sh, c.id).not.toContain(KEY);
+        expect(sh, c.id).toContain(`put '${c.projectConfig.path}'`);
+        expect(sh, c.id).not.toContain(' mcp add ');
+      }
+    });
+
+    it('refuses a client with no project config, with the reason, and an unknown scope', async () => {
+      await expect(script(writer, 'zed', { scope: 'project' })).rejects.toMatchObject({
+        status: 400,
+        response: { reason: 'setup-project-unsupported', refused: 'no-env-in-headers' },
+      });
+      await expect(script(writer, 'codex', { scope: 'project' })).rejects.toMatchObject({
+        response: { reason: 'setup-project-unsupported', refused: 'no-project-config' },
+      });
+      await expect(script(writer, 'claude-code', { scope: 'team' })).rejects.toMatchObject({ status: 400, response: { reason: 'setup-scope' } });
+    });
+
+    describe('run', () => {
+      let home: string;
+      let repo: string;
+      const run = async (cwd: string, env: Record<string, string> = { KNOWLEDGE_API_KEY: KEY }) => {
+        const res = spawnSync('sh', ['-s'], {
+          cwd,
+          input: await script(writer, 'claude-code', { scope: 'project' }),
+          env: { PATH: process.env.PATH, HOME: home, TMPDIR: home, ...env },
+        });
+        return { status: res.status, out: res.stdout.toString() + res.stderr.toString() };
+      };
+      const committed = () =>
+        execFileSync('git', ['ls-files', '--others', '--exclude-standard'], { cwd: repo }).toString().trim().split('\n').filter(Boolean);
+
+      beforeEach(() => {
+        home = mkdtempSync(join(tmpdir(), 'kn-proj-home-'));
+        repo = mkdtempSync(join(tmpdir(), 'kn-proj-repo-'));
+        execFileSync('git', ['init', '-q', repo]);
+      });
+      afterEach(() => {
+        rmSync(home, { recursive: true, force: true });
+        rmSync(repo, { recursive: true, force: true });
+      });
+
+      it('merges into an existing .mcp.json, keeps its servers, lists the files to commit and holds no key', async () => {
+        const other = { type: 'stdio', command: 'other-mcp', args: ['--flag'] };
+        writeFileSync(join(repo, '.mcp.json'), JSON.stringify({ mcpServers: { other, knowledge: { type: 'http', url: 'https://stale' } } }));
+        mkdirSync(join(repo, 'sub'));
+
+        const first = await run(join(repo, 'sub'));
+        expect(first.status, first.out).toBe(0);
+        const cfg = JSON.parse(readFileSync(join(repo, '.mcp.json'), 'utf8'));
+        expect(cfg.mcpServers.other).toEqual(other);
+        expect(cfg.mcpServers.knowledge).toEqual({
+          type: 'http',
+          url: 'https://kb.example.com/api/v1/mcp',
+          headers: { Authorization: 'Bearer ${KNOWLEDGE_API_KEY}' },
+        });
+        expect(first.out).toContain('Commit these files (they hold no key):');
+        expect(first.out).toContain('  .mcp.json\n');
+        expect(first.out).toContain('  .claude/hooks/knowledge-capture.sh\n');
+        // The skill is per caller: it lands in HOME, never in the repository.
+        expect(existsSync(join(home, '.claude/skills/knowledge-core/SKILL.md'))).toBe(true);
+        expect(committed().some((f) => f.includes('knowledge-core'))).toBe(false);
+        for (const f of committed()) expect(readFileSync(join(repo, f), 'utf8'), f).not.toContain(KEY);
+
+        const again = await run(repo);
+        expect(again.status, again.out).toBe(0);
+        expect(again.out).toContain('unchanged the server in .mcp.json');
+        expect(first.out + again.out).not.toContain(KEY);
+      });
+
+      it('creates .mcp.json when there is none', async () => {
+        const res = await run(repo);
+        expect(res.status, res.out).toBe(0);
+        expect(Object.keys(JSON.parse(readFileSync(join(repo, '.mcp.json'), 'utf8')).mcpServers)).toEqual(['knowledge']);
+      });
+
+      it('refuses outside a git repository and writes nothing', async () => {
+        const outside = mkdtempSync(join(tmpdir(), 'kn-proj-nogit-'));
+        try {
+          const res = await run(outside);
+          expect(res.status).toBe(1);
+          expect(res.out).toContain('Run this inside the git repository');
+          expect(readdirSync(outside)).toEqual([]);
+          expect(existsSync(join(home, '.claude'))).toBe(false);
+        } finally {
+          rmSync(outside, { recursive: true, force: true });
+        }
+      });
+    });
   });
 });
 
@@ -2038,12 +2300,16 @@ describe('a key limited to toolsets (#945)', () => {
   it('GET /v1/mcp/connection names the toolsets not offered and why', async () => {
     const { mcp } = service(accessWith('editor'));
     vi.spyOn(mcp, 'sectionsOffFor').mockResolvedValue(['qa']);
+    vi.spyOn(mcp, 'whoami').mockResolvedValue({ userId: 'u', email: 'a@example.com', displayName: 'Ada', mode: 'api-key', apiKey: null, workspaces: [] });
     const controller = new McpController(mcp, { get: () => 'api-key' } as never, fakeDrafts(false) as never);
     const info = await controller.connection(limited('write', ['core', 'graph', 'qa']));
     expect(new Set(info.tools.map((t) => t.toolset))).toEqual(new Set(['core', 'graph']));
     expect(info.notOffered).toContainEqual({ toolset: 'qa', reason: 'section-off' });
     expect(info.notOffered).toContainEqual({ toolset: 'authoring', reason: 'key-toolsets' });
     expect(info.notOffered.map((n) => n.toolset)).not.toContain('graph');
+    // #1349: the stamp the skill route would carry for the same caller.
+    expect(await mcp.skillFor(limited('write', ['core', 'graph', 'qa']), undefined, { offSections: ['qa'] })).toContain(`stamp \`${info.skill.stamp}\``);
+    expect(info.skill.kitVersion).toBe(CAPTURE_KIT_VERSION);
     expect((await controller.connection(keyPrincipal({ id: 'k', scope: 'read', workspaceId: null }))).notOffered).toEqual([{ toolset: 'qa', reason: 'section-off' }]);
   });
 

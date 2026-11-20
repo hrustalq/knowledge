@@ -1,4 +1,4 @@
-import type { IngestionJobStatus, Locale, RevisionStatus, ScopedSetting } from '@knowledge/contracts/core';
+import type { IngestionJobStatus, Locale, RevisionStatus, ScopedSetting, SourceVerificationState } from '@knowledge/contracts/core';
 import type { FactExtractor } from '@knowledge/contracts/graph';
 import type { ActivityEntry } from '@knowledge/contracts/documents';
 
@@ -1105,6 +1105,20 @@ export interface McpConnectionInfo {
   tools: McpToolSummary[];
   /** The toolsets it is not offered at all, each with why (#945). */
   notOffered: { toolset: McpToolset; reason: McpToolsetOffReason }[];
+  /** What a skill generated for this credential now would carry (#1349). */
+  skill: McpSkillStamp;
+}
+
+/**
+ * A skill's content stamp (#1349): a short hash of what the server renders for
+ * one caller, leaving the server version out. An installed skill carries the
+ * stamp it was rendered with; `knowledge_whoami` and the connection page carry
+ * the current one, so a difference means the installed files are stale.
+ */
+export interface McpSkillStamp {
+  stamp: string;
+  /** `CAPTURE_KIT_VERSION`: an installed kit's hook names its version in its header. */
+  kitVersion: number;
 }
 
 /**
@@ -1394,7 +1408,7 @@ export interface ProjectOverviewResponse {
     openMergeRequests: number;
   };
   /** Most recently updated pages, capped — the rail links out for the rest. */
-  recentPages: { documentId: string; title: string; updatedAt: string }[];
+  recentPages: HomeRecentPage[];
 }
 
 // GET /v1/projects/:id/git (#636). 404 while the workspace has git switched off.
@@ -1910,10 +1924,14 @@ export interface HomeNeedsYou {
   unreadCount: number;
 }
 
+/** A recently revised page, on the workspace home and the project page (#1293: the marks a tree row draws). */
 export interface HomeRecentPage {
   documentId: string;
   title: string;
   updatedAt: string;
+  /** The default branch head's lifecycle; null for a page with no revision yet. */
+  headRevisionStatus: RevisionStatus | null;
+  verification: SourceVerificationState;
 }
 
 /** A running agent, without its input, findings or subject: the home names what runs, not what it reads. */

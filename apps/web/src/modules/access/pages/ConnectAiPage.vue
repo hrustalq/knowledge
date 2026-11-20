@@ -6,7 +6,8 @@
  * Setting a client up — key, config, skill, capture kit — is the full-screen
  * wizard at /setup/connect (#1225), and `?client=` on this URL (printed in
  * every SKILL.md already handed out) goes straight there. This page is where
- * you come back to: revoke a key, see what a key reaches.
+ * you come back to: revoke a key, see what a key reaches, run the setup
+ * command again (#1347), or its separate skill commands (#1343).
  *
  * Everything here acts on the caller. Keys are yours; the tool list is what
  * *your* credential would be offered. Nothing on this page needs a workspace
@@ -23,7 +24,18 @@ import { useQueryClient } from '@tanstack/vue-query'
 import { api, fetchApi } from '@/shared/api/queries'
 import { getProjectId, getWorkspaceId } from '@/shared/api/api'
 import { formatDate, formatRelative } from '@/shared/utils/format'
-import { CopyBlock, KEY_ENV } from '@/entities/access'
+import {
+  CopyBlock,
+  KEY_ENV,
+  SKILL_NAME,
+  captureKitInstallCommand,
+  mcpClients,
+  setupInstallCommand,
+  hasProjectConfig,
+  skillDirGuides,
+  skillInstallCommand,
+  skillStackInstallCommand,
+} from '@/entities/access'
 import { useWorkspacesStore } from '@/stores/workspaces'
 import { useProjectsStore } from '@/stores/projects'
 import { useFeaturesStore } from '@/stores/features'
@@ -31,6 +43,9 @@ import { usePermission } from '@/stores/permissions'
 import { Button } from '@knowledge/ui/button'
 import { Badge } from '@knowledge/ui/badge'
 import { Skeleton } from '@knowledge/ui/skeleton'
+import { Collapse } from '@knowledge/ui/collapse'
+import { Checkbox } from '@knowledge/ui/checkbox'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@knowledge/ui/select'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -42,6 +57,7 @@ import {
   AlertDialogTitle,
 } from '@knowledge/ui/alert-dialog'
 import { CONNECT_SETUP_PATH } from '../model/connect-setup-path'
+import ChoiceCards from '../components/connect/ChoiceCards.vue'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -114,6 +130,40 @@ function workspaceName(id: string | null): string {
   if (!id) return t('connect.keys.allWorkspaces')
   return workspaces.items.find((w) => w.workspaceId === id)?.name ?? id.slice(0, 8)
 }
+
+/* ------------------------------------------------------------------ skills */
+
+/*
+ * The wizard's skill commands, to run again (#1343): the skill is fetched, so a
+ * re-run is how it learns a new workspace or toolset. They read the key from
+ * the environment; this page never shows one.
+ */
+const clients = computed(() =>
+  connection.value
+    ? mcpClients({ url: connection.value.url, serverName: connection.value.serverName, auth: needsKey.value, key: null, anyClientName: t('connect.wizard.client.anyName') })
+    : [],
+)
+const skillDirs = computed(() => skillDirGuides(clients.value))
+/** The one command (#1347) for the client picked here; the separate commands sit behind a disclosure. */
+const setupClient = ref('claude-code')
+const setupGuide = computed(() => clients.value.find((c) => c.id === setupClient.value) ?? null)
+/** "For this repository" (#1348): offered only for a client with a committable config; the server refuses the rest. */
+const setupProjectPath = computed(() => (setupGuide.value && hasProjectConfig(setupGuide.value) ? setupGuide.value.projectConfig.path : null))
+const setupForRepo = ref(false)
+const setupProject = computed(() => setupForRepo.value && !!setupProjectPath.value)
+const setupCommand = computed(() =>
+  connection.value ? setupInstallCommand(connection.value.url, setupClient.value, needsKey.value, { project: setupProject.value }) : '',
+)
+const setupKit = computed(() => !!setupGuide.value?.captureKit && capturesOffered.value)
+const separate = ref(false)
+const skillDirOptions = computed(() => skillDirs.value.map((g) => ({ value: g.dir, label: g.dir, hint: g.clients.join(', ') })))
+const pickedDir = ref<string | null>(null)
+const skillDir = computed(() => skillDirs.value.find((g) => g.dir === pickedDir.value) ?? skillDirs.value[0] ?? null)
+const skillStack = computed(() =>
+  connection.value && skillDir.value ? skillStackInstallCommand(connection.value.url, skillDir.value.dir, needsKey.value) : null,
+)
+/** A kit is refused to a credential offered no capture tool (403 `capture-not-offered`). */
+const capturesOffered = computed(() => connection.value?.tools.some((tool) => tool.toolset === 'captures') ?? false)
 
 /* ---------------------------------------------------------------- llms.txt */
 
@@ -254,6 +304,88 @@ const canManageFeatures = usePermission('workspace:admin')
             </Button>
           </li>
         </ul>
+      </section>
+
+      <!-- Set a client up again, or on a new machine (#1347); the skill commands one by one (#1343). -->
+      <section class="min-w-0 rounded-xl border bg-card px-5 py-4">
+        <h2 class="font-display text-base font-semibold tracking-tight">{{ t('connect.skill.manage.title') }}</h2>
+        <p class="kn-measure mt-0.5 text-xs text-muted-foreground">{{ t('connect.setup.manageHint') }}</p>
+        <div class="mt-3 grid min-w-0 gap-3">
+          <div class="flex min-w-0 flex-wrap items-center gap-2">
+            <span id="kn-connect-setup-client" class="text-xs font-medium">{{ t('connect.setup.client') }}</span>
+            <Select v-model="setupClient">
+              <SelectTrigger class="h-8 w-auto min-w-44 text-sm" aria-labelledby="kn-connect-setup-client">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="c in clients" :key="c.id" :value="c.id">{{ c.name }}</SelectItem>
+              </SelectContent>
+            </Select>
+            <label v-if="setupProjectPath" class="inline-flex min-h-8 items-center gap-2 text-xs">
+              <Checkbox :model-value="setupForRepo" @update:model-value="setupForRepo = $event === true" />
+              {{ t('connect.setup.forRepo', { path: setupProjectPath }) }}
+            </label>
+          </div>
+          <div class="grid min-w-0 gap-2">
+            <CopyBlock v-if="needsKey" :code="`export ${KEY_ENV}=<your-api-key>`" :label="t('connect.clients.step.env')" />
+            <CopyBlock :code="setupCommand" :label="t('connect.setup.manageLabel')" />
+            <p v-if="setupProject" class="kn-measure text-caption text-muted-foreground">
+              {{ t('connect.setup.projectHint', { client: setupGuide?.name ?? '' }) }}
+            </p>
+            <p v-else class="kn-measure text-caption text-muted-foreground">
+              {{ setupKit ? `${t('connect.setup.hint')} ${t('connect.setup.kitHint')}` : t('connect.setup.hint') }}
+            </p>
+            <!-- #1349: what a skill installed now carries, to compare with an installed one by eye. -->
+            <p class="kn-measure text-caption text-muted-foreground">
+              {{ t('connect.setup.stampLabel') }}
+              <code class="rounded bg-muted px-1 font-mono text-foreground">{{ connection.skill.stamp }}</code>.
+              {{ t('connect.setup.stampHint') }}
+            </p>
+          </div>
+
+          <div v-if="skillDir" class="min-w-0">
+            <button
+              type="button"
+              class="-mx-1 inline-flex min-h-6 items-center gap-1 rounded-md px-1 py-1 text-xs font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring"
+              :aria-expanded="separate"
+              @click="separate = !separate"
+            >
+              <ChevronRight class="size-3.5 transition-transform motion-reduce:transition-none" :class="separate ? 'rotate-90' : ''" aria-hidden="true" />
+              {{ t('connect.setup.separate') }}
+            </button>
+            <Collapse :open="separate">
+              <div class="grid min-w-0 gap-3 pt-2">
+                <ChoiceCards
+                  :model-value="skillDir.dir"
+                  name="kn-connect-skill-dir"
+                  compact
+                  :legend="t('connect.skill.manage.dirLegend')"
+                  :options="skillDirOptions"
+                  @update:model-value="(dir) => (pickedDir = dir as string)"
+                />
+                <div class="grid min-w-0 gap-2">
+                  <CopyBlock
+                    :code="skillInstallCommand(`${connection.url}/skill`, skillDir.dir, needsKey)"
+                    :label="t('connect.skill.manage.single', { path: `${skillDir.dir}/${SKILL_NAME}/SKILL.md` })"
+                  />
+                  <template v-if="skillStack">
+                    <CopyBlock :code="skillStack" :label="t('connect.skill.manage.stack', { path: skillDir.dir })" />
+                    <p class="kn-measure text-caption text-muted-foreground">{{ t('connect.skill.stackHint') }}</p>
+                  </template>
+                  <template v-if="capturesOffered">
+                    <CopyBlock
+                      v-for="kit in skillDir.kits"
+                      :key="kit.client"
+                      :code="captureKitInstallCommand(`${connection.url}/capture-kit`, kit.client, needsKey)"
+                      :label="t('connect.skill.manage.kit', { client: kit.name })"
+                    />
+                  </template>
+                </div>
+              </div>
+            </Collapse>
+          </div>
+          <p class="kn-measure text-caption text-muted-foreground">{{ t('connect.skill.alsoServed') }}</p>
+        </div>
       </section>
 
       <!-- Plain HTTP for tools that fetch URLs instead of speaking MCP. ------ -->

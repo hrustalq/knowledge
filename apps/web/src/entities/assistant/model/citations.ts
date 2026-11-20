@@ -47,6 +47,10 @@ export function sourceHref(source: AssistantAskSource): string {
 }
 
 const SKIP = new Set(['PRE', 'CODE', 'A', 'BUTTON', 'SCRIPT', 'STYLE', 'TEXTAREA'])
+// NodeFilter's values: the server render decorates in jsdom (#1331), where there is no global `NodeFilter`.
+const SHOW_TEXT = 0x4
+const FILTER_ACCEPT = 1
+const FILTER_REJECT = 2
 
 /**
  * Replace every `[S#]` marker in the rendered answer with a superscript button
@@ -59,13 +63,13 @@ const SKIP = new Set(['PRE', 'CODE', 'A', 'BUTTON', 'SCRIPT', 'STYLE', 'TEXTAREA
  * with pages and comments, where `[S1]` is just text.
  */
 export function decorateCitations(root: HTMLElement, known?: ReadonlySet<string>): number {
-  const walker = root.ownerDocument.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+  const walker = root.ownerDocument.createTreeWalker(root, SHOW_TEXT, {
     acceptNode(node) {
-      if (!node.nodeValue || !/\[\s*S\d/i.test(node.nodeValue)) return NodeFilter.FILTER_REJECT
+      if (!node.nodeValue || !/\[\s*S\d/i.test(node.nodeValue)) return FILTER_REJECT
       for (let el = node.parentElement; el && el !== root; el = el.parentElement) {
-        if (SKIP.has(el.tagName) || el.classList.contains('kn-cites')) return NodeFilter.FILTER_REJECT
+        if (SKIP.has(el.tagName) || el.classList.contains('kn-cites')) return FILTER_REJECT
       }
-      return NodeFilter.FILTER_ACCEPT
+      return FILTER_ACCEPT
     },
   })
   const targets: Text[] = []

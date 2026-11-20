@@ -1,4 +1,5 @@
 import type { CaptureKitClient, CaptureKitFile, CaptureKitResponse } from '@knowledge/contracts';
+import { PUT_FN } from './installer-shell.js';
 
 /**
  * The capture kit (issue #73, phase 5): what a coding agent installs in a
@@ -22,11 +23,13 @@ import type { CaptureKitClient, CaptureKitFile, CaptureKitResponse } from '@know
  * `Stop` / `PostToolUse` / `UserPromptSubmit` + `hookSpecificOutput.additionalContext`,
  * Cursor's `stop` + `followup_message` and `postToolUse` + `additional_context`
  * (Cursor's `beforeSubmitPrompt` cannot add context, so a ticket pasted into a
- * Cursor prompt is left to the skill). When one changes, bump
- * CAPTURE_KIT_VERSION: an installed kit names its version, and re-fetching is
- * how it updates.
+ * Cursor prompt is left to the skill), and Codex's (#1350), which copies Claude
+ * Code's layout and `additionalContext` but ends a turn only through `Stop`'s
+ * `decision: "block"` + `reason`, a new prompt like Cursor's follow-up. When
+ * one changes, bump CAPTURE_KIT_VERSION: an installed kit names its version,
+ * and re-fetching is how it updates.
  */
-export const CAPTURE_KIT_VERSION = 3;
+export const CAPTURE_KIT_VERSION = 5;
 
 /** The marker the installer looks for when it merges hook entries — and the script's file name. */
 const HOOK_FILE = 'knowledge-capture.sh';
@@ -101,7 +104,7 @@ person or agent would otherwise have to rediscover:
 
 /** The files to install for `input.client`, paths relative to the repository root. */
 export function renderCaptureKit(input: CaptureKitInput): CaptureKitResponse {
-  const files = input.client === 'claude-code' ? claudeCodeFiles(input) : cursorFiles(input);
+  const files = { 'claude-code': claudeCodeFiles, cursor: cursorFiles, codex: codexFiles }[input.client](input);
   return { client: input.client, version: CAPTURE_KIT_VERSION, files };
 }
 
@@ -127,20 +130,23 @@ export function renderCaptureKitInstaller(kit: CaptureKitResponse, kitUrl: strin
     if (file.mode === 'write') {
       return [
         `mkdir -p '${dir}'`,
-        `cat > '${file.path}' ${heredoc}`,
+        `put '${file.path}' '${file.path}' ${heredoc}`,
         ...(file.executable ? [`chmod +x '${file.path}'`] : []),
-        `echo "  wrote ${file.path}"`,
       ].join('\n');
     }
     return [
       `entries=$(mktemp)`,
       `cat > "$entries" ${heredoc}`,
       `if [ ! -f '${file.path}' ]; then`,
-      `  mkdir -p '${dir}' && cp "$entries" '${file.path}'`,
-      `  echo "  wrote ${file.path}"`,
+      `  mkdir -p '${dir}' && put '${file.path}' '${file.path}' < "$entries"`,
       `elif command -v jq >/dev/null 2>&1; then`,
-      `  jq --slurpfile kit "$entries" '(($kit[0] | del(.hooks)) + .) | reduce ($kit[0].hooks | to_entries[]) as $e (.; .hooks[$e.key] = ([(.hooks[$e.key] // [])[] | select(tostring | contains("${HOOK_FILE}") | not)] + $e.value))' '${file.path}' > "$entries.out" \\`,
-      `    && mv "$entries.out" '${file.path}' && echo "  merged the hooks into ${file.path}"`,
+      `  if jq --slurpfile kit "$entries" '(($kit[0] | del(.hooks)) + .) | reduce ($kit[0].hooks | to_entries[]) as $e (.; .hooks[$e.key] = ([(.hooks[$e.key] // [])[] | select(tostring | contains("${HOOK_FILE}") | not)] + $e.value))' '${file.path}' > "$entries.out"; then`,
+      `    put '${file.path}' 'the hooks in ${file.path}' < "$entries.out"`,
+      `  else`,
+      `    echo "  could not read ${file.path} as JSON. Merge these entries into it by hand:"`,
+      `    cat "$entries"`,
+      `  fi`,
+      `  rm -f "$entries.out"`,
       `else`,
       `  echo "  ${file.path} exists and jq is not installed. Merge these entries into it by hand:"`,
       `  cat "$entries"`,
@@ -157,53 +163,86 @@ set -eu
 root=$(git rev-parse --show-toplevel 2>/dev/null) || { echo "Run this inside the git repository the agent works in." >&2; exit 1; }
 cd "$root"
 echo "Installing the knowledge capture kit into $root"
+${PUT_FN}
 
 ${body.join('\n\n')}
 
-${kit.client === 'cursor' ? 'echo "Note: Cursor hooks cannot add context to a prompt, so a ticket pasted as a message gets no nudge; the knowledge skill asks for knowledge_context there."\n' : ''}echo "Done. Start a new ${CLIENT_NAME[kit.client]} session to load it."
+${INSTALL_NOTE[kit.client] ? `echo "Note: ${INSTALL_NOTE[kit.client]}"\n` : ''}echo "Done. Start a new ${CLIENT_NAME[kit.client]} session to load it."
 `;
 }
 
-const CLIENT_NAME: Record<CaptureKitClient, string> = { 'claude-code': 'Claude Code', cursor: 'Cursor' };
+const CLIENT_NAME: Record<CaptureKitClient, string> = { 'claude-code': 'Claude Code', cursor: 'Cursor', codex: 'Codex' };
+
+/** What the person must know that the kit cannot do for them. No double quotes: printed inside `echo "…"`. */
+const INSTALL_NOTE: Partial<Record<CaptureKitClient, string>> = {
+  cursor:
+    'Cursor hooks cannot add context to a prompt, so a ticket pasted as a message gets no nudge; the knowledge skill asks for knowledge_context there.',
+  // Codex skips a hook nobody has trusted, so without this the kit looks installed and never fires.
+  codex:
+    'Codex runs a new hook only once you trust it, and loads project hooks only in a trusted project. Open /hooks in Codex and trust the four knowledge-capture.sh hooks.',
+};
 
 /* ------------------------------------------------------------------ clients */
 
 function claudeCodeFiles(input: CaptureKitInput): CaptureKitFile[] {
-  const run = (arg: string) => ({ type: 'command', command: `"$CLAUDE_PROJECT_DIR"/.claude/hooks/${HOOK_FILE} ${arg}`, timeout: 5 });
   return [
+    skillFile('.claude/skills/knowledge-capture/SKILL.md', input),
+    { path: `.claude/hooks/${HOOK_FILE}`, content: hookScript(input, 'claude-code'), mode: 'write', executable: true },
     {
-      path: '.claude/skills/knowledge-capture/SKILL.md',
-      content: `---
+      path: '.claude/settings.json',
+      content: json(hookEntries(`"$CLAUDE_PROJECT_DIR"/.claude/hooks/${HOOK_FILE}`, 'Edit|Write|MultiEdit|NotebookEdit')),
+      mode: 'merge',
+      executable: false,
+    },
+  ];
+}
+
+/**
+ * Codex: Claude Code's layout under `.codex/`, the skill where Codex reads a
+ * repository's skills. Hooks run in the session's cwd, which may be below the
+ * root, so the path is resolved as Codex's own docs do. `Edit|Write` is
+ * Codex's alias for `apply_patch`, its one edit tool.
+ */
+function codexFiles(input: CaptureKitInput): CaptureKitFile[] {
+  return [
+    skillFile('.agents/skills/knowledge-capture/SKILL.md', input),
+    { path: `.codex/hooks/${HOOK_FILE}`, content: hookScript(input, 'codex'), mode: 'write', executable: true },
+    {
+      path: '.codex/hooks.json',
+      content: json(hookEntries(`"$(git rev-parse --show-toplevel)/.codex/hooks/${HOOK_FILE}"`, 'Edit|Write')),
+      mode: 'merge',
+      executable: false,
+    },
+  ];
+}
+
+/** The hook entries Claude Code and Codex share, `script` being the shell spelling of the script's path. */
+function hookEntries(script: string, editMatcher: string) {
+  const run = (arg: string) => ({ type: 'command', command: `${script} ${arg}`, timeout: 5 });
+  return {
+    hooks: {
+      PostToolUse: [
+        { matcher: editMatcher, hooks: [run('edited')] },
+        { matcher: TICKET_TOOL_MATCHER, hooks: [run('ticket')] },
+      ],
+      UserPromptSubmit: [{ hooks: [run('ticket-prompt')] }],
+      Stop: [{ hooks: [run('stop')] }],
+    },
+  };
+}
+
+function skillFile(path: string, input: CaptureKitInput): CaptureKitFile {
+  return {
+    path,
+    content: `---
 name: knowledge-capture
 description: Use when finishing a piece of work, or when the knowledge-capture hook asks, to record the decisions, gotchas, conventions and hard-won answers from this session in the Knowledge platform at ${hostOf(input.url)} — proposed as merge requests a person reviews, never written straight to a page.
 ---
 
 ${kitSkillBody(input)}`,
-      mode: 'write',
-      executable: false,
-    },
-    {
-      path: `.claude/hooks/${HOOK_FILE}`,
-      content: hookScript(input, 'claude-code'),
-      mode: 'write',
-      executable: true,
-    },
-    {
-      path: '.claude/settings.json',
-      content: json({
-        hooks: {
-          PostToolUse: [
-            { matcher: 'Edit|Write|MultiEdit|NotebookEdit', hooks: [run('edited')] },
-            { matcher: TICKET_TOOL_MATCHER, hooks: [run('ticket')] },
-          ],
-          UserPromptSubmit: [{ hooks: [run('ticket-prompt')] }],
-          Stop: [{ hooks: [run('stop')] }],
-        },
-      }),
-      mode: 'merge',
-      executable: false,
-    },
-  ];
+    mode: 'write',
+    executable: false,
+  };
 }
 
 function cursorFiles(input: CaptureKitInput): CaptureKitFile[] {
@@ -283,10 +322,11 @@ ${renderCapturePlaybook()}`;
  * treated as no id, and the hook stays silent.
  */
 function hookScript(input: CaptureKitInput, client: CaptureKitClient): string {
-  const claude = client === 'claude-code';
+  // Claude Code and Codex share a hook protocol; Cursor has its own.
+  const claude = client !== 'cursor';
   // About 40 tokens, no double quotes: printed into a JSON string as is.
   const nudge =
-    'Ticket %s: before you start, call knowledge_context once with query = the ticket title and key terms, ' +
+    'Ticket %s: before you start, call knowledge_context once per ticket with query = the ticket title and key terms, ' +
     'repo = git remote get-url origin, exclude = ids already shown. Open a page only if the task needs it.';
   const emitNudge = (event: string) =>
     claude
@@ -302,20 +342,24 @@ function hookScript(input: CaptureKitInput, client: CaptureKitClient): string {
     `Call knowledge_find_similar first with the title and kind you will capture with, and skip it when decision is duplicate. ` +
     `Never include secrets. ` +
     `If nothing is worth keeping, say so in one line and stop. This reminder comes once per session.`;
-  const emit = claude
-    ? `printf '{"hookSpecificOutput":{"hookEventName":"Stop","additionalContext":"%s"}}\\n' "$msg"`
-    : `printf '{"followup_message":"%s"}\\n' "$msg"`;
+  const emit = {
+    'claude-code': `printf '{"hookSpecificOutput":{"hookEventName":"Stop","additionalContext":"%s"}}\\n' "$msg"`,
+    // Codex's Stop reaches the model only as a new prompt: block, with the reminder as its text.
+    codex: `printf '{"decision":"block","reason":"%s"}\\n' "$msg"`,
+    cursor: `printf '{"followup_message":"%s"}\\n' "$msg"`,
+  }[client];
   // Cursor runs stop on an aborted or failed turn too; a follow-up then would
   // answer the person's interruption with a chore.
   const completedOnly = claude
     ? ''
     : `    case "$in" in *'"status":"completed"'* | *'"status": "completed"'*) ;; *) exit 0 ;; esac\n`;
 
-  // Claude Code only: Cursor's beforeSubmitPrompt cannot add context.
+  // Not Cursor: its beforeSubmitPrompt cannot add context.
   const promptCase = `  ticket-prompt)
     # From the prompt on: the paths and ids before it are not the person's words.
     case "$in" in *'"prompt"'*) ;; *) exit 0 ;; esac
     nudge "$(ticket "\${in#*'"prompt"'}")"
+    tell
     ${emitNudge('UserPromptSubmit')}
     ;;
 `;
@@ -345,10 +389,16 @@ ticket() {
   printf '%s' "$k" | tr -cd 'A-Za-z0-9_-' | cut -c 1-64
 }
 # Once per ticket per session: mkdir is atomic, so a second read of the same ticket is silent.
+# Collects the new keys; tell then words one nudge naming all of them, or exits.
+keys=
 nudge() {
-  [ -n "$1" ] || exit 0
-  mkdir "$dir/$id.ticket.$1" 2>/dev/null || exit 0
-  msg=$(printf '${nudge}' "$1")
+  [ -n "$1" ] || return 0
+  mkdir "$dir/$id.ticket.$1" 2>/dev/null || return 0
+  keys="\${keys:+$keys, }$1"
+}
+tell() {
+  [ -n "$keys" ] || exit 0
+  msg=$(printf '${nudge}' "$keys")
 }
 
 case "\${1:-}" in
@@ -361,18 +411,25 @@ case "\${1:-}" in
     args=\${args%%'"tool_output"'*}
     case "$tool" in
       Bash | Shell)
-        cmd=$(printf '%s' "$args" | grep -oE '(gh|glab|jira) issue view [^"]*' | head -n 1)
-        [ -n "$cmd" ] || exit 0
-        k=$(ticket "$cmd")
-        [ -n "$k" ] || k=$(printf '%s' "$cmd" | sed -n 's/^[a-z]* issue view \\([0-9][0-9]*\\).*/\\1/p')
+        # Every read in the command, each ending at a shell separator or an escape
+        # (a JSON \\n): \`gh issue view 1; gh issue view 2\` reads two tickets.
+        # A here-document, not a pipe, so the loop's nudges stay in this shell.
+        while IFS= read -r cmd; do
+          k=$(ticket "$cmd")
+          [ -n "$k" ] || k=$(printf '%s' "$cmd" | sed -n 's/^[a-z]* issue view \\([0-9][0-9]*\\).*/\\1/p')
+          nudge "$k"
+        done <<KNOWLEDGE_CMDS
+$(printf '%s' "$args" | grep -oE '(gh|glab|jira) issue view [^"\\;&|]*')
+KNOWLEDGE_CMDS
         ;;
       *)
         printf '%s' "$tool" | grep -qiE 'jira|linear|atlassian|issue|ticket' || exit 0
         k=$(ticket "$args")
         [ -n "$k" ] || k=$(printf '%s' "$args" | grep -oE '"(issue_number|issueNumber|issue_id|issueId|iid|number)"[[:space:]]*:[[:space:]]*"?[0-9]+' | head -n 1 | grep -oE '[0-9]+$')
+        nudge "$k"
         ;;
     esac
-    nudge "$k"
+    tell
     ${emitNudge('PostToolUse')}
     ;;
 ${claude ? promptCase : ''}  edited)

@@ -1,4 +1,5 @@
 import { HomeService } from '../src/home/home.service.js';
+import { recentPages } from '../src/projects/project-overview.service.js';
 import type { AccessScope } from '../src/permissions/access-scope.js';
 import type { Principal } from '../src/auth/principal.js';
 
@@ -80,5 +81,36 @@ describe('HomeService', () => {
     expect((await build(null).service.get(admin, principal)).metrics?.unansweredSearches).toBe(5);
     const off = await build(null, ['analytics', 'knowledge-health']).service.get(admin, principal);
     expect(off.metrics).toMatchObject({ pages: 7, verified: null, unansweredSearches: null });
+  });
+});
+
+describe('recentPages', () => {
+  // #1293: a row carries the head's lifecycle and the page's verification state.
+  it('stamps each newest-revised page with its head status and verification', async () => {
+    const at = new Date('2026-11-19T10:00:00Z');
+    const prisma = {
+      documentRevision: {
+        findMany: async ({ where }: { where: { id?: unknown } }) =>
+          where.id
+            ? [{ id: 'h1', status: 'indexing' }, { id: 'h2', status: 'failed' }]
+            : [
+                { documentId: 'a', createdAt: at },
+                { documentId: 'b', createdAt: at },
+                { documentId: 'a', createdAt: new Date('2026-11-01T00:00:00Z') },
+              ],
+      },
+      document: {
+        findMany: async () => [
+          { id: 'b', title: 'B', defaultBranch: 'main', verificationFlag: 'outdated', verifiedRevisionId: null, verificationExpiresAt: null, branches: [{ name: 'main', headRevisionId: 'h2' }] },
+          { id: 'a', title: 'A', defaultBranch: 'main', verificationFlag: null, verifiedRevisionId: 'h1', verificationExpiresAt: null, branches: [{ name: 'main', headRevisionId: 'h1' }] },
+        ],
+      },
+      knowledgeIssue: { groupBy: async () => [] },
+      connectorLink: { findMany: async () => [] },
+    };
+    expect(await recentPages(prisma as never, {})).toEqual([
+      { documentId: 'a', title: 'A', updatedAt: at.toISOString(), headRevisionStatus: 'indexing', verification: 'verified' },
+      { documentId: 'b', title: 'B', updatedAt: at.toISOString(), headRevisionStatus: 'failed', verification: 'outdated' },
+    ]);
   });
 });

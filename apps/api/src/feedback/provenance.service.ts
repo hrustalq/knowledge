@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { AssistantSource, SearchResult, SourceProvenance, SourceVerificationState } from '@knowledge/contracts';
 import { isPageSource, OPEN_KNOWLEDGE_ISSUE_STATUSES, verificationStateFor } from '@knowledge/contracts';
+import type { PrismaClient } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { sourceSyncOf } from '../documents/source-backed.js';
 
@@ -113,14 +114,8 @@ export class ProvenanceService {
    * into `flagged`. One grouped count for the batch; a page with none is
    * simply absent.
    */
-  async openIssueCounts(documentIds: readonly string[]): Promise<Map<string, number>> {
-    if (documentIds.length === 0) return new Map();
-    const rows = await this.prisma.knowledgeIssue.groupBy({
-      by: ['documentId'],
-      where: { documentId: { in: [...documentIds] }, status: { in: [...OPEN_KNOWLEDGE_ISSUE_STATUSES] } },
-      _count: { _all: true },
-    });
-    return new Map(rows.map((r) => [r.documentId, r._count._all]));
+  openIssueCounts(documentIds: readonly string[]): Promise<Map<string, number>> {
+    return openIssueCountsOf(this.prisma, documentIds);
   }
 
   /** The optional fields a `SourceProvenance` consumer reads, from one record. */
@@ -185,4 +180,18 @@ export class ProvenanceService {
       return p ? { ...r, ...ProvenanceService.fields(p), revisionId: r.revisionId, factClass: 'explicit' as const } : r;
     });
   }
+}
+
+/** `ProvenanceService.openIssueCounts` for a caller with only a Prisma client (`recentPages`). */
+export async function openIssueCountsOf(
+  db: Pick<PrismaClient, 'knowledgeIssue'>,
+  documentIds: readonly string[],
+): Promise<Map<string, number>> {
+  if (documentIds.length === 0) return new Map();
+  const rows = await db.knowledgeIssue.groupBy({
+    by: ['documentId'],
+    where: { documentId: { in: [...documentIds] }, status: { in: [...OPEN_KNOWLEDGE_ISSUE_STATUSES] } },
+    _count: { _all: true },
+  });
+  return new Map(rows.map((r) => [r.documentId, r._count._all]));
 }

@@ -1,14 +1,19 @@
 import { Injectable } from '@nestjs/common';
-import type {
-  ProjectContributor,
-  ProjectOverviewResponse,
-  ProjectSummary,
+import {
+  verificationStateFor,
+  type ProjectContributor,
+  type ProjectOverviewResponse,
+  type ProjectSummary,
+  type HomeRecentPage,
+  type RevisionStatus,
 } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ProjectsService } from './projects.service.js';
 import type { Prisma } from '@prisma/client';
 import { visibilityWhere, type AccessScope } from '../permissions/access-scope.js';
 import { LISTED_PAGE } from '../common/listed-page.js';
+import { openIssueCountsOf } from '../feedback/provenance.service.js';
+import { sourceSyncOf } from '../documents/source-backed.js';
 
 /** Enough people to be a roster, not a directory. The rail links out for the rest. */
 const CONTRIBUTOR_LIMIT = 12;
@@ -141,26 +146,65 @@ export class ProjectOverviewService {
  * The newest-revised pages under `where` (also the workspace home's, #1243).
  * "Updated" means the newest revision, not documents.created_at — a page
  * written a year ago and revised yesterday is the recent one.
+ *
+ * Each row carries what a tree row draws (#1293): the head's lifecycle status
+ * and `verificationStateFor` over the same inputs the tree reads.
  */
 export async function recentPages(
   prisma: PrismaService,
   where: Prisma.DocumentWhereInput,
-): Promise<ProjectOverviewResponse['recentPages']> {
+): Promise<HomeRecentPage[]> {
   const revisions = await prisma.documentRevision.findMany({
     where: { document: where },
-    select: { documentId: true, createdAt: true, document: { select: { title: true } } },
+    select: { documentId: true, createdAt: true },
     orderBy: { createdAt: 'desc' },
     take: REVISION_SCAN,
   });
-  const seen = new Map<string, { documentId: string; title: string; updatedAt: string }>();
+  const updatedAt = new Map<string, Date>();
   for (const revision of revisions) {
-    if (seen.has(revision.documentId)) continue;
-    seen.set(revision.documentId, {
-      documentId: revision.documentId,
-      title: revision.document.title,
-      updatedAt: revision.createdAt.toISOString(),
-    });
-    if (seen.size >= RECENT_PAGES) break;
+    if (!updatedAt.has(revision.documentId)) updatedAt.set(revision.documentId, revision.createdAt);
+    if (updatedAt.size >= RECENT_PAGES) break;
   }
-  return [...seen.values()];
+  const ids = [...updatedAt.keys()];
+  if (ids.length === 0) return [];
+  const [docs, issues, sources] = await Promise.all([
+    prisma.document.findMany({
+      where: { id: { in: ids } },
+      select: {
+        id: true,
+        title: true,
+        defaultBranch: true,
+        verificationFlag: true,
+        verifiedRevisionId: true,
+        verificationExpiresAt: true,
+        branches: { select: { name: true, headRevisionId: true } },
+      },
+    }),
+    openIssueCountsOf(prisma, ids),
+    sourceSyncOf(prisma, ids),
+  ]);
+  const headOf = new Map(
+    docs.map((d) => [d.id, d.branches.find((b) => b.name === d.defaultBranch)?.headRevisionId ?? null]),
+  );
+  const headIds = [...headOf.values()].filter((h): h is string => !!h);
+  const heads = await prisma.documentRevision.findMany({
+    where: { id: { in: headIds } },
+    select: { id: true, status: true },
+  });
+  const statusOf = new Map(heads.map((r) => [r.id, r.status as RevisionStatus]));
+  const byId = new Map(docs.map((d) => [d.id, d]));
+  return ids.flatMap((id) => {
+    const d = byId.get(id);
+    if (!d) return [];
+    const headId = headOf.get(id) ?? null;
+    return [
+      {
+        documentId: id,
+        title: d.title,
+        updatedAt: updatedAt.get(id)!.toISOString(),
+        headRevisionStatus: (headId && statusOf.get(headId)) || null,
+        verification: verificationStateFor({ ...d, source: sources.get(id) }, headId, issues.get(id) ?? 0),
+      },
+    ];
+  });
 }

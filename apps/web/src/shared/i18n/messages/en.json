@@ -5073,7 +5073,18 @@
             "hint": "The skill still explains capturing; there is just no reminder."
           }
         },
-        "none": "Nothing to choose for {client}. Continue."
+        "none": "Nothing to choose for {client}. Continue.",
+        "where": {
+          "legend": "Where the server is added",
+          "user": {
+            "label": "For me",
+            "hint": "Registered in your own client settings, on this machine."
+          },
+          "project": {
+            "label": "For this repository",
+            "hint": "Written to {path} at the repository root, for everyone who clones it to commit. It names the KNOWLEDGE_API_KEY variable, never your key."
+          }
+        }
       },
       "configure": {
         "title": "Add the server to {client}",
@@ -5410,10 +5421,32 @@
       "hint": "A SKILL.md that teaches the model how to use this knowledge base: your workspaces and project ids, the tools this key is offered, and the playbooks — answer with citations, propose edits as merge requests, trace impact. Generated for you; re-run the command after you join a workspace.",
       "download": "Download SKILL.md",
       "installFor": "{client} → {path}",
+      "manage": {
+        "title": "Set up a client again",
+        "dirLegend": "Where your client reads skills",
+        "single": "One SKILL.md → {path}",
+        "stack": "A stack of skills → {path}",
+        "kit": "Capture hook for {client} — run inside the repository"
+      },
       "noSkillDir": "{client} has no skills directory. Use the server's “guide” prompt instead, or paste the skill into the conversation or a project's instructions.",
       "alsoServed": "The same skill is served by the MCP server itself — as the resource knowledge://skill and the prompt “guide” — so any client can load it without installing a file.",
       "stackFor": "Or as a stack for {client}, into {path}",
       "stackHint": "A core skill plus one per toolset you are offered. The client loads each only when the task matches, so answering a question does not load the testing or repository playbooks. Run it again to update; it removes a skill you are no longer offered and never touches a folder it did not write."
+    },
+    "setup": {
+      "label": "One command: registers {client}, installs the skill",
+      "labelKit": "One command: registers {client}, installs the skill and the capture hook",
+      "hint": "Safe to run again: it updates what it wrote, leaves everything else alone and never prints your key.",
+      "stampLabel": "Skill stamp now:",
+      "stampHint": "An installed skill that names another stamp is out of date: run the command again. Your agent notices too, from knowledge_whoami.",
+      "kitHint": "Run it inside the repository the agent works in to get the capture hook.",
+      "separate": "Separate commands",
+      "manageHint": "One command registers the server with your client and installs the skill and, inside a repository, the capture hook. Run it again on a new machine, or after you join a workspace.",
+      "manageLabel": "Set up or update",
+      "client": "Client",
+      "labelProject": "One command, from the repository: writes {path}, installs the skill for you",
+      "projectHint": "Commit the files it lists: they hold no key. Each teammate exports KNOWLEDGE_API_KEY with their own key and runs this once for their skill. Not yet checked with {client}, which may ask to approve or trust the repository’s server first.",
+      "forRepo": "For this repository ({path})"
     },
     "capture": {
       "title": "Capture what sessions learn",

@@ -7669,7 +7669,8 @@
     "type": "string",
     "enum": [
       "claude-code",
-      "cursor"
+      "cursor",
+      "codex"
     ]
   },
   "CaptureKitFile": {
@@ -15263,12 +15264,25 @@
       },
       "updatedAt": {
         "type": "string"
+      },
+      "headRevisionStatus": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/RevisionStatus"
+          }
+        ],
+        "nullable": true
+      },
+      "verification": {
+        "$ref": "#/components/schemas/SourceVerificationState"
       }
     },
     "required": [
       "documentId",
       "title",
-      "updatedAt"
+      "updatedAt",
+      "headRevisionStatus",
+      "verification"
     ]
   },
   "HomeResponse": {
@@ -18479,6 +18493,9 @@
             "reason"
           ]
         }
+      },
+      "skill": {
+        "$ref": "#/components/schemas/McpSkillStamp"
       }
     },
     "required": [
@@ -18487,7 +18504,23 @@
       "authMode",
       "version",
       "tools",
-      "notOffered"
+      "notOffered",
+      "skill"
+    ]
+  },
+  "McpSkillStamp": {
+    "type": "object",
+    "properties": {
+      "stamp": {
+        "type": "string"
+      },
+      "kitVersion": {
+        "type": "number"
+      }
+    },
+    "required": [
+      "stamp",
+      "kitVersion"
     ]
   },
   "McpToolSummary": {
@@ -21687,23 +21720,7 @@
       "recentPages": {
         "type": "array",
         "items": {
-          "type": "object",
-          "properties": {
-            "documentId": {
-              "type": "string"
-            },
-            "title": {
-              "type": "string"
-            },
-            "updatedAt": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "documentId",
-            "title",
-            "updatedAt"
-          ]
+          "$ref": "#/components/schemas/HomeRecentPage"
         }
       }
     },

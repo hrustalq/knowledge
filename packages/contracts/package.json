@@ -18,6 +18,7 @@
     "./api/fixtures": "./src/api/fixtures.ts",
     "./api/test-chain": "./src/api/test-chain.ts",
     "./identity": "./src/identity/index.ts",
+    "./clients": "./src/clients/index.ts",
     "./notifications": "./src/notifications/index.ts",
     "./ai": "./src/ai/index.ts",
     "./content": "./src/content/index.ts",

@@ -4,13 +4,16 @@ export { default as PageAccessDialog } from './components/PageAccessDialog.vue'
 export { default as RequestAccessCard } from './components/RequestAccessCard.vue'
 export {
   captureKitInstallCommand,
+  hasProjectConfig,
   KEY_ENV,
   mcpClients,
+  setupInstallCommand,
   SKILL_NAME,
+  skillDirGuides,
   skillInstallCommand,
   skillStackInstallCommand,
   type McpClientGuide,
-} from './model/mcp-clients'
+} from '@knowledge/contracts'
 export { clientMark } from './model/client-logos'
 export {
   CONNECT_ROLES,

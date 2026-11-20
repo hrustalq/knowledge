@@ -116,6 +116,8 @@ async function prefetchPage(router: Router, queryClient: QueryClient) {
   const route = router.currentRoute.value
   // The home (#1243): one read, so it renders with JS off.
   if (route.path === '/') return prefetchForRender(queryClient, homeQuery())
+  // The assistant draws its opening conversation's markdown on the server (#1331).
+  if (route.path === '/assistant') return installSsrDocument()
   if (route.matched.at(-1)?.path !== '/documents/:id') return
   const id = route.params.id as string
   // The page's own `contentAt`: an explicit revision wins over `?asOf=`.
@@ -174,7 +176,7 @@ export async function render(url: string, ctx: Partial<SsrRequestContext> = {}) 
     await messagesReady
     await prefetchShell(router, pinia, queryClient, request)
 
-    const ssrContext: { teleports?: Record<string, string>; title?: () => string } = {}
+    const ssrContext: { teleports?: Record<string, string>; title?: () => string; modules?: Set<string> } = {}
     let html = await renderToString(app, ssrContext)
     // The page action bar (#441) is a teleport into the shell's own markup, so
     // its buffer goes back into that element here; the client hydrates it there.
@@ -198,6 +200,11 @@ export async function render(url: string, ctx: Partial<SsrRequestContext> = {}) 
     // Set by the shell (#644); escaped here, since server.js splices it in raw.
     const title = ssrContext.title?.().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
-    return { html, head, title }
+    // Every SFC the render drew (registered by @vitejs/plugin-vue) and the
+    // catalogue it loaded: server.js preloads their chunks (#1332). The path is
+    // the SSR manifest's key for the import in shared/i18n's LOADERS.
+    const modules = [...(ssrContext.modules ?? []), `src/shared/i18n/catalog.${request.locale ?? DEFAULT_LOCALE}.ts`]
+
+    return { html, head, title, modules }
   })
 }

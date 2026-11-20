@@ -17,11 +17,12 @@
  *   Zed; VS Code's is currently broken), so those get the key inline or a
  *   prompted input.
  *
- * Pure: the page decides which key to show, this decides where it goes.
+ * Pure: the page decides which key to show, this decides where it goes. Read by
+ * the web wizard, the manage page and the API (#1346); logos and notes stay in the web app.
  */
 
-import type { CaptureKitClient } from '@knowledge/contracts'
-import { SKILL_DIRS, SKILL_DIR_KEYS } from '@knowledge/contracts'
+import type { CaptureKitClient } from '@knowledge/contracts/captures'
+import { SKILL_DIRS, SKILL_DIR_KEYS } from '@knowledge/contracts/identity'
 
 export const KEY_ENV = 'KNOWLEDGE_API_KEY'
 export const SKILL_NAME = 'knowledge-platform'
@@ -53,11 +54,69 @@ export interface McpClientGuide {
   /** i18n key under connect.clients.notes — the one thing that goes wrong with this client. */
   note: string
   docs: string
+  /** The config a repository can commit (#1348), or why this client has none. */
+  projectConfig: ProjectConfig | { refused: ProjectRefusal }
+}
+
+/**
+ * A project-level MCP config: a JSON file at `path` (from the repository root)
+ * whose credential is always a reference to KNOWLEDGE_API_KEY in the client's
+ * own syntax, never a key, so it is safe to commit. `docs` is the vendor page
+ * that says the client reads this file and expands the variable there.
+ */
+export interface ProjectConfig {
+  path: string
+  code: string
+  docs: string
+}
+
+/** No project-level JSON config this setup can write, or no documented way to read the key from the environment in one. */
+export type ProjectRefusal = 'no-project-config' | 'no-env-in-headers'
+
+export function hasProjectConfig(c: McpClientGuide): c is McpClientGuide & { projectConfig: ProjectConfig } {
+  return 'code' in c.projectConfig
 }
 
 const json = (value: unknown) => JSON.stringify(value, null, 2)
 
+/**
+ * Each client's project config (#1348), checked against its vendor's docs in
+ * November 2026. A client gets one only where the docs state both a
+ * project-level file and an env reference for the key there, and its file is
+ * the same JSON as its user-level config. Not yet run per client (#1351):
+ * Claude Code and Kimi ask to approve or trust a folder's servers first.
+ */
+const PROJECT: Record<string, { path: string; docs: string } | ProjectRefusal> = {
+  'claude-code': { path: '.mcp.json', docs: 'https://code.claude.com/docs/en/mcp#environment-variable-expansion-in-mcp-json' },
+  cursor: { path: '.cursor/mcp.json', docs: 'https://cursor.com/docs/context/mcp' },
+  kimi: { path: '.kimi-code/mcp.json', docs: 'https://www.kimi.com/code/docs/en/kimi-code-cli/customization/mcp.html' },
+  pi: { path: '.pi/mcp.json', docs: 'https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/mcp.md' },
+  omp: { path: '.omp/mcp.json', docs: 'https://github.com/can1357/oh-my-pi/blob/main/docs/mcp-config.md' },
+  // TOML (`.codex/config.toml`, trusted projects only): no jq merge for it.
+  codex: 'no-project-config',
+  // Expansion is documented for settings strings in general, not for MCP headers.
+  gemini: 'no-env-in-headers',
+  qwen: 'no-env-in-headers',
+  deepseek: 'no-project-config',
+  hermes: 'no-project-config',
+  vscode: 'no-env-in-headers',
+  'claude-desktop': 'no-project-config',
+  // `.devin/mcp_config.json` exists, but `${env:}` is documented for OAuth fields only.
+  windsurf: 'no-env-in-headers',
+  // The docs now nest servers under `mcp.servers`; the table's shape is not re-checked yet.
+  opencode: 'no-project-config',
+  zed: 'no-env-in-headers',
+  http: 'no-project-config',
+}
+
 export function mcpClients(input: McpClientInput): McpClientGuide[] {
+  return clientTable(input).map((c) => {
+    const p = PROJECT[c.id] ?? 'no-project-config'
+    return { ...c, projectConfig: typeof p === 'string' ? { refused: p } : { ...p, code: c.config.code } }
+  })
+}
+
+function clientTable(input: McpClientInput): Omit<McpClientGuide, 'projectConfig'>[] {
   const { url, serverName: name, auth } = input
   const literal = input.key ?? '<your-api-key>'
   const header = (value: string) => (auth ? { headers: { Authorization: `Bearer ${value}` } } : {})
@@ -93,7 +152,7 @@ export function mcpClients(input: McpClientInput): McpClientGuide[] {
       },
       skillDir: SKILL_DIRS.agents,
       usesEnv: auth,
-      captureKit: null,
+      captureKit: 'codex',
       note: 'codex',
       docs: 'https://developers.openai.com/codex/mcp',
     },
@@ -372,6 +431,27 @@ export function mcpClients(input: McpClientInput): McpClientGuide[] {
   ]
 }
 
+export interface SkillDirGuide {
+  dir: string
+  /** Names of the clients that read skills from this directory. */
+  clients: string[]
+  /** Those of them with a capture kit. */
+  kits: { client: CaptureKitClient; name: string }[]
+}
+
+/** The skills directories the clients read, each with who reads it, in table order (#1343). */
+export function skillDirGuides(clients: McpClientGuide[]): SkillDirGuide[] {
+  const out = new Map<string, SkillDirGuide>()
+  for (const c of clients) {
+    if (!c.skillDir) continue
+    const guide = out.get(c.skillDir) ?? { dir: c.skillDir, clients: [], kits: [] }
+    guide.clients.push(c.name)
+    if (c.captureKit) guide.kits.push({ client: c.captureKit, name: c.name })
+    out.set(c.skillDir, guide)
+  }
+  return [...out.values()]
+}
+
 /**
  * Fetch the skill straight into a client's skills directory. Fetched rather
  * than pasted so that re-running it later picks up new workspaces and tools.
@@ -395,6 +475,28 @@ export function skillStackInstallCommand(mcpUrl: string, dir: string, auth: bool
   const key = SKILL_DIR_KEYS.find((k) => SKILL_DIRS[k] === dir)
   if (!key) return null
   return `curl -fsSL${auth ? ` -H "Authorization: Bearer $${KEY_ENV}"` : ''} \\\n  "${mcpUrl}/skills/install?dir=${key}" | sh`
+}
+
+/**
+ * The one setup command (#1347): registers the server with `client`, installs
+ * the skill and, inside a git repository, the capture kit. `single`,
+ * `kit: false` and `project` (#1348: write the repository's committable
+ * config instead of registering per user) carry the wizard's answers; the
+ * server renders the rest.
+ */
+export function setupInstallCommand(
+  mcpUrl: string,
+  client: string,
+  auth: boolean,
+  opts: { single?: boolean; kit?: boolean; project?: boolean } = {},
+): string {
+  const query = [
+    `client=${client}`,
+    ...(opts.single ? ['skill=single'] : []),
+    ...(opts.kit === false ? ['kit=no'] : []),
+    ...(opts.project ? ['scope=project'] : []),
+  ].join('&')
+  return `curl -fsSL${auth ? ` -H "Authorization: Bearer $${KEY_ENV}"` : ''} \\\n  "${mcpUrl}/setup/install?${query}" | sh`
 }
 
 /**

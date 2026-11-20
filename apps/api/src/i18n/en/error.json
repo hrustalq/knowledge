@@ -805,6 +805,12 @@
     "messageNotAssistant": "Only an assistant reply can be saved to the knowledge base.",
     "kitClient": "There is no capture kit for \"{client}\". Kits exist for: {clients}.",
     "skillsDir": "No skills directory \"{dir}\". Choose one of: {dirs}.",
+    "setupClient": "No setup for the client \"{client}\". Choose one of: {clients}.",
+    "setupScope": "No setup scope \"{scope}\". Choose user or project.",
+    "setupProject": {
+      "noFile": "{client} has no project-level config this setup can write: its vendor documents none, or it is not JSON, or its documented shape is not checked yet. Use the user setup (scope=user) instead.",
+      "noEnv": "{client} is not documented to read the key from an environment variable in a project config, so a committed file would have to hold the key. Use the user setup (scope=user) instead."
+    },
     "kitNotOffered": "This key is offered no capture tools, so a capture kit would describe calls it cannot make. Use a capture or read-write key.",
     "keyNotHere": "This key has nothing to do with this workspace."
   },

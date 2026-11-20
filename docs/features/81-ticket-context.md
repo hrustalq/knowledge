@@ -93,7 +93,7 @@ the agent pays.
 
 ## The nudge (hooks)
 
-The capture kit ([50](50-agent-memory.md#the-capture-kit), v3) installs the nudge beside the capture reminder, in the
+The capture kit ([50](50-agent-memory.md#the-capture-kit), v4) installs the nudge beside the capture reminder, in the
 same `knowledge-capture.sh`. It still **holds no key and makes no network call**: it prints about 40 tokens telling the
 model to call `knowledge_context` once, with the ticket's title and key terms, the repo remote and the ids already
 shown.
@@ -105,11 +105,16 @@ shown.
 | Cursor      | a ticket pasted as a message                                                                                                                                     | none: `beforeSubmitPrompt` cannot add context; the skill covers it |
 | Codex, Kimi, Claude Desktop, any MCP client | —                                                                                                                                | the skill's "Starting a ticket" step                   |
 
+- Checked live per client in [33 §Client checks](33-connect-ai.md#client-checks): Claude Code passes on v0.61.0; Kimi
+  Code CLI 2.6.3 never let its model call an MCP tool (#1341); a Bash command that read two tickets nudged only for
+  the first (#1340, fixed in kit v4, not re-checked live).
 - The ticket is read from the tool's **input** only, never its output, which can name any number of other tickets; from
   the prompt, only text after `"prompt"`, so a path in `cwd` is not read as a ticket.
 - A ticket is the first of: a tracker URL (`/issues/N`, `/browse/KEY`, `/issue/KEY`), `owner/repo#N`, a `KEY-123` that
   is not a standard (`UTF-8`, `ISO-8601`, `SHA-256`), or the number after `issue view`. It is folded to a key of
   `[A-Za-z0-9_-]`, at most 64 characters.
+- A shell command is cut at `;`, `&`, `|` and newlines, and every `issue view` in it is read: `gh issue view 128; gh
+  issue view 131` nudges for whichever of the two is new, and two new tickets get one nudge naming both.
 - **Once per ticket per session**: the first nudge creates `$TMPDIR/knowledge-capture/<session>.ticket.<key>` with
   `mkdir`, which is atomic; every later read of the same ticket, by tool or prompt, is silent.
 - A credential offered no capture tool gets no kit (doc 50), so no hook; its skill still has the step.

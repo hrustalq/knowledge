@@ -92,13 +92,15 @@ export class McpController {
   @ApiOperation({ summary: 'What an MCP client needs to connect: endpoint URL, auth mode, and the tools it would get' })
   async connection(@CurrentPrincipal() principal: Principal): Promise<McpConnectionInfo> {
     const offSections = await this.offSections(principal);
+    const extras = { ...this.extras, offSections };
     return {
       url: this.mcp.publicUrl(),
       serverName: MCP_SERVER_NAME,
       authMode: this.config.get('AUTH_MODE') === 'api-key' ? 'api-key' : 'none',
       version: PRODUCT_VERSION,
-      tools: this.mcp.toolsFor(principal, { ...this.extras, offSections }),
+      tools: this.mcp.toolsFor(principal, extras),
       notOffered: toolsetsNotOffered(principal, offSections),
+      skill: await this.mcp.skillStampFor(principal, extras),
     };
   }
 
@@ -146,6 +148,41 @@ export class McpController {
   })
   skillsInstaller(@CurrentPrincipal() principal: Principal, @Query('dir') dir?: string): Promise<string> {
     return this.mcp.skillStackInstallerFor(principal, dir, this.extras);
+  }
+
+  /*
+   * One setup command (#1347): registers the server with one client, installs
+   * the skill and, inside a git repository, the capture kit. The two
+   * installers above, composed, plus the register step.
+   */
+  @Get('setup/install')
+  @Header('Content-Type', 'text/x-shellscript; charset=utf-8')
+  @ApiProduces('text/x-shellscript')
+  @ApiQuery({ name: 'client', type: String, description: 'A client id from the Connect AI table (claude-code, codex, cursor, …)' })
+  @ApiQuery({ name: 'skill', enum: ['stack', 'single'], required: false, description: 'single installs one SKILL.md where a stack is available; stack is the default' })
+  @ApiQuery({ name: 'kit', enum: ['yes', 'no'], required: false, description: 'no leaves the capture kit out; yes is the default' })
+  @ApiQuery({
+    name: 'scope',
+    enum: ['user', 'project'],
+    required: false,
+    description: "project writes the client's committable config into the git repository it runs in (#1348) instead of registering per user; user is the default",
+  })
+  @ApiOperation({
+    summary: 'One POSIX shell script that registers the MCP server with a client, installs the skill and, inside a git repository, the capture kit',
+  })
+  setupInstaller(
+    @CurrentPrincipal() principal: Principal,
+    @Query('client') client: string,
+    @Query('skill') skill?: string,
+    @Query('kit') kit?: string,
+    @Query('scope') scope?: string,
+  ): Promise<string> {
+    return this.mcp.setupInstallerFor(
+      principal,
+      client ?? '',
+      { ...(skill ? { skill } : {}), ...(kit ? { kit } : {}), ...(scope ? { scope } : {}) },
+      this.extras,
+    );
   }
 
   /*

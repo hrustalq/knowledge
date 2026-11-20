@@ -9,6 +9,7 @@ import { createSiteHostResolver, siteFilesMiddleware } from './server/site-files
 import { siteWidgetRoute } from './server/site-widget.js'
 import { exportRenderRoute } from './server/export-render.js'
 import { spliceTemplate } from './server/splice-template.js'
+import { createPreloadLinks } from './server/preload-links.js'
 
 // Vue's compile-time flags. The SSR bundles leave `vue-i18n` external, so
 // Node loads its esm build unreplaced, and its plugin install() reads
@@ -68,6 +69,14 @@ const templateHtml = isProduction
 const readerTemplateHtml = isProduction
   ? await fs.readFile('./dist/client/reader.html', 'utf-8')
   : ''
+// The member app's route chunks, preloaded beside the entry's (#1332). Dev
+// serves source modules unbundled, so there is nothing to preload there. The
+// public reader gets none: on a slow phone its preloads took bandwidth from the
+// stylesheet its first paint waits on (lab LCP 756 -> 1052 ms).
+const readBuild = async (file) => JSON.parse(await fs.readFile(`./dist/client/.vite/${file}`, 'utf-8'))
+const preloadApp = isProduction
+  ? createPreloadLinks({ ssrManifest: await readBuild('ssr-manifest.json'), manifest: await readBuild('manifest.json'), template: templateHtml })
+  : () => ''
 
 // `/s/<token>` and `/s/<token>/<documentId>` — a share link — and
 // `/pub/<slug>/…` — a published site in path mode (docs/features/44). Kept in
@@ -377,6 +386,7 @@ app.use('*all', async (req, res) => {
       title: rendered.title ?? null,
       head: rendered.head,
       html: rendered.html,
+      preload: preloadApp(rendered.modules),
     })
 
     // One member's render, behind their cookie: never a shared cache's, and

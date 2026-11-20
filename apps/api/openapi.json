@@ -45103,6 +45103,103 @@
         ]
       }
     },
+    "/v1/mcp/setup/install": {
+      "get": {
+        "operationId": "McpController_setupInstaller",
+        "parameters": [
+          {
+            "name": "client",
+            "required": true,
+            "in": "query",
+            "description": "A client id from the Connect AI table (claude-code, codex, cursor, …)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "skill",
+            "required": false,
+            "in": "query",
+            "description": "single installs one SKILL.md where a stack is available; stack is the default",
+            "schema": {
+              "enum": [
+                "stack",
+                "single"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "kit",
+            "required": false,
+            "in": "query",
+            "description": "no leaves the capture kit out; yes is the default",
+            "schema": {
+              "enum": [
+                "yes",
+                "no"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "scope",
+            "required": false,
+            "in": "query",
+            "description": "project writes the client's committable config into the git repository it runs in (#1348) instead of registering per user; user is the default",
+            "schema": {
+              "enum": [
+                "user",
+                "project"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "One POSIX shell script that registers the MCP server with a client, installs the skill and, inside a git repository, the capture kit",
+        "tags": [
+          "mcp"
+        ]
+      }
+    },
     "/v1/mcp/capture-kit": {
       "get": {
         "operationId": "McpController_captureKit",
@@ -47019,7 +47116,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.60.0",
+    "version": "0.61.0",
     "contact": {}
   },
   "tags": [],
@@ -63186,7 +63283,8 @@
         "type": "string",
         "enum": [
           "claude-code",
-          "cursor"
+          "cursor",
+          "codex"
         ]
       },
       "CaptureKitFile": {
@@ -70780,12 +70878,25 @@
           },
           "updatedAt": {
             "type": "string"
+          },
+          "headRevisionStatus": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RevisionStatus"
+              }
+            ],
+            "nullable": true
+          },
+          "verification": {
+            "$ref": "#/components/schemas/SourceVerificationState"
           }
         },
         "required": [
           "documentId",
           "title",
-          "updatedAt"
+          "updatedAt",
+          "headRevisionStatus",
+          "verification"
         ]
       },
       "HomeResponse": {
@@ -73996,6 +74107,9 @@
                 "reason"
               ]
             }
+          },
+          "skill": {
+            "$ref": "#/components/schemas/McpSkillStamp"
           }
         },
         "required": [
@@ -74004,7 +74118,23 @@
           "authMode",
           "version",
           "tools",
-          "notOffered"
+          "notOffered",
+          "skill"
+        ]
+      },
+      "McpSkillStamp": {
+        "type": "object",
+        "properties": {
+          "stamp": {
+            "type": "string"
+          },
+          "kitVersion": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "stamp",
+          "kitVersion"
         ]
       },
       "McpToolSummary": {
@@ -77204,23 +77334,7 @@
           "recentPages": {
             "type": "array",
             "items": {
-              "type": "object",
-              "properties": {
-                "documentId": {
-                  "type": "string"
-                },
-                "title": {
-                  "type": "string"
-                },
-                "updatedAt": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "documentId",
-                "title",
-                "updatedAt"
-              ]
+              "$ref": "#/components/schemas/HomeRecentPage"
             }
           }
         },

@@ -26,14 +26,20 @@ and work in its knowledge base **as the person who connected it**:
   wizard. It asks who you are, which tool connects and what the agent will do, then
   derives the key (scope, suggested toolsets), shows that client's command and config
   file live beside the questions with the fresh key in them, installs the skill (and,
-  for Claude Code and Cursor, the capture kit, below), and ends by **waiting for the
+  for Claude Code, Cursor and Codex, the capture kit, below), and ends by **waiting for the
   key's first call**. Every step carries a "Something not working?" panel: symptom →
   fix, for the step and for the chosen client.
 - **Settings → AI → Connect AI** (`/settings/ai/connect`; it was its own settings row
   at `/settings/connect` until issue #182, and that URL — printed in every SKILL.md
   already handed out — redirects) is the manage side: the endpoint, your keys (revoke,
-  last used, captures), the offered tools and the llms.txt URLs. `?client=` on either
-  URL opens the wizard on that client.
+  last used, captures), the skill commands, the offered tools and the llms.txt URLs.
+  `?client=` on either URL opens the wizard on that client.
+  The skill commands (#1343) are the wizard's own, chosen by skills directory instead of
+  by client (`skillDirGuides` groups the client table by `skillDir`): the single
+  `SKILL.md`, the stack where the server has one for that directory, and the capture kit
+  for a client that has one, only while the caller is offered a capture tool. They read
+  the key from `$KNOWLEDGE_API_KEY`; the page never shows or mints one. A client with no
+  skills directory is not listed here and loads `knowledge://skill`.
 - **The skill.** A `SKILL.md` generated per caller at `GET /v1/mcp/skill`: the
   workspaces and project ids that credential reaches, the tools it is offered,
   and the playbooks — answer with citations, change a page only through a merge
@@ -152,24 +158,93 @@ bearer header, so the install command can be re-run to pick up new workspaces.
 **The capture kit is a reminder, not an agent.** The wizard's skill step runs
 `curl -H "Authorization: Bearer …" $API_PUBLIC_URL/v1/mcp/capture-kit/install?client=… | sh`.
 `GET /v1/mcp/capture-kit?client=` returns the same files as JSON
-(`CaptureKitResponse`). The kit is a skill (Claude Code) or an agent-requested
+(`CaptureKitResponse`). The kit is a skill (Claude Code, Codex) or an agent-requested
 rule (Cursor) carrying the capture playbook, plus a hook script that reminds
 the model, once per session and only after it edited a file, to propose what
 it learned. The script holds no key and calls nothing: the model captures
 through the MCP server it is already connected to. Kits exist for
-`claude-code` and `cursor` only (`CAPTURE_KIT_CLIENTS`); other clients get 400
+`claude-code`, `cursor` and `codex` only (`CAPTURE_KIT_CLIENTS`); other clients get 400
 and rely on the skill's "Capture memory" section. A credential offered no
 capture tool gets 403 `capture-not-offered`. The installer never overwrites
-`.claude/settings.json` or `.cursor/hooks.json`: it merges its entries with
-`jq`, or prints them when `jq` is missing. The exact hook behaviour is in
+`.claude/settings.json`, `.cursor/hooks.json` or `.codex/hooks.json`: it merges its entries with
+`jq`, or prints them when `jq` is missing. Codex's hook file is JSON even though its
+config is TOML (#1350). Codex skips a hook until the person trusts it in `/hooks`, and the installer says so. The exact hook behaviour is in
 [50 §The capture kit](50-agent-memory.md#the-capture-kit).
+
+**One setup command** (#1347). `GET /v1/mcp/setup/install?client=<id>` returns
+one POSIX script for a client in the table: it registers the server, installs the
+skill and, inside a git repository, the capture kit. It composes the two installers
+above, each in its own subshell, rather than restating them
+(`apps/api/src/mcp/setup.ts`); `skill=single` and `kit=no` carry the wizard's
+answers, and an unknown client is 400 `setup-client`. The script refuses to start,
+before writing anything, when the server takes keys and `KNOWLEDGE_API_KEY` is
+empty. It reads the whole body into a function before running, so a command that
+reads stdin cannot swallow the rest of a `curl | sh`, and it never prints the key
+(`set +x`; `claude mcp get` output goes only to `grep`).
+
+- **Register.** A vendor CLI is run only where the script can ask it whether the
+  server is already there, which today is Claude Code (`claude mcp get <name>`
+  printing the same URL means unchanged; another URL is left as it is and the
+  person is told how to replace it). Every other CLI command, and every config
+  file, is printed with the file it belongs in. The script never edits a
+  user-level config it did not write. A check for another CLI belongs in
+  `registerCheck` once someone has run that CLI ([§Client checks](#client-checks)).
+- **Skill.** The stack where the client's skills directory has one
+  (`~/.claude/skills`, `~/.agents/skills`), else one `SKILL.md`, else a line
+  saying the client reads none.
+- **Kit.** Only when the client has a kit and the caller is offered a capture
+  tool, the same predicate the kit route's 403 reads. A read key's script has no
+  kit step. Outside a git repository the step is skipped with a reason and the
+  exit code stays 0.
+
+**For a repository** (#1348). `scope=project` writes the client's project-level config
+into the git repository the script runs in (it `cd`s to the top level and refuses
+outside one, before writing anything) instead of registering per user. Each client's
+`projectConfig` in the contracts table is either `{ path, code, docs }` or
+`{ refused }`. A client gets a path only where its vendor's docs state both a
+project-level file and an env reference for the key there, and that file is the
+same JSON as its user-level config, so the key is always `KNOWLEDGE_API_KEY` in the
+client's own syntax:
+
+| Client | Project file | Key reference |
+| --- | --- | --- |
+| Claude Code | `.mcp.json` | `${KNOWLEDGE_API_KEY}` in `headers` (a custom name: Claude Code blanks only its own, cloud and a fixed set of named credentials in remote headers) |
+| Cursor | `.cursor/mcp.json` | `${env:KNOWLEDGE_API_KEY}` |
+| Kimi Code | `.kimi-code/mcp.json` | `bearerTokenEnvVar` |
+| pi | `.pi/mcp.json` | `${KNOWLEDGE_API_KEY}` |
+| Oh My Pi | `.omp/mcp.json` | `${KNOWLEDGE_API_KEY}` |
+
+Every other client is 400 `setup-project-unsupported` with `refused`:
+`no-env-in-headers` (VS Code, Zed, Devin/Windsurf; Gemini CLI and Qwen Code document
+expansion for settings strings in general, not MCP headers) or `no-project-config`
+(Codex's project file is TOML, which the `jq` merge cannot handle; opencode's docs now
+nest servers under `mcp.servers` and the table's shape is not re-checked; Claude
+Desktop, Hermes, DeepSeek Harness, the raw HTTP entry). It is never given the per-user
+setup in its place. An unknown scope is 400 `setup-scope`.
+
+The file is created when absent; when present, `jq` merges it one level deep, so
+every other server and top-level setting is kept and this server's entry is replaced
+whole; without `jq`, or for a file that is not JSON, the entry is printed to merge by
+hand (the capture kit's rule). The skill step still installs per caller, and says
+so: it is generated for each key. The script ends with the files to commit (the
+config plus the capture kit's files). The spec renders every project config and
+project script with a real-looking key in the input and asserts it appears in
+neither. A trust step comes first in two clients: Claude Code shows the server as
+"Pending approval" until someone runs `claude` in the folder and approves it, and Kimi
+skips it until the folder is trusted. No client's project file has been run live
+yet ([§Client checks](#client-checks), #1351); the UI says so.
+
+Every installer writes a file through one `put` helper (`PUT_FN`, `apps/api/src/mcp/installer-shell.ts`)
+that compares first, so a second run reports `unchanged` for each step. The
+wizard's skill step and the manage page lead with this command and keep the
+separate commands behind a disclosure.
 
 **Ticket context** ([81](81-ticket-context.md)). Since kit v3 the same hook
 also nudges the model to call `knowledge_context` once per ticket it reads,
 and the skill carries a "Starting a ticket" step for every other client. The
 wizard shows that step, cut from the SKILL.md it fetched, when "Work on code" was chosen.
 
-**Per-client snippets, not one JSON blob.** `apps/web/src/entities/access/model/mcp-clients.ts`
+**Per-client snippets, not one JSON blob.** `packages/contracts/src/clients/index.ts`
 has a generator per client because the differences break connections, silently:
 the env-var syntax differs in every client (`${VAR}`, `${env:VAR}`,
 `{env:VAR}`, `$VAR`, a named TOML field) and a wrong one is sent literally;
@@ -214,14 +289,15 @@ drops it in a later release.
 | Tool set, guard, whoami, skill wiring                  | `apps/api/src/mcp/mcp.service.ts`                                           |
 | Write list, annotations, read-key filter, instructions | `apps/api/src/mcp/mcp-tools.ts`                                             |
 | SKILL.md renderer                                      | `apps/api/src/mcp/skill.ts`                                                 |
-| HTTP transport + `/connection` + `/skill` + `/capture-kit` | `apps/api/src/mcp/mcp.controller.ts`                                    |
+| HTTP transport + `/connection` + `/skill` + `/capture-kit` + `/setup/install` | `apps/api/src/mcp/mcp.controller.ts`                    |
+| One setup command: register step + composed installers | `apps/api/src/mcp/setup.ts`                                                 |
 | Capture kit renderers + installer                      | `apps/api/src/mcp/capture-kit.ts`                                           |
 | Draft tools (HTTP only)                                | `apps/api/src/mcp/draft-tools.ts`, `collab/collab-draft-tools.service.ts`   |
 | Module split: core / stdio / HTTP                      | `mcp-core.module.ts`, `mcp.module.ts`, `mcp-http.module.ts`                 |
 | Key narrowing                                          | `AccessService.requireKeyAllows`, `AclGuard` (read keys on unscoped routes) |
 | Key resolution + `last_used_at`                        | `apps/api/src/auth/token-auth.service.ts`                                   |
 | Key CRUD                                               | `apps/api/src/auth/api-keys.service.ts`, `MeController`                     |
-| Client snippets                                        | `apps/web/src/entities/access/model/mcp-clients.ts`                                          |
+| Client snippets                                        | `packages/contracts/src/clients/index.ts`                                          |
 | Manage page                                            | `apps/web/src/modules/access/pages/ConnectAiPage.vue`                                      |
 | Setup wizard + its steps                               | `apps/web/src/modules/access/pages/ConnectWizardPage.vue`, `components/connect/`           |
 | What the answers mean                                  | `apps/web/src/entities/access/model/connect-plan.ts`                                       |
@@ -232,6 +308,60 @@ drops it in a later release.
 `API_PUBLIC_URL` — already required for the GitHub App's OAuth callback — is now
 also the base of the MCP URL every snippet contains (`$API_PUBLIC_URL/v1/mcp`).
 Behind the production Caddyfile that is `https://<host>/api`.
+
+## Client checks
+
+Each client is driven against production with the config the wizard hands out, pasted as is (#1209). A row
+records the version checked and five cases:
+
+- **Connect:** the pasted config lists the knowledge tools and `knowledge_whoami` answers.
+- **Skill:** the client loads the generated SKILL.md.
+- **Ticket first:** given a ticket, the first content call is `knowledge_context`, with `repo` set from
+  `git remote get-url origin`.
+- **Hook nudge** (only `CAPTURE_KIT_CLIENTS`): one nudge per ticket, none for a second read of the same ticket, a new
+  one for a new ticket.
+- **Capture:** a session that settled something proposes a `knowledge_capture_*` that becomes a merge request.
+
+Last run: prod **v0.61.0**, 2026-11-20. The owner could run only Claude Code and Kimi Code CLI, so every other row says
+so instead of claiming a result.
+
+| Client                     | Version | Connect     | Skill       | Ticket first | Hook nudge          | Capture     |
+| -------------------------- | ------- | ----------- | ----------- | ------------ | ------------------- | ----------- |
+| Claude Code                | 2.1.328 | pass        | pass        | pass ¹       | pass, one gap #1340 | pass ²      |
+| Kimi Code                  | 2.6.3   | pass ³      | pass        | fail #1341   | n/a (no hook)       | fail #1341  |
+| Codex                      | —       | not checked | not checked | not checked  | not checked ⁴       | not checked |
+| Cursor                     | —       | not checked | not checked | not checked  | not checked         | not checked |
+| Every other client (below) | —       | not checked | not checked | not checked  | n/a (no hook)       | not checked |
+
+"Not checked" means no access: Codex and Cursor are not installed on the machine that ran the checks (Cursor also needs
+a GUI session), and the rest — Gemini CLI, Qwen Code, DeepSeek Harness, pi, Oh My Pi, Hermes Agent, VS Code, Claude
+Desktop, Windsurf, opencode, Zed and the generic MCP client — were out of reach for the same reason.
+
+¹ Claude Code (Haiku, headless, only the repo's skills via `--setting-sources project,local`) called
+`knowledge_whoami` once before `knowledge_context`, to get the workspace id, then `knowledge_context` with the ticket
+title, the scp remote and, on the second ticket, `exclude` set to what it had been shown. It opened only the verified
+page. When the prompt itself scripted every step ("implement issue 128 …"), it read the nudge and skipped the call,
+as on v0.56.0.
+
+² The capture kit's Stop reminder reached the model after it edited `deploy.sh`. It called `knowledge_find_similar`,
+then `knowledge_capture_decision`, answered the three `needs_input` questions (project, related page, reviewer) through
+the person, and the capture became an open merge request amending the verified page (`provenance: captured`). The
+title prefix followed the key owner's account locale (ru), not the session's language.
+
+³ The pasted `.kimi-code/mcp.json` connects and Kimi discovers all 94 tools, but only once the folder is trusted
+("Trust this folder" or `KIMI_CODE_TRUST_WORKSPACE=1`); an untrusted folder skips a project-level server with a
+warning. The model's tool list then held no MCP tools at all, headless (`kimi -p`) or over ACP, so it reported the
+server as not connected. #1341 tracks the cause.
+
+⁴ Codex has had a capture kit since v5 (#1350), checked against Codex's documented hook stdin in
+`capture-kit.spec.ts`, never in a live session. Codex runs the hooks only after they are trusted in `/hooks`.
+
+The hook gap (#1340): `gh issue view 128; gh issue view 131` in one command nudges only for the first ticket. Separate
+commands nudge correctly, and a ticket pasted as the prompt (`ORION-140 — …`) got its one `UserPromptSubmit` nudge.
+Kit v4 reads every `issue view` in a command (doc 81); the row above stays as run until it is re-checked live.
+
+The wizard's "Context when a ticket starts" block was checked on the Skill step in en and ru (Claude Code, "I build
+software").
 
 ## Not done
 

@@ -1515,6 +1515,12 @@ export type I18nTranslations = {
             "messageNotAssistant": string;
             "kitClient": string;
             "skillsDir": string;
+            "setupClient": string;
+            "setupScope": string;
+            "setupProject": {
+                "noFile": string;
+                "noEnv": string;
+            };
             "kitNotOffered": string;
             "keyNotHere": string;
         };

@@ -74,7 +74,7 @@ revision DAG and graph as the pages people write, not in a separate store.
 - **Settings → AI → Agent memory** (`/settings/ai/capture`): the switch, both
   rate limits, both dedupe thresholds and the parent page for new captured
   pages.
-- **A capture kit** for Claude Code and Cursor. It installs a skill or rule
+- **A capture kit** for Claude Code, Cursor and Codex. It installs a skill or rule
   that says what is worth capturing, and a hook that reminds the agent to
   capture at the end of a session that changed files. It is step 4 of Connect
   AI.
@@ -265,7 +265,7 @@ no separate FAQ page. The assistant route builds the capture from
 Capturing depends on the agent choosing to do it, and the end of a session is
 when it forgets. The kit puts the reminder there.
 
-`GET /v1/mcp/capture-kit?client=claude-code|cursor` returns the files
+`GET /v1/mcp/capture-kit?client=claude-code|cursor|codex` returns the files
 (`CaptureKitResponse`) and `GET /v1/mcp/capture-kit/install?client=…` returns
 a POSIX installer for `curl … | sh`. Both are generated for the caller, like
 `/v1/mcp/skill`. A credential that is offered no capture tool, such as a
@@ -277,13 +277,16 @@ skill uses. Other clients get 400. Their guidance is the generated skill's
 | ----------- | ----- |
 | Claude Code | `.claude/skills/knowledge-capture/SKILL.md`, `.claude/hooks/knowledge-capture.sh`, and hook entries merged into `.claude/settings.json`: `PostToolUse` on `Edit\|Write\|MultiEdit\|NotebookEdit` runs `edited`, `PostToolUse` on `TICKET_TOOL_MATCHER` (Bash and tracker MCP tools) runs `ticket`, `UserPromptSubmit` runs `ticket-prompt`, `Stop` runs `stop` |
 | Cursor      | `.cursor/rules/knowledge-capture.mdc` (agent-requested: `alwaysApply: false`, no globs), `.cursor/hooks/knowledge-capture.sh`, and `.cursor/hooks.json` with `afterFileEdit` → `edited`, `postToolUse` → `ticket`, `stop` → `stop` |
+| Codex       | `.agents/skills/knowledge-capture/SKILL.md` (Codex's repository skill directory), `.codex/hooks/knowledge-capture.sh`, and Claude Code's entries merged into `.codex/hooks.json` (#1350): `PostToolUse` on `Edit\|Write`, which is Codex's alias for `apply_patch`, its one edit tool. The command is `"$(git rev-parse --show-toplevel)/.codex/hooks/…"`, because Codex runs hooks in the session's cwd |
+
+**Codex runs a hook only once it is trusted.** It records trust against the hash of the hook's definition and skips a new or changed one until the person trusts it in `/hooks`. It also loads `.codex/` hooks only in a trusted project. The installer says both. A re-run with the same entries keeps the trust, and a newer script under an unchanged entry does not ask for it again.
 
 The hook does exactly this:
 
 - **It holds no key and calls nothing.** It only prints a reminder. The model
   does the capturing, through the MCP server it is already connected to.
 - **`edited`** writes a marker `$TMPDIR/knowledge-capture/<id>.edited`
-  (falling back to `/tmp`), where `<id>` is Claude Code's `session_id` or
+  (falling back to `/tmp`), where `<id>` is Claude Code's or Codex's `session_id` or
   Cursor's `conversation_id` from the hook's stdin. The markers sit outside
   the repository, so the working tree never shows them.
 - **`stop`** does nothing unless that marker exists, so a session that changed
@@ -302,38 +305,44 @@ The hook does exactly this:
   - Cursor receives it as `followup_message`, only on a `completed` turn. A
     follow-up on an aborted or failed turn would answer the person's
     interruption with a chore.
+  - Codex receives it as `decision: "block"` with the reminder as `reason`.
+    That is the only `Stop` output that reaches Codex's model, and Codex
+    continues with it as a new prompt, like Cursor's follow-up. An interrupted
+    turn runs Codex's separate `Interrupt` event, not `Stop`, so Codex needs no
+    completed-only check. The stop that ends the continued turn finds
+    `<id>.reminded` and stays silent.
 - **A session id outside `[A-Za-z0-9._-]{1,200}` counts as no id** and the hook
   stays silent. The id becomes a file name and lands in printed JSON, so it is
   matched against a closed alphabet first.
 - "The session made edits" comes from the marker alone. The transcript is not
   parsed.
-- **`ticket` / `ticket-prompt`** (kit v3, #1196) nudge the model to call
+- **`ticket` / `ticket-prompt`** (kit v3, #1196; v4 reads every ticket of a chained command, #1340) nudge the model to call
   `knowledge_context` ([81](81-ticket-context.md)) once per ticket per
   session. `ticket` fires after a shell `gh|glab|jira issue view …` or a
   tracker MCP tool (name mentions Jira, Linear, Atlassian, issue or ticket)
   and reads the ticket from the tool's **input** only — its output can name any
-  number of other tickets. `ticket-prompt` (Claude Code only) reads the
+  number of other tickets. `ticket-prompt` (Claude Code and Codex) reads the
   prompt. A ticket is a tracker URL (`/issues/N`, `/browse/KEY`,
   `/issue/KEY`), `owner/repo#N`, a `KEY-123` that is not a standard
   (`UTF-8`, `ISO-8601`), or the number after `issue view`. The first read of
   a ticket creates `<id>.ticket.<key>` with `mkdir`; every later read of it
   is silent. The nudge is about 40 tokens: call `knowledge_context` with the
   ticket's title and key terms, the repo remote, and the ids already shown.
-  Claude Code receives it as `additionalContext` on `PostToolUse` /
+  Claude Code and Codex receive it as `additionalContext` on `PostToolUse` /
   `UserPromptSubmit`, Cursor as `additional_context` on `postToolUse`.
   Cursor's `beforeSubmitPrompt` cannot add context, so a ticket pasted into a
-  Cursor prompt gets no nudge (the installer says so); the generated skill's
-  "Starting a ticket" step covers it, as it covers Codex and Kimi.
+  Cursor prompt gets no nudge (the installer says so). The generated skill's
+  "Starting a ticket" step covers it, as it covers Kimi and the other clients without a kit.
 
 The installer refuses to run outside a git repository and installs at its
 root. It overwrites the skill or rule and the script. It **never overwrites**
-`.claude/settings.json` or `.cursor/hooks.json`. With `jq`, it merges the
+`.claude/settings.json`, `.cursor/hooks.json` or `.codex/hooks.json`. With `jq`, it merges the
 kit's entries in, first dropping any earlier entry whose JSON mentions
 `knowledge-capture.sh`, so re-running updates without duplicating. Without
 `jq`, it prints the entries for the person to add. The kit's own skill lists
 the workspaces and projects the caller may capture into, with the key's pin
 applied, and names no person, so a team can commit it. `CAPTURE_KIT_VERSION`
-(currently 3) is printed in every installed script. Bump it when a vendor
+(currently 5, for Codex's `Stop` output) is printed in every installed script. Bump it when a vendor
 changes its hook contract; re-fetching is how a kit updates.
 
 `knowledge_whoami` returns `apiKey.projectIds`, and the generated skill's key
@@ -358,7 +367,7 @@ line names the pin.
 | Inbox                                                    | `apps/web/src/modules/captures/pages/CapturesPage.vue`, `components/captures/`                                      |
 | Chat Save and harvest (#82)                              | `apps/api/src/chat/chat-captures.service.ts`, `chat/harvest.service.ts`                            |
 | Provenance strip, Save to knowledge base, settings panel | `modules/merge-requests/components/MrProvenance.vue`, `assistant/ChatMessage.vue`, `ai/AiCapturePanel.vue` |
-| Connect AI step 4                                        | `apps/web/src/modules/access/pages/ConnectAiPage.vue`, `modules/access/model/mcp-clients.ts` (`captureKit`)                        |
+| Connect AI step 4                                        | `apps/web/src/modules/access/pages/ConnectAiPage.vue`, `packages/contracts/src/clients/index.ts` (`captureKit`)                        |
 
 ## API
 
@@ -633,7 +642,7 @@ new fact for dedupe, a false amend for amend) does not grow. It prints the
   POSIX sh and fires once per session id, and the skill has no capture section
   for a read key.
 
-**Not exercised:** the kit inside a live Claude Code or Cursor session; Connect
+**Not exercised:** the kit inside a live Cursor or Codex session (Codex's is checked only against its documented stdin, #1350); Connect
 AI step 4 and the project pin with a bootstrapped key (both need
 `AUTH_MODE=api-key`, and are typecheck- and unit-tested only); Save to
 knowledge base on a live reply.
@@ -655,5 +664,5 @@ knowledge base on a live reply.
   is an ordinary revert merge request.
 - **No server-side distillation.** The agent decides what to capture. The
   platform never receives a transcript and has nothing to distill from.
-- **Kits for two clients.** Codex, Gemini CLI and the rest get the skill's
+- **Kits for three clients.** Gemini CLI, Kimi and the rest get the skill's
   playbook without a reminder hook.

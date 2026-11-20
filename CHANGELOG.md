@@ -13,6 +13,92 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.62.0] — 2026-11-20
+
+### Added
+
+- **Codex gets the capture kit (#1350).** Until now only Claude Code and Cursor had one. A Codex session depended
+  entirely on the skill text to remember to propose what it learned and to call `knowledge_context` when a ticket
+  started. `GET /v1/mcp/capture-kit/install?client=codex` (and the setup command and Connect wizard for Codex) now
+  installs `.agents/skills/knowledge-capture/SKILL.md`, a hook script and entries merged into `.codex/hooks.json`:
+  one capture reminder per session after a file edit, and one `knowledge_context` nudge per ticket read through the
+  shell, a tracker MCP tool or the prompt. As with the other kits, the script holds no key and makes no network call.
+  **Codex runs a new hook only once you trust it**, so after installing, open `/hooks` in Codex and trust the four
+  `knowledge-capture.sh` hooks (the installer says so). The kit is now v5. Claude Code and Cursor kits are unchanged
+  apart from the version line, so re-running their installers is optional.
+
+- **An agent says when its installed knowledge skill is out of date (#1349).** The skill is generated per person and
+  installed as files, so it went stale silently when the person joined a workspace, a section was switched off, a key
+  was narrowed or a release rewrote a playbook. Every skill now carries a short content stamp (the single SKILL.md in a
+  new "Keeping this skill current" section, each stack skill in its marker line), `knowledge_whoami` returns
+  `skill: { stamp, kitVersion }` for what the server would generate now, and the skill tells the agent to compare the two,
+  tell the person once and name the command that refreshes it. A skill installed before this release carries no stamp
+  and reads as stale on its first `knowledge_whoami`, which is the point: re-run the setup or skill command once.
+  **Settings → AI → Connect AI** shows the current stamp under the setup command. The server version is not part of the
+  stamp, so a release that changes no playbook or tool description leaves installed skills current.
+
+- **A repository can carry its own MCP setup (#1348).** Each teammate had to register the server by hand, so a clone
+  of a repository that uses the knowledge base was not connected to it. `GET /v1/mcp/setup/install?client=<id>&scope=project`,
+  run inside a git repository, writes that client's project-level config (`.mcp.json` for Claude Code,
+  `.cursor/mcp.json`, `.kimi-code/mcp.json`, `.pi/mcp.json`, `.omp/mcp.json`) with the key as a reference to
+  `KNOWLEDGE_API_KEY`, never the key itself, plus the capture hook, and prints the files to commit. An existing config
+  keeps its other servers (merged with `jq`; printed to merge by hand without it). A teammate who clones the repository,
+  exports their own key and approves the server is connected. The skill is still installed per person, because it is
+  generated for each key. Any other client is refused with the reason (no documented project config, or no way to read
+  the key from the environment in one) rather than given the per-user setup. The setup wizard's install step and
+  **Settings → AI → Connect AI** offer "For this repository" for the clients that have one. Not yet checked live with
+  each client: Claude Code and Kimi ask to approve or trust a repository's server first.
+- **One command sets up a coding agent (#1347).** Connecting a client took up to three pastes: the command that
+  registers the MCP server, the skill installer and the capture hook installer, repeated on every machine.
+  `GET /v1/mcp/setup/install?client=<id>` now returns one script that does all three: it registers the server (it runs
+  `claude mcp add` for Claude Code when the server is not already there, and prints the command or config for every
+  other client), installs the skill stack or single `SKILL.md`, and installs the capture hook when you run it inside a
+  git repository and your key may capture. It reads the key from `KNOWLEDGE_API_KEY`, refuses to start without it,
+  never prints it, and running it again reports each step as unchanged. The setup wizard's skill step and **Settings →
+  AI → Connect AI** lead with this command; the separate commands are under "Separate commands". The skill and capture
+  hook installers now also report `unchanged` for a file that did not change, and a `.claude/settings.json` that `jq`
+  cannot parse gets the entries printed instead of a silent skip.
+- **Skill commands on the Connect AI page (#1343).** The commands that install the agent skill were shown only at the
+  end of the guided setup, so refreshing the skill after joining a workspace, or installing it on a second machine,
+  meant walking the setup again. **Settings → AI → Connect AI** now has a "Set up a client again" section; under
+  "Separate commands" choose where your client reads skills from (`~/.claude/skills`, `~/.agents/skills`,
+  `~/.qwen/skills`, `~/.hermes/skills`, each listing its clients) and copy the single `SKILL.md` command, the skill
+  stack installer where there is one, and the capture hook installer for Claude Code or Cursor. The commands read the
+  key from `KNOWLEDGE_API_KEY`; the page does not show or create a key.
+
+### Changed
+
+- **Recent pages show each page's state (#1293).** On the workspace home and the project page, a recently updated
+  page used to show only a generic page icon and a time, which repeated what the Activity widget beside it already
+  said. Each row now has the same marks as a row in the page tree: the lifecycle dot (green when indexed, a pulsing
+  amber dot while indexing, red when indexing failed) and, when a page needs a look (outdated, flagged, expired,
+  edited since it was verified, or asked to be checked), the verification diamond. `HomeRecentPage` and `ProjectOverviewResponse.recentPages`
+  gain `headRevisionStatus` and `verification`.
+- **The assistant opens with its conversation already on screen (#1331).** Opening `/assistant` used to paint a
+  loading skeleton and show the chat only after the app's scripts had downloaded and hydrated and two requests had
+  run in a row: 5.9 s on a slow phone in the lab profile. The server now opens the latest chat (or the `?thread=`
+  one) itself and sends its newest messages, markdown, citation chips included, in the page, or the intro when that
+  chat is empty. The browser reuses that state instead of asking again. Lab LCP: 1.6 s on mobile (390 px, 4× CPU,
+  1.6 Mbps) for both a chat with messages and an empty one, and 156–356 ms on desktop (was 336 ms). Before scripts
+  load, the transcript shows its last six messages scrolled to the newest; the rail, composer, streaming, switching
+  chats and the mobile chat list behave as before.
+- **A member page asks for its own code as soon as the HTML arrives (#1332).** The browser used to learn about a
+  route's scripts and the language catalogue only after the app's entry script had downloaded and run, so they
+  came in a second, serial wave (from ~3.0 s on a slow phone in the lab profile). The server now lists exactly the
+  files its render used as preloads in the page, and they start with the entry (0.2 s). Nothing new is downloaded:
+  every preloaded file is one the page fetched anyway. In the lab, desktop hydration is 10–35 ms sooner; on the
+  throttled mobile profile, bandwidth is the limit and load times are unchanged. Share links and published sites
+  are left as they were: there, the preloads delayed the first paint on a slow phone.
+
+### Fixed
+
+- **The ticket nudge names every ticket a command reads (#1340).** When an agent read two tickets in one shell
+  command (`gh issue view 128; gh issue view 131`), the capture hook took only the first. If that ticket had already
+  been nudged, it stayed silent, and the agent was never asked to call `knowledge_context` for the second one. The
+  hook now reads every `gh|glab|jira issue view` in the command, split at `;`, `&`, `|` and newlines. Each new ticket
+  gets its once-per-session nudge, and two new tickets share one nudge that names both. The capture kit is now v4:
+  re-run the hook installer (Settings → AI → Connect AI) to update a repository's hook in place.
+
 ## [0.61.0] — 2026-11-19
 
 ### Changed
@@ -8041,7 +8127,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.61.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.62.0...HEAD
+[0.62.0]: https://github.com/hrustalq/knowledge/compare/v0.61.0...v0.62.0
 [0.61.0]: https://github.com/hrustalq/knowledge/compare/v0.60.0...v0.61.0
 [0.60.0]: https://github.com/hrustalq/knowledge/compare/v0.59.0...v0.60.0
 [0.59.0]: https://github.com/hrustalq/knowledge/compare/v0.58.0...v0.59.0

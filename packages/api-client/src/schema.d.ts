@@ -8336,6 +8336,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/mcp/setup/install": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One POSIX shell script that registers the MCP server with a client, installs the skill and, inside a git repository, the capture kit */
+        get: operations["McpController_setupInstaller"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/mcp/capture-kit": {
         parameters: {
             query?: never;
@@ -13716,7 +13733,7 @@ export interface components {
         /** @enum {string} */
         CaptureKind: "decision" | "gotcha" | "convention" | "howto" | "glossary" | "relation" | "answer";
         /** @enum {string} */
-        CaptureKitClient: "claude-code" | "cursor";
+        CaptureKitClient: "claude-code" | "cursor" | "codex";
         CaptureKitFile: {
             path: string;
             content: string;
@@ -15456,6 +15473,8 @@ export interface components {
             documentId: string;
             title: string;
             updatedAt: string;
+            headRevisionStatus: components["schemas"]["RevisionStatus"] | null;
+            verification: components["schemas"]["SourceVerificationState"];
         };
         HomeResponse: {
             workspaceId: string;
@@ -16178,6 +16197,11 @@ export interface components {
                 toolset: components["schemas"]["McpToolset"];
                 reason: components["schemas"]["McpToolsetOffReason"];
             }[];
+            skill: components["schemas"]["McpSkillStamp"];
+        };
+        McpSkillStamp: {
+            stamp: string;
+            kitVersion: number;
         };
         McpToolSummary: {
             name: string;
@@ -16920,11 +16944,7 @@ export interface components {
                 workflows: number;
                 openMergeRequests: number;
             };
-            recentPages: {
-                documentId: string;
-                title: string;
-                updatedAt: string;
-            }[];
+            recentPages: components["schemas"]["HomeRecentPage"][];
         };
         ProjectPermissions: {
             "document:view": boolean;
@@ -46607,6 +46627,53 @@ export interface operations {
         parameters: {
             query?: {
                 dir?: "claude" | "agents";
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    McpController_setupInstaller: {
+        parameters: {
+            query: {
+                /** @description A client id from the Connect AI table (claude-code, codex, cursor, …) */
+                client: string;
+                /** @description single installs one SKILL.md where a stack is available; stack is the default */
+                skill?: "stack" | "single";
+                /** @description no leaves the capture kit out; yes is the default */
+                kit?: "yes" | "no";
+                /** @description project writes the client's committable config into the git repository it runs in (#1348) instead of registering per user; user is the default */
+                scope?: "user" | "project";
             };
             header?: {
                 /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */

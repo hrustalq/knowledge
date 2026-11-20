@@ -13,6 +13,32 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Added
+
+- **opencode gets a project file (#1351).** The setup command's `scope=project` now writes the server into the
+  repository's `opencode.json` (key read through `{env:KNOWLEDGE_API_KEY}`, never written) instead of refusing
+  opencode. The snippet keeps opencode's V1 `mcp.<name>` shape, the only one both opencode 1.x and 2.x accept.
+
+### Changed
+
+- **The Connect wizard's client notes say what the client checks found (#1351).** Every headless client was run
+  against production with the wizard's own output: Claude Code, Codex, Gemini CLI, Qwen Code, opencode, pi, Oh My Pi,
+  Hermes Agent and DeepSeek Harness. The notes now name the step each one needs that the config cannot carry, such as
+  trusting the folder (Gemini CLI, pi), trusting Codex's hooks per checkout, Hermes' `mcp` extra, or a new session in
+  Oh My Pi. Results per client are in doc 33 §Client checks.
+
+### Fixed
+
+- **pi and DeepSeek Harness dropped the `knowledge-qa` skill (#1351).** Its description held ": " unquoted, which a
+  strict YAML parser rejects, so those clients loaded 11 of the 12 stack skills. Stack skill descriptions are now
+  quoted. Re-run the setup or skill install command to pick it up: the skill's stamp hashes the single SKILL.md,
+  which did not change, so an installed stack is not reported as out of date.
+- **The setup command for DeepSeek Harness stopped before printing anything (#1351)** with `DSH_HOME: unbound
+  variable` when `DSH_HOME` was not set, which is dsh's default (it then uses `~/.dsh`). It now prints the path as
+  text, and installs the skill stack into `~/.agents/skills`, which dsh reads, instead of saying it reads no skills.
+
 ## [0.62.0] — 2026-11-20
 
 ### Added

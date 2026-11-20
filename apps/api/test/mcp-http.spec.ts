@@ -24,6 +24,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { load as loadYaml } from 'js-yaml';
 import { AiReadableService } from '../src/ai-readable/ai-readable.service.js';
 import { AiReadableController } from '../src/ai-readable/ai-readable.controller.js';
 import { ENFORCING_PROVIDER, enforcingPolicy, noAuthPolicy } from './auth-policy-fakes.js';
@@ -1668,6 +1669,16 @@ describe('renderSkill', () => {
       for (const skill of stack.slice(1)) expect(stack[0].content).toContain(`\`${skill.name}\``);
     });
 
+    // #1351: pi and DeepSeek Harness dropped knowledge-qa, whose `when` holds ": ", as invalid YAML.
+    it('writes frontmatter a strict YAML parser reads, for every skill', () => {
+      for (const skill of [...renderSkillStack(full), { name: 'knowledge-platform', content: renderSkill(full) }]) {
+        const front = skill.content.split('\n---\n')[0].replace(/^---\n/, '');
+        const parsed = loadYaml(front) as { name: string; description: string };
+        expect(parsed.name, skill.name).toBe(skill.name);
+        expect(parsed.description, skill.name).toMatch(/^Use when /);
+      }
+    });
+
     it('drops a toolset that is not offered, from the stack and from what the core names', () => {
       const stack = renderSkillStack(skillInputFor('write', ['qa']));
       expect(stack.map((s) => s.name)).not.toContain('knowledge-qa');
@@ -2014,7 +2025,7 @@ esac
     const projectClients = mcpClients({ url: 'https://kb.example.com/api/v1/mcp', serverName: 'knowledge', auth: true, key: KEY }).filter(hasProjectConfig);
 
     it('never puts a key in a project config or its script, for every client that has one', async () => {
-      expect(projectClients.map((c) => c.id)).toEqual(['claude-code', 'kimi', 'pi', 'omp', 'cursor']);
+      expect(projectClients.map((c) => c.id)).toEqual(['claude-code', 'kimi', 'pi', 'omp', 'cursor', 'opencode']);
       for (const c of projectClients) {
         // Rendered with a real-looking key minted on the page: the project config must still hold only a reference.
         expect(c.projectConfig.code, c.id).not.toContain(KEY);

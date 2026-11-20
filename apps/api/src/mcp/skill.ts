@@ -311,9 +311,12 @@ export function renderSkillStack(input: SkillInput): StackSkill[] {
       return {
         name: nameOf(key),
         toolset: key,
+        // A JSON string is a YAML double-quoted scalar: a `when` holding ": " would otherwise make strict parsers (pi, dsh) drop the skill (#1351).
         content: `---
 name: ${nameOf(key)}
-description: Use when ${when}, in the Knowledge platform at ${host}, through the \`${input.serverName}\` MCP server. Part of the knowledge skill stack; \`${STACK_CORE_SKILL}\` has the connection, your workspaces and the rules.
+description: ${JSON.stringify(
+          `Use when ${when}, in the Knowledge platform at ${host}, through the \`${input.serverName}\` MCP server. Part of the knowledge skill stack; \`${STACK_CORE_SKILL}\` has the connection, your workspaces and the rules.`,
+        )}
 ---
 
 # Knowledge platform: ${title}

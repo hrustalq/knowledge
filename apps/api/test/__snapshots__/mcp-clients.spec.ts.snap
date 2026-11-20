@@ -164,7 +164,7 @@ bearer_token_env_var = "KNOWLEDGE_API_KEY"",
         headers:
           Authorization: !!js '\`Bearer \${process.env.KNOWLEDGE_API_KEY}\`'",
       "lang": "yaml",
-      "path": "$DSH_HOME/cordis.patch.yml",
+      "path": "$DSH_HOME/cordis.patch.yml  (~/.dsh when unset)",
     },
     "docs": "https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/mcp/mcp-client/README.md",
     "id": "deepseek",
@@ -173,7 +173,7 @@ bearer_token_env_var = "KNOWLEDGE_API_KEY"",
     "projectConfig": {
       "refused": "no-project-config",
     },
-    "skillDir": null,
+    "skillDir": "~/.agents/skills",
     "usesEnv": true,
   },
   {
@@ -439,7 +439,22 @@ bearer_token_env_var = "KNOWLEDGE_API_KEY"",
     "name": "opencode",
     "note": "opencode",
     "projectConfig": {
-      "refused": "no-project-config",
+      "code": "{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "kb": {
+      "type": "remote",
+      "url": "https://kb.test/v1/mcp",
+      "enabled": true,
+      "oauth": false,
+      "headers": {
+        "Authorization": "Bearer {env:KNOWLEDGE_API_KEY}"
+      }
+    }
+  }
+}",
+      "docs": "https://opencode.ai/docs/config/",
+      "path": "opencode.json",
     },
     "skillDir": "~/.agents/skills",
     "usesEnv": true,
@@ -515,6 +530,7 @@ exports[`client table snapshot > renders every client — auth, minted key 2`] =
       "Codex",
       "Gemini CLI",
       "Kimi Code",
+      "DeepSeek Harness",
       "pi",
       "Oh My Pi",
       "Cursor",
@@ -716,7 +732,7 @@ bearer_token_env_var = "KNOWLEDGE_API_KEY"",
         headers:
           Authorization: !!js '\`Bearer \${process.env.KNOWLEDGE_API_KEY}\`'",
       "lang": "yaml",
-      "path": "$DSH_HOME/cordis.patch.yml",
+      "path": "$DSH_HOME/cordis.patch.yml  (~/.dsh when unset)",
     },
     "docs": "https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/mcp/mcp-client/README.md",
     "id": "deepseek",
@@ -725,7 +741,7 @@ bearer_token_env_var = "KNOWLEDGE_API_KEY"",
     "projectConfig": {
       "refused": "no-project-config",
     },
-    "skillDir": null,
+    "skillDir": "~/.agents/skills",
     "usesEnv": true,
   },
   {
@@ -991,7 +1007,22 @@ bearer_token_env_var = "KNOWLEDGE_API_KEY"",
     "name": "opencode",
     "note": "opencode",
     "projectConfig": {
-      "refused": "no-project-config",
+      "code": "{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "knowledge": {
+      "type": "remote",
+      "url": "https://kb.test/v1/mcp",
+      "enabled": true,
+      "oauth": false,
+      "headers": {
+        "Authorization": "Bearer {env:KNOWLEDGE_API_KEY}"
+      }
+    }
+  }
+}",
+      "docs": "https://opencode.ai/docs/config/",
+      "path": "opencode.json",
     },
     "skillDir": "~/.agents/skills",
     "usesEnv": true,
@@ -1067,6 +1098,7 @@ exports[`client table snapshot > renders every client — auth, no key 2`] = `
       "Codex",
       "Gemini CLI",
       "Kimi Code",
+      "DeepSeek Harness",
       "pi",
       "Oh My Pi",
       "Cursor",
@@ -1251,7 +1283,7 @@ url = "https://kb.test/v1/mcp"",
         transport: streamable-http
         url: https://kb.test/v1/mcp",
       "lang": "yaml",
-      "path": "$DSH_HOME/cordis.patch.yml",
+      "path": "$DSH_HOME/cordis.patch.yml  (~/.dsh when unset)",
     },
     "docs": "https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/mcp/mcp-client/README.md",
     "id": "deepseek",
@@ -1260,7 +1292,7 @@ url = "https://kb.test/v1/mcp"",
     "projectConfig": {
       "refused": "no-project-config",
     },
-    "skillDir": null,
+    "skillDir": "~/.agents/skills",
     "usesEnv": false,
   },
   {
@@ -1484,7 +1516,19 @@ url = "https://kb.test/v1/mcp"",
     "name": "opencode",
     "note": "opencode",
     "projectConfig": {
-      "refused": "no-project-config",
+      "code": "{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "knowledge": {
+      "type": "remote",
+      "url": "https://kb.test/v1/mcp",
+      "enabled": true,
+      "oauth": false
+    }
+  }
+}",
+      "docs": "https://opencode.ai/docs/config/",
+      "path": "opencode.json",
     },
     "skillDir": "~/.agents/skills",
     "usesEnv": false,
@@ -1556,6 +1600,7 @@ exports[`client table snapshot > renders every client — no auth 2`] = `
       "Codex",
       "Gemini CLI",
       "Kimi Code",
+      "DeepSeek Harness",
       "pi",
       "Oh My Pi",
       "Cursor",

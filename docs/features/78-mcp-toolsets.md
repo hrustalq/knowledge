@@ -188,7 +188,7 @@ with a skills directory.
 | Routes | `apps/api/src/mcp/mcp.controller.ts` |
 | MCP-only refusal | `apps/api/src/auth/token-auth.service.ts`, `apps/api/src/auth/auth.guard.ts` |
 | Key toolsets | `apps/api/src/auth/api-keys.service.ts`, `apps/api/src/auth/api-keys.dto.ts` |
-| Page, install commands | `apps/web/src/modules/access/pages/ConnectAiPage.vue`, `apps/web/src/entities/access/model/mcp-clients.ts` |
+| Page, install commands | `apps/web/src/modules/access/pages/ConnectAiPage.vue`, `packages/contracts/src/clients/index.ts` |
 | Tests | `apps/api/test/mcp-http.spec.ts` |
 
 ## Not built

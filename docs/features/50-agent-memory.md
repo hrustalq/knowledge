@@ -358,7 +358,7 @@ line names the pin.
 | Inbox                                                    | `apps/web/src/modules/captures/pages/CapturesPage.vue`, `components/captures/`                                      |
 | Chat Save and harvest (#82)                              | `apps/api/src/chat/chat-captures.service.ts`, `chat/harvest.service.ts`                            |
 | Provenance strip, Save to knowledge base, settings panel | `modules/merge-requests/components/MrProvenance.vue`, `assistant/ChatMessage.vue`, `ai/AiCapturePanel.vue` |
-| Connect AI step 4                                        | `apps/web/src/modules/access/pages/ConnectAiPage.vue`, `modules/access/model/mcp-clients.ts` (`captureKit`)                        |
+| Connect AI step 4                                        | `apps/web/src/modules/access/pages/ConnectAiPage.vue`, `packages/contracts/src/clients/index.ts` (`captureKit`)                        |
 
 ## API
 

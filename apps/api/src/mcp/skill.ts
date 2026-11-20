@@ -1,4 +1,4 @@
-import { MCP_TOOLSET_KEYS } from '@knowledge/contracts';
+import { MCP_TOOLSET_KEYS, SKILL_NAME } from '@knowledge/contracts';
 import type { ApiKeyScope, McpToolset, McpToolSummary, PublishMode, WorkspaceRole } from '@knowledge/contracts';
 import { CAPTURE_TOOLS, authoringOf } from './mcp-tools.js';
 import { TOOLSET_SKILLS, cell, joinSections, skillSections, type SkillSection } from './skill-sections.js';
@@ -92,7 +92,7 @@ const KEY_SCOPE_LABEL: Record<ApiKeyScope, string> = {
 
 export function renderSkill(input: SkillInput): string {
   return compose(input, {
-    name: 'knowledge-platform',
+    name: SKILL_NAME,
     sections: sectionsOf(input),
     tools: input.tools,
     more: '',

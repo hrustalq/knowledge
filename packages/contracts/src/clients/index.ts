@@ -17,11 +17,12 @@
  *   Zed; VS Code's is currently broken), so those get the key inline or a
  *   prompted input.
  *
- * Pure: the page decides which key to show, this decides where it goes.
+ * Pure: the page decides which key to show, this decides where it goes. Read by
+ * the web wizard, the manage page and the API (#1346); logos and notes stay in the web app.
  */
 
-import type { CaptureKitClient } from '@knowledge/contracts'
-import { SKILL_DIRS, SKILL_DIR_KEYS } from '@knowledge/contracts'
+import type { CaptureKitClient } from '@knowledge/contracts/captures'
+import { SKILL_DIRS, SKILL_DIR_KEYS } from '@knowledge/contracts/identity'
 
 export const KEY_ENV = 'KNOWLEDGE_API_KEY'
 export const SKILL_NAME = 'knowledge-platform'

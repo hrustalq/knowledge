@@ -175,7 +175,7 @@ also nudges the model to call `knowledge_context` once per ticket it reads,
 and the skill carries a "Starting a ticket" step for every other client. The
 wizard shows that step, cut from the SKILL.md it fetched, when "Work on code" was chosen.
 
-**Per-client snippets, not one JSON blob.** `apps/web/src/entities/access/model/mcp-clients.ts`
+**Per-client snippets, not one JSON blob.** `packages/contracts/src/clients/index.ts`
 has a generator per client because the differences break connections, silently:
 the env-var syntax differs in every client (`${VAR}`, `${env:VAR}`,
 `{env:VAR}`, `$VAR`, a named TOML field) and a wrong one is sent literally;
@@ -227,7 +227,7 @@ drops it in a later release.
 | Key narrowing                                          | `AccessService.requireKeyAllows`, `AclGuard` (read keys on unscoped routes) |
 | Key resolution + `last_used_at`                        | `apps/api/src/auth/token-auth.service.ts`                                   |
 | Key CRUD                                               | `apps/api/src/auth/api-keys.service.ts`, `MeController`                     |
-| Client snippets                                        | `apps/web/src/entities/access/model/mcp-clients.ts`                                          |
+| Client snippets                                        | `packages/contracts/src/clients/index.ts`                                          |
 | Manage page                                            | `apps/web/src/modules/access/pages/ConnectAiPage.vue`                                      |
 | Setup wizard + its steps                               | `apps/web/src/modules/access/pages/ConnectWizardPage.vue`, `components/connect/`           |
 | What the answers mean                                  | `apps/web/src/entities/access/model/connect-plan.ts`                                       |

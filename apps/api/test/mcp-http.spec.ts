@@ -1908,7 +1908,7 @@ describe('one setup command (#1347)', () => {
     workspaces: [{ workspaceId: WS_A, name: 'Eng', role: 'editor' as const, projects: [{ projectId: WS_B, name: 'Billing' }] }],
   };
   const writer = keyPrincipal({ id: 'k', scope: 'write', workspaceId: null });
-  async function script(principal: Principal, client: string, opts: { skill?: string; kit?: string; scope?: string } = {}) {
+  async function script(principal: Principal, client: string, opts: { skill?: string; kit?: string; scope?: string; signIn?: string } = {}) {
     const { mcp } = service(accessWith('editor'));
     vi.spyOn(mcp, 'whoami').mockResolvedValue(whoami);
     return mcp.setupInstallerFor(principal, client, opts, { offSections: [] });
@@ -2053,6 +2053,9 @@ esac
         response: { reason: 'setup-project-unsupported', refused: 'no-project-config' },
       });
       await expect(script(writer, 'claude-code', { scope: 'team' })).rejects.toMatchObject({ status: 400, response: { reason: 'setup-scope' } });
+      // Browser sign-in (#1371): an unknown way is refused, and so is oauth on a server that signs nobody in.
+      await expect(script(writer, 'claude-code', { signIn: 'magic' })).rejects.toMatchObject({ status: 400, response: { reason: 'setup-sign-in' } });
+      await expect(script(writer, 'claude-code', { signIn: 'oauth' })).rejects.toMatchObject({ status: 400, response: { reason: 'setup-sign-in-off' } });
     });
 
     describe('run', () => {

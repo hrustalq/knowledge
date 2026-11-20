@@ -749,6 +749,8 @@ export type I18nTranslations = {
             "apiKeyNeedsSession": string;
             "apiKeyNotFound": string;
             "oauthMcpOnly": string;
+            "apiKeyInstallOnly": string;
+            "installKeyExpiry": string;
             "oauthRequestGone": string;
             "oauthClientGone": string;
             "apiKeyWorkspaceNotMember": string;
@@ -1520,6 +1522,8 @@ export type I18nTranslations = {
             "skillsDir": string;
             "setupClient": string;
             "setupScope": string;
+            "setupSignIn": string;
+            "setupSignInOff": string;
             "setupProject": {
                 "noFile": string;
                 "noEnv": string;

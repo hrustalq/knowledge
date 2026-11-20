@@ -288,6 +288,8 @@ const canManageFeatures = usePermission('workspace:admin')
                 <Badge v-if="k.toolsets" variant="secondary">{{ t('connect.keys.mcpOnly') }}</Badge>
                 <!-- An OAuth grant (#1352): the client signed in through the browser; revoked like a key. -->
                 <Badge v-if="k.oauth" variant="secondary">{{ t('connect.oauth.via') }}</Badge>
+                <!-- A Connect wizard setup key (#1371): installers only, for an hour; it drops out of this list once spent. -->
+                <Badge v-if="k.install" variant="secondary">{{ t('connect.keys.install') }}</Badge>
               </div>
               <p v-if="k.toolsets" class="mt-0.5 text-caption text-muted-foreground">
                 {{ t('connect.keys.toolsets', { list: k.toolsets.map((key) => t(`connect.toolsets.${key}.label`)).join(', ') }) }}

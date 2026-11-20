@@ -357,8 +357,39 @@ design was agreed on #1352 before any code; this is what shipped.
   for it (a CIMD domain, or a warning that a registered name is unverified) and
   where the browser returns, then offers the key form's access, workspace,
   expiry and toolset choices. The request lasts 10 minutes and the code 2.
-- **Wizard.** With OAuth on, `McpConnectionInfo.oauth` is true and Claude
-  Desktop's guide becomes "paste the URL as a custom connector", with no key step.
+- **Wizard (#1371).** With OAuth on, `McpConnectionInfo.oauth` is true and the
+  key step first asks a client that can sign in how it will: *In the browser*
+  (the default) or *With an API key*. "Can sign in" is `McpClientGuide.signIn`,
+  set for the 13 clients whose vendor docs describe MCP OAuth for a remote HTTP
+  server (checked 2026-11-20): every client but DeepSeek Harness and the generic
+  HTTP entry. `mcpClients({ signIn: 'oauth' })` renders those with no
+  credential (an `Authorization` header turns OAuth off in all of them), marks
+  them `oauth`, and keeps the key snippet for the rest. Three need more than
+  "no header": Hermes adds `auth: oauth`, opencode drops `oauth: false`, Claude
+  Desktop becomes a custom connector instead of `mcp-remote`. `signIn.command`
+  is the client's own sign-in step (`codex mcp login knowledge`, `/mcp`, …), or
+  null where the client asks by itself on its first connection. Each client
+  also has an OAuth note (`connect.clients.oauthNotes`), since the key notes
+  would mislead.
+- **Setup key (#1371).** The installer curls still need a credential when the
+  client does not, so on reaching the skill step the wizard mints a setup key:
+  `POST /v1/me/api-keys { install: true }` → `api_keys.purpose = 'install'`,
+  `expires_at` = now + `INSTALL_KEY_TTL_MINUTES` (60), scope from the workflows
+  (the skill describes the credential that fetched it, and a read key is
+  refused the kit), refused together with `expiresInDays`.
+  `TokenAuthService.resolve` refuses it at every door unless the route says
+  `install`, which only the six installer handlers (`@InstallKeyOk`, per
+  handler, never the class) do: `skill`, `skills`, `skills/install`,
+  `setup/install`, `capture-kit`, `capture-kit/install`. `POST /v1/mcp`, REST, the
+  git remote and the live socket all answer 403 `apiKeyInstallOnly`. A spent
+  setup key drops out of the key list and the 50-key cap; an ordinary expired
+  key stays listed, as before. `setup/install?signIn=oauth` registers with no
+  credential, skips the `KNOWLEDGE_API_KEY` check and prints the sign-in step;
+  it is 400 `setup-sign-in-off` while OAuth is off.
+- **Verify (#1371).** A browser sign-in is connected once a grant (`oauth`)
+  created after the wizard opened has been used. The setup key never counts,
+  and there is no terminal check to offer: after 90 s the step says how to
+  start the client's sign-in by hand.
 - **Stateless HTTP stays.** Each `/v1/mcp` call resolves its bearer like a key
   does. Nothing about the transport keeps state.
 

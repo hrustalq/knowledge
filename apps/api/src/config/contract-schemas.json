@@ -5047,6 +5047,9 @@
       "oauth": {
         "type": "boolean"
       },
+      "install": {
+        "type": "boolean"
+      },
       "expiresAt": {
         "type": "string",
         "nullable": true
@@ -5068,6 +5071,7 @@
       "projectIds",
       "toolsets",
       "oauth",
+      "install",
       "expiresAt",
       "lastUsedAt",
       "createdAt"

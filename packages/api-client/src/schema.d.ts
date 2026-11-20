@@ -8842,6 +8842,8 @@ export interface components {
             toolsets?: ("core" | "authoring" | "quality" | "review" | "graph" | "conflicts" | "captures" | "qa" | "api-reference" | "code" | "connectors" | "workflows" | "agents" | "insights" | "memos" | "sharing" | "embeds" | "chat" | "projects" | "drafts")[];
             /** @description Days until the key stops working (1–365); omit for no expiry. */
             expiresInDays?: number;
+            /** @description A setup key (#1371): accepted only by the skill and capture-kit installer routes, and only for an hour (INSTALL_KEY_TTL_MINUTES). The Connect wizard mints one for a client that signs in through the browser. Refused together with expiresInDays. */
+            install?: boolean;
         };
         SsoDiscoverDto: {
             /** @example you@corp.example */
@@ -11955,6 +11957,8 @@ export interface components {
             projectIds?: string[];
             /** @description Limit the key to these MCP toolsets ('core' is always added); omit for every toolset. A key with a list works over MCP only: it is refused on REST routes, the git remote and plain-markdown URLs. */
             toolsets?: ("core" | "authoring" | "quality" | "review" | "graph" | "conflicts" | "captures" | "qa" | "api-reference" | "code" | "connectors" | "workflows" | "agents" | "insights" | "memos" | "sharing" | "embeds" | "chat" | "projects" | "drafts")[];
+            /** @description A setup key (#1371): accepted only by the skill and capture-kit installer routes, and only for an hour (INSTALL_KEY_TTL_MINUTES). The Connect wizard mints one for a client that signs in through the browser. Refused together with expiresInDays. */
+            install?: boolean;
             /** @description Days until the grant ends (1–365); omitted means 90. */
             expiresInDays?: number;
         };
@@ -13181,6 +13185,7 @@ export interface components {
             projectIds: string[] | null;
             toolsets: components["schemas"]["McpToolset"][] | null;
             oauth: boolean;
+            install: boolean;
             expiresAt: string | null;
             lastUsedAt: string | null;
             createdAt: string;
@@ -46758,6 +46763,8 @@ export interface operations {
                 kit?: "yes" | "no";
                 /** @description project writes the client's committable config into the git repository it runs in (#1348) instead of registering per user; user is the default */
                 scope?: "user" | "project";
+                /** @description oauth registers the server with no credential and prints how the client signs in through the browser (#1371); needs MCP_OAUTH_ENABLED. key is the default */
+                signIn?: "key" | "oauth";
             };
             header?: {
                 /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */

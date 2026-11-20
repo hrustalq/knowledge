@@ -869,6 +869,9 @@ model ApiKey {
   /// enforced SSO (#75). `created_at` is the consent time the age cap counts from.
   signInMethod     String? @map("sign_in_method")
   signInProviderId String? @map("sign_in_provider_id") @db.Uuid
+  /// 'install' (#1371): a Connect wizard setup key, accepted only by the
+  /// installer routes (`@InstallKeyOk`) until `expires_at`. Null otherwise.
+  purpose          String?
 
   user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   oauthTokens OAuthToken[]

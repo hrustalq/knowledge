@@ -45164,6 +45164,19 @@
             }
           },
           {
+            "name": "signIn",
+            "required": false,
+            "in": "query",
+            "description": "oauth registers the server with no credential and prints how the client signs in through the browser (#1371); needs MCP_OAUTH_ENABLED. key is the default",
+            "schema": {
+              "enum": [
+                "key",
+                "oauth"
+              ],
+              "type": "string"
+            }
+          },
+          {
             "name": "Accept-Language",
             "in": "header",
             "required": false,
@@ -47328,7 +47341,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.62.0",
+    "version": "0.63.0",
     "contact": {}
   },
   "tags": [],
@@ -47516,6 +47529,10 @@
           "expiresInDays": {
             "type": "number",
             "description": "Days until the key stops working (1–365); omit for no expiry."
+          },
+          "install": {
+            "type": "boolean",
+            "description": "A setup key (#1371): accepted only by the skill and capture-kit installer routes, and only for an hour (INSTALL_KEY_TTL_MINUTES). The Connect wizard mints one for a client that signs in through the browser. Refused together with expiresInDays."
           }
         },
         "required": [
@@ -55698,6 +55715,10 @@
               ]
             }
           },
+          "install": {
+            "type": "boolean",
+            "description": "A setup key (#1371): accepted only by the skill and capture-kit installer routes, and only for an hour (INSTALL_KEY_TTL_MINUTES). The Connect wizard mints one for a client that signs in through the browser. Refused together with expiresInDays."
+          },
           "expiresInDays": {
             "type": "number",
             "description": "Days until the grant ends (1–365); omitted means 90."
@@ -60933,6 +60954,9 @@
           "oauth": {
             "type": "boolean"
           },
+          "install": {
+            "type": "boolean"
+          },
           "expiresAt": {
             "type": "string",
             "nullable": true
@@ -60954,6 +60978,7 @@
           "projectIds",
           "toolsets",
           "oauth",
+          "install",
           "expiresAt",
           "lastUsedAt",
           "createdAt"

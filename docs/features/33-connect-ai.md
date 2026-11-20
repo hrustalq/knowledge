@@ -247,6 +247,14 @@ also nudges the model to call `knowledge_context` once per ticket it reads,
 and the skill carries a "Starting a ticket" step for every other client. The
 wizard shows that step, cut from the SKILL.md it fetched, when "Work on code" was chosen.
 
+Most clients load a skill's description and the server instructions, never the skill body, so the step alone
+reached no model without a hook (#1362). Where `knowledge_context` is offered, the rule is also in both places a
+model reads first: the `knowledge-core` description adds "or when starting work on a ticket or issue in a
+repository", and the server instructions add a line that names `knowledge_context`, with `repo` from
+`git remote get-url origin`. A caller not offered the tool gets neither. The core's connection line tells a model
+whose client loads tools on demand (Hermes, pi) to search for `knowledge` before it calls the server not connected.
+pi's snippet marks `knowledge_whoami` and `knowledge_context` `toolExposure: "direct"`, which `pi mcp add` cannot set.
+
 **Per-client snippets, not one JSON blob.** `packages/contracts/src/clients/index.ts`
 has a generator per client because the differences break connections, silently:
 the env-var syntax differs in every client (`${VAR}`, `${env:VAR}`,
@@ -410,6 +418,9 @@ Last run: prod **v0.62.0**, 2026-11-20 (Kimi Code: v0.61.0, the same day). Every
 throwaway `HOME`, in a fixture repository with an scp-style `origin` and a fake `gh` printing two tickets. Models:
 Claude Code on Haiku; every other client on DeepSeek (`deepseek-flash`) through its own provider settings. The key was
 pinned to a real workspace, so Capture ran only where noted, and each merge request it opened was closed at once.
+
+The Ticket first failures marked #1362 ran before the rule reached the skill description and the server instructions
+(see Ticket context above). Those rows are re-run on the release that ships the change.
 
 | Client                 | Version    | Connect                    | Skill    | Ticket first                     | Hook nudge          | Capture            |
 | ---------------------- | ---------- | -------------------------- | -------- | -------------------------------- | ------------------- | ------------------ |

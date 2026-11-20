@@ -1590,12 +1590,19 @@ describe('renderSkill', () => {
   });
 
   // #1197: a caller not offered knowledge_context reads the skill as it was before the tool existed.
+  // #1362: the description names tickets too, so a client that reads only descriptions picks the skill.
   it.each(['write', 'read', 'capture'] as const)('renders no ticket step without knowledge_context (%s key)', (scope) => {
     const full = skillInputFor(scope);
     const without = renderSkill({ ...full, tools: full.tools.filter((t) => t.name !== 'knowledge_context') });
-    expect(without).not.toMatch(/knowledge_context|Starting a ticket/);
+    expect(without).not.toMatch(/knowledge_context|Starting a ticket|ticket or issue/);
     expect(without).toMatchSnapshot();
     expect(renderSkill(full)).toContain('### Starting a ticket');
+    expect(renderSkill(full).split('\n').find((l) => l.startsWith('description:'))).toContain('starting work on a ticket or issue');
+  });
+
+  it('names knowledge_context for a ticket in the instructions only when it is offered (#1362)', () => {
+    expect(MCP_INSTRUCTIONS).toMatch(/ticket or issue .*knowledge_context .*git remote get-url origin/);
+    expect(mcpInstructions((t) => t !== 'knowledge_context')).toBe(MCP_INSTRUCTIONS.split('\n').filter((l) => !l.includes('knowledge_context')).join('\n'));
   });
 
   it('renders a toolset section only when its tools are offered (#945)', () => {

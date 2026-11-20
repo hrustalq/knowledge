@@ -28,11 +28,14 @@ describe('connect plan', () => {
     expect(stepsFor({ needsKey: false })).toEqual(['role', 'client', 'workflow', 'preferences', 'configure', 'skill', 'verify'])
   })
 
-  it('has preferences only for a stackable skill dir, or a kit once capturing was chosen', () => {
-    expect(hasPreferences({ client: { stackable: true, captureKit: null }, workflows: ['ask'] })).toBe(true)
-    expect(hasPreferences({ client: { stackable: false, captureKit: null }, workflows: ['capture'] })).toBe(false)
-    expect(hasPreferences({ client: { stackable: false, captureKit: 'cursor' }, workflows: ['capture'] })).toBe(true)
-    expect(hasPreferences({ client: { stackable: false, captureKit: 'cursor' }, workflows: ['ask'] })).toBe(false)
+  it('has preferences only for a stackable skill dir, a project config, or a kit once capturing was chosen', () => {
+    const c = { stackable: false, captureKit: null, project: false }
+    expect(hasPreferences({ client: { ...c, stackable: true }, workflows: ['ask'] })).toBe(true)
+    expect(hasPreferences({ client: c, workflows: ['capture'] })).toBe(false)
+    expect(hasPreferences({ client: { ...c, captureKit: 'cursor' }, workflows: ['capture'] })).toBe(true)
+    expect(hasPreferences({ client: { ...c, captureKit: 'cursor' }, workflows: ['ask'] })).toBe(false)
+    // "For this repository" is a choice even for a client with no skills dir and no kit (#1348).
+    expect(hasPreferences({ client: { ...c, project: true }, workflows: ['ask'] })).toBe(true)
     expect(hasPreferences({ client: null, workflows: [] })).toBe(false)
   })
 })

@@ -20,6 +20,7 @@ import {
   SKILL_NAME,
   KEY_ENV,
   captureKitInstallCommand,
+  hasProjectConfig,
   setupInstallCommand,
   skillInstallCommand,
   skillStackInstallCommand,
@@ -34,6 +35,8 @@ const props = defineProps<{
   keyScope: ApiKeyScope | null
   format: 'single' | 'stack'
   kit: boolean
+  /** Write the repository's committable config instead of registering per user (#1348). */
+  project: boolean
   ticket: boolean
 }>()
 const { t } = useI18n()
@@ -65,9 +68,16 @@ const setup = computed(() => {
   const command = setupInstallCommand(props.url, props.client.id, props.needsKey, {
     single: props.format === 'single',
     ...(props.client.captureKit && !props.kit ? { kit: false } : {}),
+    ...(props.project ? { project: true } : {}),
   })
   return props.needsKey ? `export ${KEY_ENV}=${props.apiKey ?? '<your-api-key>'}\n${command}` : command
 })
+const projectPath = computed(() => (props.project && hasProjectConfig(props.client) ? props.client.projectConfig.path : null))
+const setupLabel = computed(() =>
+  projectPath.value
+    ? t('connect.setup.labelProject', { path: projectPath.value })
+    : t(kitIncluded.value ? 'connect.setup.labelKit' : 'connect.setup.label', { client: props.client.name }),
+)
 const separate = ref(false)
 
 function download() {
@@ -80,8 +90,11 @@ function download() {
     <p class="kn-measure text-xs leading-relaxed text-muted-foreground">{{ t('connect.skill.hint') }}</p>
 
     <div class="grid min-w-0 gap-2">
-      <CopyBlock :code="setup" :secret="!!apiKey" :label="t(kitIncluded ? 'connect.setup.labelKit' : 'connect.setup.label', { client: client.name })" />
-      <p class="kn-measure text-caption text-muted-foreground">
+      <CopyBlock :code="setup" :secret="!!apiKey" :label="setupLabel" />
+      <p v-if="projectPath" class="kn-measure text-caption text-muted-foreground">
+        {{ t('connect.setup.projectHint', { client: client.name }) }}
+      </p>
+      <p v-else class="kn-measure text-caption text-muted-foreground">
         {{ kitIncluded ? `${t('connect.setup.hint')} ${t('connect.setup.kitHint')}` : t('connect.setup.hint') }}
       </p>
     </div>

@@ -24,6 +24,21 @@ exports[`client table snapshot > renders every client — auth, minted key 1`] =
     "id": "claude-code",
     "name": "Claude Code",
     "note": "claudeCode",
+    "projectConfig": {
+      "code": "{
+  "mcpServers": {
+    "kb": {
+      "type": "http",
+      "url": "https://kb.test/v1/mcp",
+      "headers": {
+        "Authorization": "Bearer \${KNOWLEDGE_API_KEY}"
+      }
+    }
+  }
+}",
+      "docs": "https://code.claude.com/docs/en/mcp#environment-variable-expansion-in-mcp-json",
+      "path": ".mcp.json",
+    },
     "skillDir": "~/.claude/skills",
     "usesEnv": true,
   },
@@ -41,6 +56,9 @@ bearer_token_env_var = "KNOWLEDGE_API_KEY"",
     "id": "codex",
     "name": "Codex",
     "note": "codex",
+    "projectConfig": {
+      "refused": "no-project-config",
+    },
     "skillDir": "~/.agents/skills",
     "usesEnv": true,
   },
@@ -65,6 +83,9 @@ bearer_token_env_var = "KNOWLEDGE_API_KEY"",
     "id": "gemini",
     "name": "Gemini CLI",
     "note": "gemini",
+    "projectConfig": {
+      "refused": "no-env-in-headers",
+    },
     "skillDir": "~/.agents/skills",
     "usesEnv": true,
   },
@@ -89,6 +110,9 @@ bearer_token_env_var = "KNOWLEDGE_API_KEY"",
     "id": "qwen",
     "name": "Qwen Code",
     "note": "qwen",
+    "projectConfig": {
+      "refused": "no-env-in-headers",
+    },
     "skillDir": "~/.qwen/skills",
     "usesEnv": true,
   },
@@ -111,6 +135,18 @@ bearer_token_env_var = "KNOWLEDGE_API_KEY"",
     "id": "kimi",
     "name": "Kimi Code",
     "note": "kimi",
+    "projectConfig": {
+      "code": "{
+  "mcpServers": {
+    "kb": {
+      "url": "https://kb.test/v1/mcp",
+      "bearerTokenEnvVar": "KNOWLEDGE_API_KEY"
+    }
+  }
+}",
+      "docs": "https://www.kimi.com/code/docs/en/kimi-code-cli/customization/mcp.html",
+      "path": ".kimi-code/mcp.json",
+    },
     "skillDir": "~/.agents/skills",
     "usesEnv": true,
   },
@@ -134,6 +170,9 @@ bearer_token_env_var = "KNOWLEDGE_API_KEY"",
     "id": "deepseek",
     "name": "DeepSeek Harness",
     "note": "deepseek",
+    "projectConfig": {
+      "refused": "no-project-config",
+    },
     "skillDir": null,
     "usesEnv": true,
   },
@@ -158,6 +197,20 @@ bearer_token_env_var = "KNOWLEDGE_API_KEY"",
     "id": "pi",
     "name": "pi",
     "note": "pi",
+    "projectConfig": {
+      "code": "{
+  "mcpServers": {
+    "kb": {
+      "url": "https://kb.test/v1/mcp",
+      "headers": {
+        "Authorization": "Bearer \${KNOWLEDGE_API_KEY}"
+      }
+    }
+  }
+}",
+      "docs": "https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/mcp.md",
+      "path": ".pi/mcp.json",
+    },
     "skillDir": "~/.agents/skills",
     "usesEnv": true,
   },
@@ -183,6 +236,21 @@ bearer_token_env_var = "KNOWLEDGE_API_KEY"",
     "id": "omp",
     "name": "Oh My Pi",
     "note": "omp",
+    "projectConfig": {
+      "code": "{
+  "mcpServers": {
+    "kb": {
+      "type": "http",
+      "url": "https://kb.test/v1/mcp",
+      "headers": {
+        "Authorization": "Bearer \${KNOWLEDGE_API_KEY}"
+      }
+    }
+  }
+}",
+      "docs": "https://github.com/can1357/oh-my-pi/blob/main/docs/mcp-config.md",
+      "path": ".omp/mcp.json",
+    },
     "skillDir": "~/.agents/skills",
     "usesEnv": true,
   },
@@ -202,6 +270,9 @@ bearer_token_env_var = "KNOWLEDGE_API_KEY"",
     "id": "hermes",
     "name": "Hermes Agent",
     "note": "hermes",
+    "projectConfig": {
+      "refused": "no-project-config",
+    },
     "skillDir": "~/.hermes/skills",
     "usesEnv": true,
   },
@@ -226,6 +297,20 @@ bearer_token_env_var = "KNOWLEDGE_API_KEY"",
     "id": "cursor",
     "name": "Cursor",
     "note": "cursor",
+    "projectConfig": {
+      "code": "{
+  "mcpServers": {
+    "kb": {
+      "url": "https://kb.test/v1/mcp",
+      "headers": {
+        "Authorization": "Bearer \${env:KNOWLEDGE_API_KEY}"
+      }
+    }
+  }
+}",
+      "docs": "https://cursor.com/docs/context/mcp",
+      "path": ".cursor/mcp.json",
+    },
     "skillDir": "~/.agents/skills",
     "usesEnv": true,
   },
@@ -259,6 +344,9 @@ bearer_token_env_var = "KNOWLEDGE_API_KEY"",
     "id": "vscode",
     "name": "VS Code · Copilot",
     "note": "vscode",
+    "projectConfig": {
+      "refused": "no-env-in-headers",
+    },
     "skillDir": "~/.agents/skills",
     "usesEnv": false,
   },
@@ -292,6 +380,9 @@ bearer_token_env_var = "KNOWLEDGE_API_KEY"",
     "id": "claude-desktop",
     "name": "Claude Desktop",
     "note": "claudeDesktop",
+    "projectConfig": {
+      "refused": "no-project-config",
+    },
     "skillDir": null,
     "usesEnv": false,
   },
@@ -316,6 +407,9 @@ bearer_token_env_var = "KNOWLEDGE_API_KEY"",
     "id": "windsurf",
     "name": "Windsurf · Devin",
     "note": "windsurf",
+    "projectConfig": {
+      "refused": "no-env-in-headers",
+    },
     "skillDir": "~/.agents/skills",
     "usesEnv": true,
   },
@@ -344,6 +438,9 @@ bearer_token_env_var = "KNOWLEDGE_API_KEY"",
     "id": "opencode",
     "name": "opencode",
     "note": "opencode",
+    "projectConfig": {
+      "refused": "no-project-config",
+    },
     "skillDir": "~/.agents/skills",
     "usesEnv": true,
   },
@@ -368,6 +465,9 @@ bearer_token_env_var = "KNOWLEDGE_API_KEY"",
     "id": "zed",
     "name": "Zed",
     "note": "zed",
+    "projectConfig": {
+      "refused": "no-env-in-headers",
+    },
     "skillDir": "~/.agents/skills",
     "usesEnv": false,
   },
@@ -387,6 +487,9 @@ bearer_token_env_var = "KNOWLEDGE_API_KEY"",
     "id": "http",
     "name": "Любой MCP-клиент",
     "note": "http",
+    "projectConfig": {
+      "refused": "no-project-config",
+    },
     "skillDir": null,
     "usesEnv": true,
   },
@@ -469,6 +572,21 @@ exports[`client table snapshot > renders every client — auth, no key 1`] = `
     "id": "claude-code",
     "name": "Claude Code",
     "note": "claudeCode",
+    "projectConfig": {
+      "code": "{
+  "mcpServers": {
+    "knowledge": {
+      "type": "http",
+      "url": "https://kb.test/v1/mcp",
+      "headers": {
+        "Authorization": "Bearer \${KNOWLEDGE_API_KEY}"
+      }
+    }
+  }
+}",
+      "docs": "https://code.claude.com/docs/en/mcp#environment-variable-expansion-in-mcp-json",
+      "path": ".mcp.json",
+    },
     "skillDir": "~/.claude/skills",
     "usesEnv": true,
   },
@@ -486,6 +604,9 @@ bearer_token_env_var = "KNOWLEDGE_API_KEY"",
     "id": "codex",
     "name": "Codex",
     "note": "codex",
+    "projectConfig": {
+      "refused": "no-project-config",
+    },
     "skillDir": "~/.agents/skills",
     "usesEnv": true,
   },
@@ -510,6 +631,9 @@ bearer_token_env_var = "KNOWLEDGE_API_KEY"",
     "id": "gemini",
     "name": "Gemini CLI",
     "note": "gemini",
+    "projectConfig": {
+      "refused": "no-env-in-headers",
+    },
     "skillDir": "~/.agents/skills",
     "usesEnv": true,
   },
@@ -534,6 +658,9 @@ bearer_token_env_var = "KNOWLEDGE_API_KEY"",
     "id": "qwen",
     "name": "Qwen Code",
     "note": "qwen",
+    "projectConfig": {
+      "refused": "no-env-in-headers",
+    },
     "skillDir": "~/.qwen/skills",
     "usesEnv": true,
   },
@@ -556,6 +683,18 @@ bearer_token_env_var = "KNOWLEDGE_API_KEY"",
     "id": "kimi",
     "name": "Kimi Code",
     "note": "kimi",
+    "projectConfig": {
+      "code": "{
+  "mcpServers": {
+    "knowledge": {
+      "url": "https://kb.test/v1/mcp",
+      "bearerTokenEnvVar": "KNOWLEDGE_API_KEY"
+    }
+  }
+}",
+      "docs": "https://www.kimi.com/code/docs/en/kimi-code-cli/customization/mcp.html",
+      "path": ".kimi-code/mcp.json",
+    },
     "skillDir": "~/.agents/skills",
     "usesEnv": true,
   },
@@ -579,6 +718,9 @@ bearer_token_env_var = "KNOWLEDGE_API_KEY"",
     "id": "deepseek",
     "name": "DeepSeek Harness",
     "note": "deepseek",
+    "projectConfig": {
+      "refused": "no-project-config",
+    },
     "skillDir": null,
     "usesEnv": true,
   },
@@ -603,6 +745,20 @@ bearer_token_env_var = "KNOWLEDGE_API_KEY"",
     "id": "pi",
     "name": "pi",
     "note": "pi",
+    "projectConfig": {
+      "code": "{
+  "mcpServers": {
+    "knowledge": {
+      "url": "https://kb.test/v1/mcp",
+      "headers": {
+        "Authorization": "Bearer \${KNOWLEDGE_API_KEY}"
+      }
+    }
+  }
+}",
+      "docs": "https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/mcp.md",
+      "path": ".pi/mcp.json",
+    },
     "skillDir": "~/.agents/skills",
     "usesEnv": true,
   },
@@ -628,6 +784,21 @@ bearer_token_env_var = "KNOWLEDGE_API_KEY"",
     "id": "omp",
     "name": "Oh My Pi",
     "note": "omp",
+    "projectConfig": {
+      "code": "{
+  "mcpServers": {
+    "knowledge": {
+      "type": "http",
+      "url": "https://kb.test/v1/mcp",
+      "headers": {
+        "Authorization": "Bearer \${KNOWLEDGE_API_KEY}"
+      }
+    }
+  }
+}",
+      "docs": "https://github.com/can1357/oh-my-pi/blob/main/docs/mcp-config.md",
+      "path": ".omp/mcp.json",
+    },
     "skillDir": "~/.agents/skills",
     "usesEnv": true,
   },
@@ -647,6 +818,9 @@ bearer_token_env_var = "KNOWLEDGE_API_KEY"",
     "id": "hermes",
     "name": "Hermes Agent",
     "note": "hermes",
+    "projectConfig": {
+      "refused": "no-project-config",
+    },
     "skillDir": "~/.hermes/skills",
     "usesEnv": true,
   },
@@ -671,6 +845,20 @@ bearer_token_env_var = "KNOWLEDGE_API_KEY"",
     "id": "cursor",
     "name": "Cursor",
     "note": "cursor",
+    "projectConfig": {
+      "code": "{
+  "mcpServers": {
+    "knowledge": {
+      "url": "https://kb.test/v1/mcp",
+      "headers": {
+        "Authorization": "Bearer \${env:KNOWLEDGE_API_KEY}"
+      }
+    }
+  }
+}",
+      "docs": "https://cursor.com/docs/context/mcp",
+      "path": ".cursor/mcp.json",
+    },
     "skillDir": "~/.agents/skills",
     "usesEnv": true,
   },
@@ -704,6 +892,9 @@ bearer_token_env_var = "KNOWLEDGE_API_KEY"",
     "id": "vscode",
     "name": "VS Code · Copilot",
     "note": "vscode",
+    "projectConfig": {
+      "refused": "no-env-in-headers",
+    },
     "skillDir": "~/.agents/skills",
     "usesEnv": false,
   },
@@ -737,6 +928,9 @@ bearer_token_env_var = "KNOWLEDGE_API_KEY"",
     "id": "claude-desktop",
     "name": "Claude Desktop",
     "note": "claudeDesktop",
+    "projectConfig": {
+      "refused": "no-project-config",
+    },
     "skillDir": null,
     "usesEnv": false,
   },
@@ -761,6 +955,9 @@ bearer_token_env_var = "KNOWLEDGE_API_KEY"",
     "id": "windsurf",
     "name": "Windsurf · Devin",
     "note": "windsurf",
+    "projectConfig": {
+      "refused": "no-env-in-headers",
+    },
     "skillDir": "~/.agents/skills",
     "usesEnv": true,
   },
@@ -789,6 +986,9 @@ bearer_token_env_var = "KNOWLEDGE_API_KEY"",
     "id": "opencode",
     "name": "opencode",
     "note": "opencode",
+    "projectConfig": {
+      "refused": "no-project-config",
+    },
     "skillDir": "~/.agents/skills",
     "usesEnv": true,
   },
@@ -813,6 +1013,9 @@ bearer_token_env_var = "KNOWLEDGE_API_KEY"",
     "id": "zed",
     "name": "Zed",
     "note": "zed",
+    "projectConfig": {
+      "refused": "no-env-in-headers",
+    },
     "skillDir": "~/.agents/skills",
     "usesEnv": false,
   },
@@ -832,6 +1035,9 @@ bearer_token_env_var = "KNOWLEDGE_API_KEY"",
     "id": "http",
     "name": "Any MCP client",
     "note": "http",
+    "projectConfig": {
+      "refused": "no-project-config",
+    },
     "skillDir": null,
     "usesEnv": true,
   },
@@ -911,6 +1117,18 @@ exports[`client table snapshot > renders every client — no auth 1`] = `
     "id": "claude-code",
     "name": "Claude Code",
     "note": "claudeCode",
+    "projectConfig": {
+      "code": "{
+  "mcpServers": {
+    "knowledge": {
+      "type": "http",
+      "url": "https://kb.test/v1/mcp"
+    }
+  }
+}",
+      "docs": "https://code.claude.com/docs/en/mcp#environment-variable-expansion-in-mcp-json",
+      "path": ".mcp.json",
+    },
     "skillDir": "~/.claude/skills",
     "usesEnv": false,
   },
@@ -927,6 +1145,9 @@ url = "https://kb.test/v1/mcp"",
     "id": "codex",
     "name": "Codex",
     "note": "codex",
+    "projectConfig": {
+      "refused": "no-project-config",
+    },
     "skillDir": "~/.agents/skills",
     "usesEnv": false,
   },
@@ -948,6 +1169,9 @@ url = "https://kb.test/v1/mcp"",
     "id": "gemini",
     "name": "Gemini CLI",
     "note": "gemini",
+    "projectConfig": {
+      "refused": "no-env-in-headers",
+    },
     "skillDir": "~/.agents/skills",
     "usesEnv": false,
   },
@@ -969,6 +1193,9 @@ url = "https://kb.test/v1/mcp"",
     "id": "qwen",
     "name": "Qwen Code",
     "note": "qwen",
+    "projectConfig": {
+      "refused": "no-env-in-headers",
+    },
     "skillDir": "~/.qwen/skills",
     "usesEnv": false,
   },
@@ -990,6 +1217,17 @@ url = "https://kb.test/v1/mcp"",
     "id": "kimi",
     "name": "Kimi Code",
     "note": "kimi",
+    "projectConfig": {
+      "code": "{
+  "mcpServers": {
+    "knowledge": {
+      "url": "https://kb.test/v1/mcp"
+    }
+  }
+}",
+      "docs": "https://www.kimi.com/code/docs/en/kimi-code-cli/customization/mcp.html",
+      "path": ".kimi-code/mcp.json",
+    },
     "skillDir": "~/.agents/skills",
     "usesEnv": false,
   },
@@ -1011,6 +1249,9 @@ url = "https://kb.test/v1/mcp"",
     "id": "deepseek",
     "name": "DeepSeek Harness",
     "note": "deepseek",
+    "projectConfig": {
+      "refused": "no-project-config",
+    },
     "skillDir": null,
     "usesEnv": false,
   },
@@ -1032,6 +1273,17 @@ url = "https://kb.test/v1/mcp"",
     "id": "pi",
     "name": "pi",
     "note": "pi",
+    "projectConfig": {
+      "code": "{
+  "mcpServers": {
+    "knowledge": {
+      "url": "https://kb.test/v1/mcp"
+    }
+  }
+}",
+      "docs": "https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/mcp.md",
+      "path": ".pi/mcp.json",
+    },
     "skillDir": "~/.agents/skills",
     "usesEnv": false,
   },
@@ -1054,6 +1306,18 @@ url = "https://kb.test/v1/mcp"",
     "id": "omp",
     "name": "Oh My Pi",
     "note": "omp",
+    "projectConfig": {
+      "code": "{
+  "mcpServers": {
+    "knowledge": {
+      "type": "http",
+      "url": "https://kb.test/v1/mcp"
+    }
+  }
+}",
+      "docs": "https://github.com/can1357/oh-my-pi/blob/main/docs/mcp-config.md",
+      "path": ".omp/mcp.json",
+    },
     "skillDir": "~/.agents/skills",
     "usesEnv": false,
   },
@@ -1071,6 +1335,9 @@ url = "https://kb.test/v1/mcp"",
     "id": "hermes",
     "name": "Hermes Agent",
     "note": "hermes",
+    "projectConfig": {
+      "refused": "no-project-config",
+    },
     "skillDir": "~/.hermes/skills",
     "usesEnv": false,
   },
@@ -1092,6 +1359,17 @@ url = "https://kb.test/v1/mcp"",
     "id": "cursor",
     "name": "Cursor",
     "note": "cursor",
+    "projectConfig": {
+      "code": "{
+  "mcpServers": {
+    "knowledge": {
+      "url": "https://kb.test/v1/mcp"
+    }
+  }
+}",
+      "docs": "https://cursor.com/docs/context/mcp",
+      "path": ".cursor/mcp.json",
+    },
     "skillDir": "~/.agents/skills",
     "usesEnv": false,
   },
@@ -1114,6 +1392,9 @@ url = "https://kb.test/v1/mcp"",
     "id": "vscode",
     "name": "VS Code · Copilot",
     "note": "vscode",
+    "projectConfig": {
+      "refused": "no-env-in-headers",
+    },
     "skillDir": "~/.agents/skills",
     "usesEnv": false,
   },
@@ -1142,6 +1423,9 @@ url = "https://kb.test/v1/mcp"",
     "id": "claude-desktop",
     "name": "Claude Desktop",
     "note": "claudeDesktop",
+    "projectConfig": {
+      "refused": "no-project-config",
+    },
     "skillDir": null,
     "usesEnv": false,
   },
@@ -1163,6 +1447,9 @@ url = "https://kb.test/v1/mcp"",
     "id": "windsurf",
     "name": "Windsurf · Devin",
     "note": "windsurf",
+    "projectConfig": {
+      "refused": "no-env-in-headers",
+    },
     "skillDir": "~/.agents/skills",
     "usesEnv": false,
   },
@@ -1188,6 +1475,9 @@ url = "https://kb.test/v1/mcp"",
     "id": "opencode",
     "name": "opencode",
     "note": "opencode",
+    "projectConfig": {
+      "refused": "no-project-config",
+    },
     "skillDir": "~/.agents/skills",
     "usesEnv": false,
   },
@@ -1209,6 +1499,9 @@ url = "https://kb.test/v1/mcp"",
     "id": "zed",
     "name": "Zed",
     "note": "zed",
+    "projectConfig": {
+      "refused": "no-env-in-headers",
+    },
     "skillDir": "~/.agents/skills",
     "usesEnv": false,
   },
@@ -1227,6 +1520,9 @@ url = "https://kb.test/v1/mcp"",
     "id": "http",
     "name": "Any MCP client",
     "note": "http",
+    "projectConfig": {
+      "refused": "no-project-config",
+    },
     "skillDir": null,
     "usesEnv": false,
   },

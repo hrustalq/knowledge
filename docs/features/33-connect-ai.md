@@ -196,6 +196,43 @@ reads stdin cannot swallow the rest of a `curl | sh`, and it never prints the ke
   kit step. Outside a git repository the step is skipped with a reason and the
   exit code stays 0.
 
+**For a repository** (#1348). `scope=project` writes the client's project-level config
+into the git repository the script runs in (it `cd`s to the top level and refuses
+outside one, before writing anything) instead of registering per user. Each client's
+`projectConfig` in the contracts table is either `{ path, code, docs }` or
+`{ refused }`. A client gets a path only where its vendor's docs state both a
+project-level file and an env reference for the key there, and that file is the
+same JSON as its user-level config, so the key is always `KNOWLEDGE_API_KEY` in the
+client's own syntax:
+
+| Client | Project file | Key reference |
+| --- | --- | --- |
+| Claude Code | `.mcp.json` | `${KNOWLEDGE_API_KEY}` in `headers` (a custom name: Claude Code blanks only its own, cloud and a fixed set of named credentials in remote headers) |
+| Cursor | `.cursor/mcp.json` | `${env:KNOWLEDGE_API_KEY}` |
+| Kimi Code | `.kimi-code/mcp.json` | `bearerTokenEnvVar` |
+| pi | `.pi/mcp.json` | `${KNOWLEDGE_API_KEY}` |
+| Oh My Pi | `.omp/mcp.json` | `${KNOWLEDGE_API_KEY}` |
+
+Every other client is 400 `setup-project-unsupported` with `refused`:
+`no-env-in-headers` (VS Code, Zed, Devin/Windsurf; Gemini CLI and Qwen Code document
+expansion for settings strings in general, not MCP headers) or `no-project-config`
+(Codex's project file is TOML, which the `jq` merge cannot handle; opencode's docs now
+nest servers under `mcp.servers` and the table's shape is not re-checked; Claude
+Desktop, Hermes, DeepSeek Harness, the raw HTTP entry). It is never given the per-user
+setup in its place. An unknown scope is 400 `setup-scope`.
+
+The file is created when absent; when present, `jq` merges it one level deep, so
+every other server and top-level setting is kept and this server's entry is replaced
+whole; without `jq`, or for a file that is not JSON, the entry is printed to merge by
+hand (the capture kit's rule). The skill step still installs per caller, and says
+so: it is generated for each key. The script ends with the files to commit (the
+config plus the capture kit's files). The spec renders every project config and
+project script with a real-looking key in the input and asserts it appears in
+neither. A trust step comes first in two clients: Claude Code shows the server as
+"Pending approval" until someone runs `claude` in the folder and approves it, and Kimi
+skips it until the folder is trusted. No client's project file has been run live
+yet ([§Client checks](#client-checks), #1351); the UI says so.
+
 Every installer writes a file through one `put` helper (`PUT_FN`, `apps/api/src/mcp/installer-shell.ts`)
 that compares first, so a second run reports `unchanged` for each step. The
 wizard's skill step and the manage page lead with this command and keep the

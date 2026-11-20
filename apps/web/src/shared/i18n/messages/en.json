@@ -5073,7 +5073,18 @@
             "hint": "The skill still explains capturing; there is just no reminder."
           }
         },
-        "none": "Nothing to choose for {client}. Continue."
+        "none": "Nothing to choose for {client}. Continue.",
+        "where": {
+          "legend": "Where the server is added",
+          "user": {
+            "label": "For me",
+            "hint": "Registered in your own client settings, on this machine."
+          },
+          "project": {
+            "label": "For this repository",
+            "hint": "Written to {path} at the repository root, for everyone who clones it to commit. It names the KNOWLEDGE_API_KEY variable, never your key."
+          }
+        }
       },
       "configure": {
         "title": "Add the server to {client}",
@@ -5430,7 +5441,10 @@
       "separate": "Separate commands",
       "manageHint": "One command registers the server with your client and installs the skill and, inside a repository, the capture hook. Run it again on a new machine, or after you join a workspace.",
       "manageLabel": "Set up or update",
-      "client": "Client"
+      "client": "Client",
+      "labelProject": "One command, from the repository: writes {path}, installs the skill for you",
+      "projectHint": "Commit the files it lists: they hold no key. Each teammate exports KNOWLEDGE_API_KEY with their own key and runs this once for their skill. Not yet checked with {client}, which may ask to approve or trust the repository’s server first.",
+      "forRepo": "For this repository ({path})"
     },
     "capture": {
       "title": "Capture what sessions learn",

@@ -57,8 +57,11 @@ export function toolsetsFor(workflows: readonly ConnectWorkflow[]): McpToolset[]
 export interface StepInput {
   /** The server takes API keys (AUTH_MODE=api-key); dev mode has none to create. */
   needsKey: boolean
-  /** The chosen client, once there is one: can its skill install as a stack, and does it have a capture kit. */
-  client: { stackable: boolean; captureKit: string | null } | null
+  /**
+   * The chosen client, once there is one: can its skill install as a stack, does it have a capture kit,
+   * and does it read a config a repository can commit (#1348).
+   */
+  client: { stackable: boolean; captureKit: string | null; project: boolean } | null
   workflows: readonly ConnectWorkflow[]
 }
 
@@ -73,5 +76,5 @@ export function stepsFor({ needsKey }: { needsKey: boolean }): ConnectStep[] {
 
 /** Whether Preferences has anything to ask for this client and these workflows. */
 export function hasPreferences({ client, workflows }: Omit<StepInput, 'needsKey'>): boolean {
-  return !!client && (client.stackable || (!!client.captureKit && workflows.includes('capture')))
+  return !!client && (client.stackable || client.project || (!!client.captureKit && workflows.includes('capture')))
 }

@@ -17,6 +17,17 @@ in the pull request that introduces them — see
 
 ### Added
 
+- **A repository can carry its own MCP setup (#1348).** Each teammate had to register the server by hand, so a clone
+  of a repository that uses the knowledge base was not connected to it. `GET /v1/mcp/setup/install?client=<id>&scope=project`,
+  run inside a git repository, writes that client's project-level config (`.mcp.json` for Claude Code,
+  `.cursor/mcp.json`, `.kimi-code/mcp.json`, `.pi/mcp.json`, `.omp/mcp.json`) with the key as a reference to
+  `KNOWLEDGE_API_KEY`, never the key itself, plus the capture hook, and prints the files to commit. An existing config
+  keeps its other servers (merged with `jq`; printed to merge by hand without it). A teammate who clones the repository,
+  exports their own key and approves the server is connected. The skill is still installed per person, because it is
+  generated for each key. Any other client is refused with the reason (no documented project config, or no way to read
+  the key from the environment in one) rather than given the per-user setup. The setup wizard's install step and
+  **Settings → AI → Connect AI** offer "For this repository" for the clients that have one. Not yet checked live with
+  each client: Claude Code and Kimi ask to approve or trust a repository's server first.
 - **One command sets up a coding agent (#1347).** Connecting a client took up to three pastes: the command that
   registers the MCP server, the skill installer and the capture hook installer, repeated on every machine.
   `GET /v1/mcp/setup/install?client=<id>` now returns one script that does all three: it registers the server (it runs

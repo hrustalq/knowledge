@@ -27,7 +27,7 @@ import { AiReadableService } from '../src/ai-readable/ai-readable.service.js';
 import { AiReadableController } from '../src/ai-readable/ai-readable.controller.js';
 import { ENFORCING_PROVIDER, enforcingPolicy, noAuthPolicy } from './auth-policy-fakes.js';
 import { ElicitRequestSchema, type ElicitRequest, type ElicitResult } from '@modelcontextprotocol/sdk/types.js';
-import { FLOW_NO_LINK, FLOW_OTHER_KEY, FLOW_SCOPE_SUBTREE, MCP_TOOLSETS, MCP_TOOLSET_KEYS, keyToolsetsOf, toolsetOf, type McpToolset } from '@knowledge/contracts';
+import { FLOW_NO_LINK, FLOW_OTHER_KEY, FLOW_SCOPE_SUBTREE, MCP_TOOLSETS, MCP_TOOLSET_KEYS, hasProjectConfig, keyToolsetsOf, mcpClients, toolsetOf, type McpToolset } from '@knowledge/contracts';
 import { FlowsService } from '../src/flows/flows.service.js';
 import { FeaturesService } from '../src/auth/features.service.js';
 import { TokenAuthService } from '../src/auth/token-auth.service.js';
@@ -1859,7 +1859,7 @@ describe('one setup command (#1347)', () => {
     workspaces: [{ workspaceId: WS_A, name: 'Eng', role: 'editor' as const, projects: [{ projectId: WS_B, name: 'Billing' }] }],
   };
   const writer = keyPrincipal({ id: 'k', scope: 'write', workspaceId: null });
-  async function script(principal: Principal, client: string, opts: { skill?: string; kit?: string } = {}) {
+  async function script(principal: Principal, client: string, opts: { skill?: string; kit?: string; scope?: string } = {}) {
     const { mcp } = service(accessWith('editor'));
     vi.spyOn(mcp, 'whoami').mockResolvedValue(whoami);
     return mcp.setupInstallerFor(principal, client, opts, { offSections: [] });
@@ -1975,6 +1975,107 @@ esac
       expect(existsSync(join(home, '.added'))).toBe(false);
       expect(existsSync(join(home, '.claude'))).toBe(false);
       expect(existsSync(join(repo, '.claude'))).toBe(false);
+    });
+  });
+
+  describe('for a repository (#1348)', () => {
+    const KEY = 'kn_live_9f8e7d6c5b4a39281706f5e4d3c2b1a0';
+    const projectClients = mcpClients({ url: 'https://kb.example.com/api/v1/mcp', serverName: 'knowledge', auth: true, key: KEY }).filter(hasProjectConfig);
+
+    it('never puts a key in a project config or its script, for every client that has one', async () => {
+      expect(projectClients.map((c) => c.id)).toEqual(['claude-code', 'kimi', 'pi', 'omp', 'cursor']);
+      for (const c of projectClients) {
+        // Rendered with a real-looking key minted on the page: the project config must still hold only a reference.
+        expect(c.projectConfig.code, c.id).not.toContain(KEY);
+        expect(c.projectConfig.code, c.id).toMatch(/KNOWLEDGE_API_KEY/);
+        const sh = await script(writer, c.id, { scope: 'project' });
+        expect(sh, c.id).not.toContain(KEY);
+        expect(sh, c.id).toContain(`put '${c.projectConfig.path}'`);
+        expect(sh, c.id).not.toContain(' mcp add ');
+      }
+    });
+
+    it('refuses a client with no project config, with the reason, and an unknown scope', async () => {
+      await expect(script(writer, 'zed', { scope: 'project' })).rejects.toMatchObject({
+        status: 400,
+        response: { reason: 'setup-project-unsupported', refused: 'no-env-in-headers' },
+      });
+      await expect(script(writer, 'codex', { scope: 'project' })).rejects.toMatchObject({
+        response: { reason: 'setup-project-unsupported', refused: 'no-project-config' },
+      });
+      await expect(script(writer, 'claude-code', { scope: 'team' })).rejects.toMatchObject({ status: 400, response: { reason: 'setup-scope' } });
+    });
+
+    describe('run', () => {
+      let home: string;
+      let repo: string;
+      const run = async (cwd: string, env: Record<string, string> = { KNOWLEDGE_API_KEY: KEY }) => {
+        const res = spawnSync('sh', ['-s'], {
+          cwd,
+          input: await script(writer, 'claude-code', { scope: 'project' }),
+          env: { PATH: process.env.PATH, HOME: home, TMPDIR: home, ...env },
+        });
+        return { status: res.status, out: res.stdout.toString() + res.stderr.toString() };
+      };
+      const committed = () =>
+        execFileSync('git', ['ls-files', '--others', '--exclude-standard'], { cwd: repo }).toString().trim().split('\n').filter(Boolean);
+
+      beforeEach(() => {
+        home = mkdtempSync(join(tmpdir(), 'kn-proj-home-'));
+        repo = mkdtempSync(join(tmpdir(), 'kn-proj-repo-'));
+        execFileSync('git', ['init', '-q', repo]);
+      });
+      afterEach(() => {
+        rmSync(home, { recursive: true, force: true });
+        rmSync(repo, { recursive: true, force: true });
+      });
+
+      it('merges into an existing .mcp.json, keeps its servers, lists the files to commit and holds no key', async () => {
+        const other = { type: 'stdio', command: 'other-mcp', args: ['--flag'] };
+        writeFileSync(join(repo, '.mcp.json'), JSON.stringify({ mcpServers: { other, knowledge: { type: 'http', url: 'https://stale' } } }));
+        mkdirSync(join(repo, 'sub'));
+
+        const first = await run(join(repo, 'sub'));
+        expect(first.status, first.out).toBe(0);
+        const cfg = JSON.parse(readFileSync(join(repo, '.mcp.json'), 'utf8'));
+        expect(cfg.mcpServers.other).toEqual(other);
+        expect(cfg.mcpServers.knowledge).toEqual({
+          type: 'http',
+          url: 'https://kb.example.com/api/v1/mcp',
+          headers: { Authorization: 'Bearer ${KNOWLEDGE_API_KEY}' },
+        });
+        expect(first.out).toContain('Commit these files (they hold no key):');
+        expect(first.out).toContain('  .mcp.json\n');
+        expect(first.out).toContain('  .claude/hooks/knowledge-capture.sh\n');
+        // The skill is per caller: it lands in HOME, never in the repository.
+        expect(existsSync(join(home, '.claude/skills/knowledge-core/SKILL.md'))).toBe(true);
+        expect(committed().some((f) => f.includes('knowledge-core'))).toBe(false);
+        for (const f of committed()) expect(readFileSync(join(repo, f), 'utf8'), f).not.toContain(KEY);
+
+        const again = await run(repo);
+        expect(again.status, again.out).toBe(0);
+        expect(again.out).toContain('unchanged the server in .mcp.json');
+        expect(first.out + again.out).not.toContain(KEY);
+      });
+
+      it('creates .mcp.json when there is none', async () => {
+        const res = await run(repo);
+        expect(res.status, res.out).toBe(0);
+        expect(Object.keys(JSON.parse(readFileSync(join(repo, '.mcp.json'), 'utf8')).mcpServers)).toEqual(['knowledge']);
+      });
+
+      it('refuses outside a git repository and writes nothing', async () => {
+        const outside = mkdtempSync(join(tmpdir(), 'kn-proj-nogit-'));
+        try {
+          const res = await run(outside);
+          expect(res.status).toBe(1);
+          expect(res.out).toContain('Run this inside the git repository');
+          expect(readdirSync(outside)).toEqual([]);
+          expect(existsSync(join(home, '.claude'))).toBe(false);
+        } finally {
+          rmSync(outside, { recursive: true, force: true });
+        }
+      });
     });
   });
 });

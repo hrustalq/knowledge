@@ -29,6 +29,7 @@ import {
   CONNECT_ROLES,
   CONNECT_WORKFLOWS,
   hasPreferences,
+  hasProjectConfig,
   KEY_ENV,
   mcpClients,
   scopeFor,
@@ -102,6 +103,8 @@ const keyMode = ref<'new' | 'existing'>('new')
 const fresh = ref<{ key: ApiKeyInfo; apiKey: string } | null>(null)
 const skillFormat = ref<'single' | 'stack'>('single')
 const kit = ref<'yes' | 'no'>('yes')
+/** Where the server is registered: per user, or in the repository's committable config (#1348). */
+const where = ref<'user' | 'project'>('user')
 
 const clients = computed(() =>
   connection.value
@@ -115,6 +118,9 @@ const clients = computed(() =>
     : [],
 )
 const client = computed(() => clients.value.find((c) => c.id === clientId.value) ?? null)
+/** A client whose project config its vendor documents, with the key read from the environment. */
+const projectable = computed(() => !!client.value && hasProjectConfig(client.value))
+const forRepo = computed(() => projectable.value && where.value === 'project')
 const wantsKit = computed(() => !!client.value?.captureKit && workflows.value.includes('capture') && kit.value === 'yes')
 
 /** Run from the same shell as the client: the whoami call, with the variable it reads. */
@@ -132,7 +138,10 @@ const stackable = computed(
 )
 const steps = computed(() => stepsFor({ needsKey: needsKey.value }))
 const preferences = computed(() =>
-  hasPreferences({ client: client.value && { stackable: stackable.value, captureKit: client.value.captureKit }, workflows: workflows.value }),
+  hasPreferences({
+    client: client.value && { stackable: stackable.value, captureKit: client.value.captureKit, project: projectable.value },
+    workflows: workflows.value,
+  }),
 )
 const index = ref(0)
 const step = computed<ConnectStep>(() => steps.value[Math.min(index.value, steps.value.length - 1)]!)
@@ -228,6 +237,15 @@ const skillOptions = computed(() =>
     hint: t(`connect.wizard.preferences.skill.${v}.hint`),
   })),
 )
+const whereOptions = computed(() =>
+  (['user', 'project'] as const).map((v) => ({
+    value: v,
+    label: t(`connect.wizard.preferences.where.${v}.label`),
+    hint: t(`connect.wizard.preferences.where.${v}.hint`, {
+      path: client.value && hasProjectConfig(client.value) ? client.value.projectConfig.path : '',
+    }),
+  })),
+)
 const kitOptions = computed(() =>
   (['yes', 'no'] as const).map((v) => ({
     value: v,
@@ -242,7 +260,11 @@ const answers = computed<Partial<Record<ConnectStep, string>>>(() => ({
   client: client.value?.name,
   workflow: workflows.value.map((w) => t(`connect.wizard.workflow.options.${w}.label`)).join(', '),
   key: fresh.value?.key.name ?? (keyMode.value === 'existing' ? t('connect.wizard.key.have') : undefined),
-  preferences: stackable.value ? t(`connect.wizard.preferences.skill.${skillFormat.value}.label`) : undefined,
+  preferences: forRepo.value
+    ? t('connect.wizard.preferences.where.project.label')
+    : stackable.value
+      ? t(`connect.wizard.preferences.skill.${skillFormat.value}.label`)
+      : undefined,
 }))
 
 type HelpItem = { q: string; a: string }
@@ -366,6 +388,13 @@ const help = computed(() => [
           <p v-if="!preferences" class="kn-measure text-sm text-muted-foreground">
             {{ t('connect.wizard.preferences.none', { client: client?.name ?? '' }) }}
           </p>
+          <ChoiceCards
+            v-if="projectable"
+            v-model="where"
+            name="kn-wiz-where"
+            :legend="t('connect.wizard.preferences.where.legend')"
+            :options="whereOptions"
+          />
           <ChoiceCards v-if="stackable" v-model="skillFormat" name="kn-wiz-skill" :legend="t('connect.wizard.preferences.skill.legend')" :options="skillOptions" />
           <ChoiceCards
             v-if="client?.captureKit && workflows.includes('capture')"
@@ -387,6 +416,7 @@ const help = computed(() => [
             :key-scope="fresh?.key.scope ?? null"
             :format="skillFormat"
             :kit="wantsKit"
+            :project="forRepo"
             :ticket="workflows.includes('code')"
           />
         </div>

@@ -186,7 +186,9 @@ function compose(
 
   return `---
 name: ${part.name}
-description: Use when the user asks about, or wants to change, anything kept in the Knowledge platform at ${host} — internal documentation, architecture and service pages, how systems depend on each other, what a change would impact, or merge requests on pages. Searches with citations, reads whole pages, walks the relation graph${
+description: Use when the user asks about, or wants to change, anything kept in the Knowledge platform at ${host} — internal documentation, architecture and service pages, how systems depend on each other, what a change would impact, or merge requests on pages${
+    part.tools.some((t) => t.name === 'knowledge_context') ? ' — or when starting work on a ticket or issue in a repository' : ''
+  }. Searches with citations, reads whole pages, walks the relation graph${
     canWrite ? (authoringOf(input.whoami.workspaces) === 'direct' ? ', and edits pages' : ', and proposes edits as merge requests') : ''
   } through the \`${serverName}\` MCP server.
 ---
@@ -202,7 +204,8 @@ relations between them. Containment is **Workspace > Project > Document**; the w
 - MCP server \`${serverName}\` — Streamable HTTP at \`${input.url}\` (server version ${input.version}).
 - Tools are all named \`knowledge_*\`. Some clients prefix them — in Claude Code they appear as
   \`mcp__${serverName}__knowledge_search\`.
-- If none of these tools are available, the server is not connected. Do not improvise with web requests; tell the user
+- If your client loads tools on demand (a tool search, deferred tools), search it for \`knowledge\` first. If none of
+  these tools are available after that, the server is not connected. Do not improvise with web requests; tell the user
   to connect it from \`${webUrl}/settings/ai/connect\`.
 - ${keyLine}
 
@@ -311,9 +314,12 @@ export function renderSkillStack(input: SkillInput): StackSkill[] {
       return {
         name: nameOf(key),
         toolset: key,
+        // A JSON string is a YAML double-quoted scalar: a `when` holding ": " would otherwise make strict parsers (pi, dsh) drop the skill (#1351).
         content: `---
 name: ${nameOf(key)}
-description: Use when ${when}, in the Knowledge platform at ${host}, through the \`${input.serverName}\` MCP server. Part of the knowledge skill stack; \`${STACK_CORE_SKILL}\` has the connection, your workspaces and the rules.
+description: ${JSON.stringify(
+          `Use when ${when}, in the Knowledge platform at ${host}, through the \`${input.serverName}\` MCP server. Part of the knowledge skill stack; \`${STACK_CORE_SKILL}\` has the connection, your workspaces and the rules.`,
+        )}
 ---
 
 # Knowledge platform: ${title}

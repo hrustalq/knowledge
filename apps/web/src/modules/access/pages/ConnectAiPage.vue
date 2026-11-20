@@ -286,13 +286,14 @@ const canManageFeatures = usePermission('workspace:admin')
                 <Badge v-if="k.workspaceId" variant="outline">{{ workspaceName(k.workspaceId) }}</Badge>
                 <Badge v-for="id in k.projectIds ?? []" :key="id" variant="outline" class="font-normal">{{ projectName(id) }}</Badge>
                 <Badge v-if="k.toolsets" variant="secondary">{{ t('connect.keys.mcpOnly') }}</Badge>
+                <!-- An OAuth grant (#1352): the client signed in through the browser; revoked like a key. -->
+                <Badge v-if="k.oauth" variant="secondary">{{ t('connect.oauth.via') }}</Badge>
               </div>
               <p v-if="k.toolsets" class="mt-0.5 text-caption text-muted-foreground">
                 {{ t('connect.keys.toolsets', { list: k.toolsets.map((key) => t(`connect.toolsets.${key}.label`)).join(', ') }) }}
               </p>
               <p class="mt-0.5 text-caption text-muted-foreground">
-                <code class="font-mono">{{ k.prefix }}…</code>
-                · {{ k.lastUsedAt ? t('connect.keys.lastUsed', { when: formatRelative(k.lastUsedAt) }) : t('connect.keys.neverUsed') }}
+                <template v-if="!k.oauth"><code class="font-mono">{{ k.prefix }}…</code> · </template>{{ k.lastUsedAt ? t('connect.keys.lastUsed', { when: formatRelative(k.lastUsedAt) }) : t('connect.keys.neverUsed') }}
                 · {{ k.expiresAt ? t('connect.keys.expires', { when: formatDate(k.expiresAt) }) : t('connect.keys.noExpiry') }}
                 <template v-if="capturesOf(k)">
                   · <RouterLink :to="capturesOf(k)!" class="text-primary underline underline-offset-2">{{ t('connect.keys.captures') }}</RouterLink>

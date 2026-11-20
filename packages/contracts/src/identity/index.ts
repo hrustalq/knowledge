@@ -204,6 +204,9 @@ export const AUDIT_ACTIONS = [
   /** A personal key, filed under the workspace it is pinned to (else a platform event). `params` never holds the secret. */
   'api-key.created',
   'api-key.revoked',
+  // #1352: a person approved an MCP client on the consent screen; a reused refresh token or a revocation call ended a grant.
+  'oauth.granted',
+  'oauth.revoked',
   /** An admin downloaded the audit trail itself: `params` is the filter, `rowCount` what left. */
   'audit.exported',
   /**
@@ -1061,10 +1064,40 @@ export interface ApiKeyInfo {
    * the git remote and the plain-markdown URLs.
    */
   toolsets: McpToolset[] | null;
+  /**
+   * An OAuth grant a client got through the consent screen (#1352), not a key
+   * pasted into a config: `name` is the client's, `prefix` means nothing.
+   * Revoked the same way.
+   */
+  oauth: boolean;
   expiresAt: string | null;
   /** Coarse — refreshed at most once a minute, so it answers "is this still in use", not "when exactly". */
   lastUsedAt: string | null;
   createdAt: string;
+}
+
+// OAuth for MCP clients (#1352, docs/features/33). The consent screen reads a
+// pending authorize request and answers it; the browser then follows `redirect`
+// back to the client.
+/** How long a grant lasts when the consent screen is not told otherwise. */
+export const OAUTH_GRANT_DEFAULT_DAYS = 90;
+
+// GET /v1/oauth/requests/:id
+export interface OAuthRequestView {
+  client: {
+    /** What the client calls itself. Only a `cimd` client's name is vouched for, by `domain` hosting its metadata. */
+    name: string;
+    kind: 'dcr' | 'cimd';
+    domain: string | null;
+  };
+  /** Where the browser goes after the answer: a host, or a native app's scheme. */
+  redirectTo: string;
+  expiresAt: string;
+}
+
+// POST /v1/oauth/requests/:id/approve and /deny
+export interface OAuthDecisionResponse {
+  redirect: string;
 }
 
 // GET /v1/me/api-keys
@@ -1100,6 +1133,8 @@ export interface McpConnectionInfo {
   serverName: string;
   /** 'none' means the server accepts any caller as the dev principal and no key is needed. */
   authMode: 'none' | 'api-key';
+  /** The server signs clients in with OAuth (#1352, MCP_OAUTH_ENABLED): a client that can skips the key. */
+  oauth: boolean;
   version: string;
   /** Tools the calling credential would be offered. */
   tools: McpToolSummary[];

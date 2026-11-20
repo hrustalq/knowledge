@@ -842,7 +842,9 @@ model ApiKey {
   id          String    @id @default(uuid()) @db.Uuid
   userId      String    @map("user_id") @db.Uuid
   name        String
-  keyHash     String    @unique @map("key_hash")
+  // Null on an OAuth grant (#1352): the grant row carries what its tokens may
+  // do and has no bearer of its own, so nothing can resolve it directly.
+  keyHash     String?   @unique @map("key_hash")
   // First 11 characters of the plaintext (`kn_` + 8 hex): recognisable in a
   // config file, far too short to be worth anything on its own.
   prefix      String
@@ -860,11 +862,72 @@ model ApiKey {
   lastUsedAt  DateTime? @map("last_used_at") @db.Timestamptz
   revokedAt   DateTime? @map("revoked_at") @db.Timestamptz
   createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  /// Set on an OAuth grant (#1352): the `oauth_clients` id the consent screen
+  /// approved. The row is then judged as the sign-in that made it, not as a key.
+  oauthClientId    String? @map("oauth_client_id")
+  /// That sign-in: the approving session's method and identity provider, read by
+  /// enforced SSO (#75). `created_at` is the consent time the age cap counts from.
+  signInMethod     String? @map("sign_in_method")
+  signInProviderId String? @map("sign_in_provider_id") @db.Uuid
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  oauthTokens OAuthToken[]
 
   @@index([userId, createdAt])
   @@map("api_keys")
+}
+
+// OAuth for MCP clients (#1352, docs/features/33). A registered client: a uuid
+// from dynamic registration, or the https URL of a Client ID Metadata Document
+// (cached copy, refetched when stale). Global, like users.
+model OAuthClient {
+  id           String    @id
+  // 'dcr' | 'cimd'
+  kind         String
+  name         String
+  redirectUris Json      @map("redirect_uris")
+  metadata     Json
+  fetchedAt    DateTime? @map("fetched_at") @db.Timestamptz
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([kind, createdAt])
+  @@map("oauth_clients")
+}
+
+// One authorize attempt: pending until a person approves it on the consent
+// screen, then it holds the code's hash (single use, minutes) and the grant.
+model OAuthRequest {
+  id            String    @id @default(uuid()) @db.Uuid
+  clientId      String    @map("client_id")
+  redirectUri   String    @map("redirect_uri")
+  codeChallenge String    @map("code_challenge")
+  state         String?
+  resource      String?
+  codeHash      String?   @unique @map("code_hash")
+  apiKeyId      String?   @map("api_key_id") @db.Uuid
+  expiresAt     DateTime  @map("expires_at") @db.Timestamptz
+  spentAt       DateTime? @map("spent_at") @db.Timestamptz
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([expiresAt])
+  @@map("oauth_requests")
+}
+
+// `ko_` access and `kr_` refresh tokens of a grant; only the SHA-256 is stored.
+model OAuthToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  apiKeyId  String    @map("api_key_id") @db.Uuid
+  // 'access' | 'refresh'
+  kind      String
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz
+  spentAt   DateTime? @map("spent_at") @db.Timestamptz
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  apiKey ApiKey @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+
+  @@index([apiKeyId])
+  @@map("oauth_tokens")
 }
 
 // Auth flow: opaque `ks_` login session tokens (only the SHA-256 is stored).

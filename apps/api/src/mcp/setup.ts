@@ -59,7 +59,8 @@ function registerStep(input: SetupInput): string {
   const check = client.command ? registerCheck(client, name, url) : null;
   const placeholder = auth && !client.usesEnv && client.id !== 'vscode';
   const printConfig = [
-    `echo "  Add this to ${client.config.path}:"`,
+    // Single quotes: a path such as $DSH_HOME/… is shown, never expanded (an unset one stops the script under set -u).
+    `echo '  Add this to ${client.config.path}:'`,
     `echo`,
     `cat ${heredoc(client.config.code)}`,
     `echo`,

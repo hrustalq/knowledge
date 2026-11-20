@@ -213,13 +213,14 @@ client's own syntax:
 | Kimi Code | `.kimi-code/mcp.json` | `bearerTokenEnvVar` |
 | pi | `.pi/mcp.json` | `${KNOWLEDGE_API_KEY}` |
 | Oh My Pi | `.omp/mcp.json` | `${KNOWLEDGE_API_KEY}` |
+| opencode | `opencode.json` | `{env:KNOWLEDGE_API_KEY}` (the V1 `mcp.<name>` shape: 1.x rejects V2's `mcp.servers`, 2.x still reads V1) |
 
 Every other client is 400 `setup-project-unsupported` with `refused`:
 `no-env-in-headers` (VS Code, Zed, Devin/Windsurf; Gemini CLI and Qwen Code document
 expansion for settings strings in general, not MCP headers) or `no-project-config`
-(Codex's project file is TOML, which the `jq` merge cannot handle; opencode's docs now
-nest servers under `mcp.servers` and the table's shape is not re-checked; Claude
-Desktop, Hermes, DeepSeek Harness, the raw HTTP entry). It is never given the per-user
+(Codex's project file is TOML, which the `jq` merge cannot handle; Claude Desktop,
+Hermes, DeepSeek Harness, the raw HTTP entry). Gemini CLI and Qwen Code did expand the
+key in a project file when run (#1364), but nothing documents it yet. It is never given the per-user
 setup in its place. An unknown scope is 400 `setup-scope`.
 
 The file is created when absent; when present, `jq` merges it one level deep, so
@@ -231,8 +232,10 @@ config plus the capture kit's files). The spec renders every project config and
 project script with a real-looking key in the input and asserts it appears in
 neither. A trust step comes first in two clients: Claude Code shows the server as
 "Pending approval" until someone runs `claude` in the folder and approves it, and Kimi
-skips it until the folder is trusted. No client's project file has been run live
-yet ([§Client checks](#client-checks), #1351); the UI says so.
+skips it until the folder is trusted; pi ignores `.pi/mcp.json` until the project is
+trusted. Run live in #1351: Claude Code, pi, Oh My Pi and opencode connect from their
+project file once approved or trusted; Cursor's is not run ([§Client checks](#client-checks)).
+The UI says a client may ask to approve or trust the repository's server first.
 
 Every installer writes a file through one `put` helper (`PUT_FN`, `apps/api/src/mcp/installer-shell.ts`)
 that compares first, so a second run reports `unchanged` for each step. The
@@ -243,6 +246,14 @@ separate commands behind a disclosure.
 also nudges the model to call `knowledge_context` once per ticket it reads,
 and the skill carries a "Starting a ticket" step for every other client. The
 wizard shows that step, cut from the SKILL.md it fetched, when "Work on code" was chosen.
+
+Most clients load a skill's description and the server instructions, never the skill body, so the step alone
+reached no model without a hook (#1362). Where `knowledge_context` is offered, the rule is also in both places a
+model reads first: the `knowledge-core` description adds "or when starting work on a ticket or issue in a
+repository", and the server instructions add a line that names `knowledge_context`, with `repo` from
+`git remote get-url origin`. A caller not offered the tool gets neither. The core's connection line tells a model
+whose client loads tools on demand (Hermes, pi) to search for `knowledge` before it calls the server not connected.
+pi's snippet marks `knowledge_whoami` and `knowledge_context` `toolExposure: "direct"`, which `pi mcp add` cannot set.
 
 **Per-client snippets, not one JSON blob.** `packages/contracts/src/clients/index.ts`
 has a generator per client because the differences break connections, silently:
@@ -282,6 +293,78 @@ shows a `knowledge_whoami` curl and what each reply means (no reply, 401, 403, 4
 the previous image still authenticates after a rollback — the contract step
 drops it in a later release.
 
+## OAuth for MCP clients (#1352)
+
+A client that speaks the MCP authorization flow connects to `/v1/mcp` by signing
+the person in through the browser: no key minted by hand, no `mcp-remote`. The
+design was agreed on #1352 before any code; this is what shipped.
+
+- **Spec.** Built to the 2025-11-25 authorization spec (what Claude implements:
+  2025-03-26, 2025-06-18, 2025-11-25) and complete for 2026-07-28, which only
+  deprecates dynamic registration. Protected-resource metadata (RFC 9728),
+  authorization-server metadata (RFC 8414), PKCE S256 only, Client ID Metadata
+  Documents (CIMD), dynamic registration (RFC 7591), refresh rotation,
+  revocation (RFC 7009).
+- **A grant is an `api_keys` row.** The consent screen writes it through
+  `ApiKeysService.createGrant` with the key form's checks, cap and audit
+  (`oauth.granted`), plus `oauth_client_id` and the approving session's sign-in
+  method and provider. It has no bearer of its own (`key_hash` is null). Its
+  tokens live in `oauth_tokens`, hashed: `ko_` access (1 h, never past the
+  grant) and `kor_` refresh (rotated on every use; a spent one presented again
+  ends the grant, as does a replayed code). `TokenAuthService.resolveOAuth`
+  turns a `ko_` token into the same `principal.apiKey` the row would give as a
+  key, with `oauth` added. So `requireRole` narrowing, toolsets, `isOffered`,
+  audit, `isCurrent` and revocation (`DELETE /v1/me/api-keys/:id`, the same
+  button on this page) all apply unchanged.
+- **Audience.** A `ko_` token is MCP-only by the same rule as a toolset-limited
+  key: refused wherever `@McpKeyOk` is not said, which today is everything but
+  `McpController`.
+- **Enforced SSO judges the sign-in, not the key.** `policyFailure` sends an
+  OAuth principal down the session branch, so `allowApiKeys` never lets a
+  password sign-in through. A grant from another IdP is `foreign-provider`, and
+  the workspace age cap counts from consent. Approving with a workspace pin asks
+  `requireRole` first, so the screen refuses before a grant exists.
+- **A token never makes or extends a grant.** Approving is `@SessionOnly` and
+  `createGrant` requires a `ks_` session. A grant ends a fixed time after
+  consent (chosen on the screen, 90 days by default), and refreshing never
+  moves that date.
+- **The protocol is the MCP SDK's** (`@modelcontextprotocol/sdk/server/auth`
+  handlers): redirect matching (exact, loopback port relaxed per RFC 8252), PKCE
+  verification, error shapes. `OAuthService` implements its
+  `OAuthServerProvider` for storage and decisions. `mount.ts` puts the handlers
+  on the API's Express instance, with the house Redis limiter in place of the
+  SDK's in-memory one. The SDK's `mcpAuthRouter` is not used: its metadata
+  cannot advertise CIMD.
+- **CIMD** is resolved inside `getClient`. An `https` client id with a path is
+  fetched through `safeFetch` (5 KB, 5 s, no redirects). The document must name
+  itself, list redirect URIs and be a public client. It is cached in
+  `oauth_clients` for its `max-age` (24 h at most), and a stale copy serves while
+  the client's host is down. Checked against Claude Code's real document
+  (`https://claude.ai/oauth/claude-code-client-metadata`).
+- **Dynamic registration is an unauthenticated write.** It is held to 20 per IP
+  per hour (fails closed without Redis), and a client is always registered
+  public. Never-granted registrations are pruned after 24 h, and over 1 000 of
+  them answers `temporarily_unavailable`.
+- **Discovery.** The issuer is `API_PUBLIC_URL`'s origin, so the documents are
+  at `/.well-known/oauth-protected-resource/<api path>/v1/mcp` and
+  `/.well-known/oauth-authorization-server`, and the proxy sends `/.well-known/oauth-*`
+  to the API (Caddyfile). The endpoints are `$API_PUBLIC_URL/oauth/{authorize,token,register,revoke}`.
+  A 401 from the MCP controller carries
+  `WWW-Authenticate: Bearer resource_metadata="…"`, and Claude honours that
+  pointer only on a 401.
+- **Consent screen.** `/oauth/authorize?request=` in the member app (`meta.focus`).
+  Signed out, it goes to `/login` first. It shows the client's name, who vouches
+  for it (a CIMD domain, or a warning that a registered name is unverified) and
+  where the browser returns, then offers the key form's access, workspace,
+  expiry and toolset choices. The request lasts 10 minutes and the code 2.
+- **Wizard.** With OAuth on, `McpConnectionInfo.oauth` is true and Claude
+  Desktop's guide becomes "paste the URL as a custom connector", with no key step.
+- **Stateless HTTP stays.** Each `/v1/mcp` call resolves its bearer like a key
+  does. Nothing about the transport keeps state.
+
+Not done: a project pin on the consent screen (keys only), OAuth for the
+memory-bank MCP and REST, and checking clients other than Claude live.
+
 ## Where it lives
 
 | Piece                                                  | File                                                                        |
@@ -301,7 +384,10 @@ drops it in a later release.
 | Manage page                                            | `apps/web/src/modules/access/pages/ConnectAiPage.vue`                                      |
 | Setup wizard + its steps                               | `apps/web/src/modules/access/pages/ConnectWizardPage.vue`, `components/connect/`           |
 | What the answers mean                                  | `apps/web/src/entities/access/model/connect-plan.ts`                                       |
-| Tests                                                  | `apps/api/test/mcp-http.spec.ts`                                            |
+| OAuth: protocol mount, provider, consent API           | `apps/api/src/oauth/` (`mount.ts`, `oauth.service.ts`, `oauth.controller.ts`) |
+| OAuth: token resolution, URLs, SSO rule                | `token-auth.service.ts`, `auth/oauth-urls.ts`, `policyFailure`              |
+| OAuth consent screen                                   | `apps/web/src/modules/access/pages/OAuthConsentPage.vue`                    |
+| Tests                                                  | `apps/api/test/mcp-http.spec.ts`, `apps/api/test/mcp-oauth.spec.ts`         |
 
 ## Configuration
 
@@ -309,66 +395,93 @@ drops it in a later release.
 also the base of the MCP URL every snippet contains (`$API_PUBLIC_URL/v1/mcp`).
 Behind the production Caddyfile that is `https://<host>/api`.
 
+`MCP_OAUTH_ENABLED` (default `false`, needs `AUTH_MODE=api-key`) turns on OAuth
+for MCP clients. It is a ceiling: off means the discovery documents and
+endpoints 404, a 401 carries no pointer, and existing grants stop resolving.
+
 ## Client checks
 
-Each client is driven against production with the config the wizard hands out, pasted as is (#1209). A row
-records the version checked and five cases:
+Each client is driven against production with what the wizard hands out, pasted as is (#1209, #1351): the one setup
+command (`/v1/mcp/setup/install?client=<id>`, and `&scope=project` where the client has a project file), and whatever
+config or command it prints, applied unedited. A row records the version checked and five cases:
 
 - **Connect:** the pasted config lists the knowledge tools and `knowledge_whoami` answers.
-- **Skill:** the client loads the generated SKILL.md.
+- **Skill:** the client loads the generated skill (the stack in `~/.claude/skills` / `~/.agents/skills`, else the one
+  SKILL.md).
 - **Ticket first:** given a ticket, the first content call is `knowledge_context`, with `repo` set from
   `git remote get-url origin`.
 - **Hook nudge** (only `CAPTURE_KIT_CLIENTS`): one nudge per ticket, none for a second read of the same ticket, a new
-  one for a new ticket.
+  one for a new ticket, and both tickets of `gh issue view 1; gh issue view 2` in one command.
 - **Capture:** a session that settled something proposes a `knowledge_capture_*` that becomes a merge request.
 
-Last run: prod **v0.61.0**, 2026-11-20. The owner could run only Claude Code and Kimi Code CLI, so every other row says
-so instead of claiming a result.
+Last run: prod **v0.62.0**, 2026-11-20 (Kimi Code: v0.61.0, the same day). Every client ran headless in its own
+throwaway `HOME`, in a fixture repository with an scp-style `origin` and a fake `gh` printing two tickets. Models:
+Claude Code on Haiku; every other client on DeepSeek (`deepseek-flash`) through its own provider settings. The key was
+pinned to a real workspace, so Capture ran only where noted, and each merge request it opened was closed at once.
 
-| Client                     | Version | Connect     | Skill       | Ticket first | Hook nudge          | Capture     |
-| -------------------------- | ------- | ----------- | ----------- | ------------ | ------------------- | ----------- |
-| Claude Code                | 2.1.328 | pass        | pass        | pass ¹       | pass, one gap #1340 | pass ²      |
-| Kimi Code                  | 2.6.3   | pass ³      | pass        | fail #1341   | n/a (no hook)       | fail #1341  |
-| Codex                      | —       | not checked | not checked | not checked  | not checked ⁴       | not checked |
-| Cursor                     | —       | not checked | not checked | not checked  | not checked         | not checked |
-| Every other client (below) | —       | not checked | not checked | not checked  | n/a (no hook)       | not checked |
+The Ticket first failures marked #1362 ran before the rule reached the skill description and the server instructions
+(see Ticket context above). Those rows are re-run on the release that ships the change.
 
-"Not checked" means no access: Codex and Cursor are not installed on the machine that ran the checks (Cursor also needs
-a GUI session), and the rest — Gemini CLI, Qwen Code, DeepSeek Harness, pi, Oh My Pi, Hermes Agent, VS Code, Claude
-Desktop, Windsurf, opencode, Zed and the generic MCP client — were out of reach for the same reason.
+| Client                 | Version    | Connect                    | Skill    | Ticket first                     | Hook nudge          | Capture            |
+| ---------------------- | ---------- | -------------------------- | -------- | -------------------------------- | ------------------- | ------------------ |
+| Claude Code            | 2.1.329    | pass ¹                     | pass     | pass                             | pass ²              | pass on v0.61.0; not re-run, #1363 |
+| Codex                  | 0.171.0    | pass                       | pass     | pass with the kit; fail without, #1362 | pass ³        | not run #1363      |
+| DeepSeek Harness       | 0.2.2-rc.5 | pass ⁴                     | pass ⁵   | pass                             | n/a (no hook)       | pass               |
+| opencode               | 1.14.48    | pass ⁶                     | pass     | pass                             | n/a (no hook)       | not run #1363      |
+| Oh My Pi               | 16.3.0     | pass, from the second session, #1365 | pass | pass                       | n/a (no hook)       | not run #1363      |
+| pi                     | 1.6.0      | pass                       | pass ⁵   | fail #1362 ⁷                     | n/a (no hook)       | not run #1363      |
+| Gemini CLI             | 0.70.0     | pass ⁸                     | pass     | fail #1362 (no `repo`)           | n/a (no hook)       | not run #1363      |
+| Qwen Code              | 0.28.0     | pass                       | pass     | fail #1362                       | n/a (no hook)       | not run #1363      |
+| Hermes Agent           | 0.19.0     | pass with the `mcp` extra, #1365 | pass | fail #1362, #1365              | n/a (no hook)       | not run #1363      |
+| Kimi Code              | 2.6.3      | pass ⁹                     | pass     | fail #1341                       | n/a (no hook)       | fail #1341         |
+| Cursor                 | —          | not run: needs a GUI, #1363 | not run | not run                          | not run             | not run            |
+| VS Code, Claude Desktop, Windsurf, Zed | — | not run: needs a GUI, #1363 | not run | not run                  | n/a (no hook)       | not run            |
+| Any MCP client (curl)  | —          | pass                       | n/a      | n/a                              | n/a (no hook)       | n/a                |
 
-¹ Claude Code (Haiku, headless, only the repo's skills via `--setting-sources project,local`) called
-`knowledge_whoami` once before `knowledge_context`, to get the workspace id, then `knowledge_context` with the ticket
-title, the scp remote and, on the second ticket, `exclude` set to what it had been shown. It opened only the verified
-page. When the prompt itself scripted every step ("implement issue 128 …"), it read the nudge and skipped the call,
-as on v0.56.0.
+Fixed in the same pull request as this table (#1351): the stack skills' `description` was unquoted, so `knowledge-qa`
+(whose description holds ": ") was dropped as invalid YAML by pi and DeepSeek Harness; the setup script stopped with
+`DSH_HOME: unbound variable` before printing DeepSeek Harness's row; DeepSeek Harness reads `~/.agents/skills` and now
+gets the stack; opencode gets `opencode.json` as its project file.
 
-² The capture kit's Stop reminder reached the model after it edited `deploy.sh`. It called `knowledge_find_similar`,
-then `knowledge_capture_decision`, answered the three `needs_input` questions (project, related page, reviewer) through
-the person, and the capture became an open merge request amending the verified page (`provenance: captured`). The
-title prefix followed the key owner's account locale (ru), not the session's language.
+¹ The setup command registers the server, and a second run says `unchanged` for every step. The project setup's `jq`
+merge kept another server and an extra top-level key, and replaced a stale `knowledge` entry whole. An unapproved
+project `.mcp.json` server is hidden behind a user-scope server of the same name (no "Pending approval" hint), which
+the wizard's note now says.
 
-³ The pasted `.kimi-code/mcp.json` connects and Kimi discovers all 94 tools, but only once the folder is trusted
+² Kit v5: one nudge for 4821, none for re-reading it, a new one for 4822 (and `knowledge_context` then sent `exclude`),
+and `gh issue view 4821; gh issue view 4822` in one Bash call nudged once for both — #1340 is fixed.
+
+³ The same four steps pass in Codex once the hooks run. Codex loads `.codex/hooks.json` only in a trusted project and
+runs each hook only after it is trusted in `/hooks`, which records a hash per hooks.json entry under the checkout's
+absolute path in the user's `config.toml` — so a moved or re-cloned repository needs trusting again. Headless, the
+check trusted them through `codex app-server` (`hooks/list` + `config/batchWrite`), the writer `/hooks` uses. On DeepSeek the hook turns ran through a local proxy that moves the hook's
+message after the tool output, because DeepSeek refuses Codex's order (#1365). Without the kit the model never opened
+the skill (#1362).
+
+⁴ The printed `cordis.patch.yml` row validates against `dsh --dump-config-schema` and composes after the headless
+profile.
+
+⁵ After the quoting fix above; before it, 11 of the 12 stack skills loaded.
+
+⁶ opencode 1.14.48 rejects the V2 `mcp.servers` shape and opencode 2.x still reads V1, so the snippet's `mcp.<name>`
+shape is the one both accept (#1357). The same JSON in a repository's `opencode.json` connects.
+
+⁷ pi hides MCP tool descriptions behind its tool search; marking `knowledge_whoami` and `knowledge_context`
+`toolExposure: "direct"` made one rerun pass (#1362).
+
+⁸ Gemini CLI disables every MCP server, user-level ones too, in an untrusted folder. Its model cases ran through a
+local Gemini-to-DeepSeek API shim, not a Google sign-in (#1363).
+
+⁹ The pasted `.kimi-code/mcp.json` connects and Kimi discovers all 94 tools, but only once the folder is trusted
 ("Trust this folder" or `KIMI_CODE_TRUST_WORKSPACE=1`); an untrusted folder skips a project-level server with a
 warning. The model's tool list then held no MCP tools at all, headless (`kimi -p`) or over ACP, so it reported the
 server as not connected. #1341 tracks the cause.
-
-⁴ Codex has had a capture kit since v5 (#1350), checked against Codex's documented hook stdin in
-`capture-kit.spec.ts`, never in a live session. Codex runs the hooks only after they are trusted in `/hooks`.
-
-The hook gap (#1340): `gh issue view 128; gh issue view 131` in one command nudges only for the first ticket. Separate
-commands nudge correctly, and a ticket pasted as the prompt (`ORION-140 — …`) got its one `UserPromptSubmit` nudge.
-Kit v4 reads every `issue view` in a command (doc 81); the row above stays as run until it is re-checked live.
 
 The wizard's "Context when a ticket starts" block was checked on the Skill step in en and ru (Claude Code, "I build
 software").
 
 ## Not done
 
-- **OAuth.** Clients that only speak OAuth for remote servers (Claude Desktop's
-  native connectors, claude.ai) connect through `mcp-remote` for now. An OAuth
-  authorization server would let them connect natively and is the obvious next
-  step.
 - **Per-tool key lists.** A key can be limited to chosen toolsets, and is then
   valid over MCP only ([78](78-mcp-toolsets.md)). A list finer than a toolset
   is not expressible.

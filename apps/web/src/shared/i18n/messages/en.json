@@ -4940,6 +4940,23 @@
     }
   },
   "connect": {
+    "oauth": {
+      "bar": "Connect an AI client",
+      "title": "Allow {client} to use your knowledge base?",
+      "verified": "Identified by {domain}",
+      "unverified": "This name is what the client calls itself; nothing has verified it. Allow only if you just started connecting it yourself.",
+      "returnTo": "You'll return to",
+      "limit": "Limit it to chosen toolsets",
+      "allow": "Allow",
+      "allowing": "Allowing…",
+      "deny": "Deny",
+      "denying": "Denying…",
+      "leaving": "Returning you to {client}…",
+      "goneTitle": "This sign-in can't continue",
+      "missing": "This page opens from an AI client's sign-in. Start the connection again from your AI client.",
+      "toConnect": "Go to Connect AI",
+      "via": "via OAuth"
+    },
     "wizard": {
       "title": "Connect an AI client",
       "close": "Close",
@@ -5399,21 +5416,22 @@
         "command": "Terminal"
       },
       "notes": {
-        "claudeCode": "Use single quotes so the ${'{'}KNOWLEDGE_API_KEY{'}'} placeholder is stored, not the key itself. Check with `claude mcp list`, then `/mcp` inside a session.",
-        "codex": "Codex reads the key from the variable named in bearer_token_env_var — no interpolation syntax. Verify with `codex mcp list`.",
-        "gemini": "Streamable HTTP needs httpUrl; plain url means SSE. The CLI defaults to project scope, hence --scope user. Check with `/mcp` in a session.",
+        "claudeCode": "Use single quotes so the ${'{'}KNOWLEDGE_API_KEY{'}'} placeholder is stored, not the key itself. Check with `claude mcp list`, then `/mcp` inside a session. A repository's .mcp.json server waits until you approve it in `claude`; a server of the same name registered for yourself hides it until then (`claude mcp remove knowledge -s user`).",
+        "codex": "Codex reads the key from the variable named in bearer_token_env_var — no interpolation syntax. Verify with `codex mcp list`. The capture kit's hooks run only once the project is trusted and each hook is trusted in /hooks. Trust is per checkout: trust again after moving or re-cloning the repository.",
+        "gemini": "Streamable HTTP needs httpUrl; plain url means SSE. The CLI defaults to project scope, hence --scope user. Check with `/mcp` in a session. An untrusted folder disables every MCP server, user-level ones too: trust the folder first.",
         "cursor": "Cursor expands ${'{'}env:VAR{'}'} in headers. Restart Cursor after exporting the variable so it inherits it, then enable the server under Settings → MCP.",
         "vscode": "VS Code asks for the key once and stores it encrypted. ${'{'}env:…{'}'} in headers is currently sent literally by VS Code, so this uses a prompted input instead.",
+        "claudeDesktopOauth": "Paste this URL as a custom connector in Claude Desktop (Settings → Connectors). Claude opens your browser to sign you in here, where you choose what it may do — no key, no mcp-remote.",
         "claudeDesktop": "Claude Desktop's config file runs local servers only, so mcp-remote bridges to this endpoint (Node.js required). The key is written into the file — keep it private. Restart Claude after saving.",
         "windsurf": "Newer builds read ~/.config/devin/mcp_config.json; older Windsurf builds ~/.codeium/windsurf/mcp_config.json. Refresh the MCP list in Cascade after saving.",
-        "opencode": "oauth: false stops opencode trying OAuth against a key-authenticated server. Place it in opencode.json at the project root, or globally.",
+        "opencode": "oauth: false stops opencode trying OAuth against a key-authenticated server. Place it in opencode.json at the project root, or globally. If opencode reports the config invalid, its error prints the key with the variable filled in: do not paste that error anywhere.",
         "zed": "Zed has no environment-variable expansion in headers, so the key is written into settings.json. Or add it from Settings → AI → MCP Servers.",
         "qwen": "Streamable HTTP needs httpUrl, as in Gemini CLI, which Qwen Code is built on. --scope user writes ~/.qwen/settings.json instead of the project's file. Check with `qwen mcp list`.",
         "kimi": "Kimi reads the key from the variable named in bearerTokenEnvVar, so the file holds no secret. Use ~/.kimi-code/mcp.json, or .kimi-code/mcp.json for one repository. Check with `kimi mcp list`, then `/mcp` in a session.",
-        "deepseek": "Merge this row into your existing patch file rather than replacing it, or save it as its own file and start with `dsh web --patch <file>`. The !!js header reads the key from the environment the harness starts in.",
-        "pi": "pi reads the key from the variable named by --bearer-token-env-var; the file form expands the variable in the header. Check with `pi mcp list`.",
-        "omp": "Oh My Pi expands environment variables in headers. Use ~/.omp/agent/mcp.json, not the older ~/.omp/mcp.json, then run `/mcp reload` and `/mcp list` in a session.",
-        "hermes": "Hermes expands the variable from your environment or ~/.hermes/.env. Run `/reload-mcp` in a chat after editing.",
+        "deepseek": "Merge this row into your existing patch file rather than replacing it, or save it as its own file and start with `dsh web --patch <file>`. The !!js header reads the key from the environment the harness starts in. Start dsh from a folder whose .env sets no launch-only variable such as NODE_TLS_REJECT_UNAUTHORIZED, or it refuses to start.",
+        "pi": "pi reads the key from the variable named by --bearer-token-env-var; the file form expands the variable in the header. Check with `pi mcp list`. A repository's .pi/mcp.json is ignored until the project is trusted: start pi there once, or pass --approve. The file form keeps knowledge_whoami and knowledge_context out of pi's tool search (toolExposure \"direct\"), so a ticket starts with them; `pi mcp add` cannot set that, so add the toolExposure block to the file after it.",
+        "omp": "Oh My Pi expands environment variables in headers. Use ~/.omp/agent/mcp.json, not the older ~/.omp/mcp.json, then run `/mcp reload` and `/mcp list` in a session. The first session after you add the server may see none of its tools; start a new one.",
+        "hermes": "Hermes expands the variable from your environment or ~/.hermes/.env. Run `/reload-mcp` in a chat after editing. Install Hermes with its MCP extra (`pipx install 'hermes-agent[mcp]'`): without it the server fails with “mcp.client.streamable_http is not available”.",
         "http": "Any MCP client that speaks Streamable HTTP works: POST JSON-RPC with the bearer header. This call answers who the key acts as — a quick way to test a key."
       }
     },
@@ -5445,7 +5463,7 @@
       "manageLabel": "Set up or update",
       "client": "Client",
       "labelProject": "One command, from the repository: writes {path}, installs the skill for you",
-      "projectHint": "Commit the files it lists: they hold no key. Each teammate exports KNOWLEDGE_API_KEY with their own key and runs this once for their skill. Not yet checked with {client}, which may ask to approve or trust the repository’s server first.",
+      "projectHint": "Commit the files it lists: they hold no key. Each teammate exports KNOWLEDGE_API_KEY with their own key and runs this once for their skill. {client} may ask you to approve or trust the repository’s server first.",
       "forRepo": "For this repository ({path})"
     },
     "capture": {
@@ -7627,6 +7645,8 @@
         "publishing_settings_updated": "Publishing switches changed",
         "api-key_created": "API key created",
         "api-key_revoked": "API key revoked",
+        "oauth_granted": "OAuth access granted to an AI client",
+        "oauth_revoked": "OAuth access of an AI client ended",
         "audit_exported": "Audit log exported",
         "ai_settings_updated": "AI settings changed",
         "ai_provider_created": "AI provider added",

@@ -4962,6 +4962,36 @@
     },
     {
       "method": "GET",
+      "path": "/v1/oauth/requests/{id}",
+      "tag": "oauth",
+      "summary": "A pending MCP client sign-in, as the consent screen shows it",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/oauth/requests/{id}/approve",
+      "tag": "oauth",
+      "summary": "Approve an MCP client sign-in: what it may do, then the redirect back to it",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/oauth/requests/{id}/deny",
+      "tag": "oauth",
+      "summary": "Refuse an MCP client sign-in: the redirect back to it, carrying access_denied",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/profiles/{userId}",
       "tag": "profiles",
       "summary": "A workspace member's identity, membership, open work and pages",

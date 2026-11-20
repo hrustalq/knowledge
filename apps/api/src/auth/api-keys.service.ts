@@ -35,6 +35,33 @@ export class ApiKeysService {
   }
 
   async create(principal: Principal, dto: CreateApiKeyDto): Promise<CreateApiKeyResponse> {
+    const { token: apiKey, tokenHash: keyHash } = mintToken('kn_', 24);
+    const row = await this.insert(principal, dto, { keyHash, prefix: apiKey.slice(0, 11) }, { action: 'api-key.created' });
+    return { key: toInfo(row), apiKey };
+  }
+
+  /**
+   * An OAuth grant (#1352): the row a client's tokens resolve through, written
+   * by the consent screen with the same checks, cap and audit as a key — and,
+   * like a key, only from a session. It has no bearer of its own. The
+   * approving session's sign-in is kept on it for enforced SSO.
+   */
+  async createGrant(principal: Principal, dto: CreateApiKeyDto, oauthClientId: string): Promise<ApiKey> {
+    return this.insert(principal, dto, {
+      keyHash: null,
+      prefix: 'oauth',
+      oauthClientId,
+      signInMethod: principal.authMethod ?? null,
+      signInProviderId: principal.providerId ?? null,
+    }, { action: 'oauth.granted' });
+  }
+
+  private async insert(
+    principal: Principal,
+    dto: CreateApiKeyDto,
+    credential: Pick<Prisma.ApiKeyUncheckedCreateInput, 'keyHash' | 'prefix' | 'oauthClientId' | 'signInMethod' | 'signInProviderId'>,
+    audit: { action: 'api-key.created' | 'oauth.granted' },
+  ): Promise<ApiKey> {
     this.requireSession(principal);
     if (dto.workspaceId && !principal.isAdmin) {
       const member = await this.prisma.workspaceMember.findUnique({
@@ -51,15 +78,13 @@ export class ApiKeysService {
       throw new BadRequestException(t('error.auth.apiKeyLimit', { max: MAX_ACTIVE_KEYS }));
     }
 
-    // Same shape as `make auth-bootstrap`: 24 random bytes, and only the
-    // SHA-256 ever reaches PostgreSQL.
-    const { token: apiKey, tokenHash: keyHash } = mintToken('kn_', 24);
+    // A key has the same shape as `make auth-bootstrap`: 24 random bytes, and
+    // only the SHA-256 ever reaches PostgreSQL.
     const row = await this.prisma.apiKey.create({
       data: {
+        ...credential,
         userId: principal.userId,
         name: dto.name,
-        keyHash,
-        prefix: apiKey.slice(0, 11),
         scope: dto.scope ?? 'write',
         workspaceId: dto.workspaceId ?? null,
         projectIds: projectIds ?? Prisma.DbNull,
@@ -72,12 +97,20 @@ export class ApiKeysService {
     void this.audit.record({
       workspaceId: row.workspaceId,
       actor: principal.userId,
-      action: 'api-key.created',
-      params: { name: row.name, prefix: row.prefix, scope: row.scope, projectIds, toolsets: row.toolsets, expiresAt: row.expiresAt },
+      action: audit.action,
+      params: {
+        name: row.name,
+        prefix: row.prefix,
+        scope: row.scope,
+        projectIds,
+        toolsets: row.toolsets,
+        expiresAt: row.expiresAt,
+        ...(row.oauthClientId ? { client: row.oauthClientId } : {}),
+      },
       target: row.id,
       ok: true,
     });
-    return { key: toInfo(row), apiKey };
+    return row;
   }
 
   /** Soft: the row stays so a 401 from an old config can still be traced to a name. */
@@ -163,6 +196,7 @@ function toInfo(row: ApiKey): ApiKeyInfo {
     workspaceId: row.workspaceId,
     projectIds: projectPinOf(row.projectIds),
     toolsets: keyToolsetsOf(row.toolsets),
+    oauth: row.oauthClientId !== null,
     expiresAt: row.expiresAt?.toISOString() ?? null,
     lastUsedAt: row.lastUsedAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),

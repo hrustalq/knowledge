@@ -37,6 +37,8 @@ export interface McpClientInput {
   key: string | null
   /** The generic client's name in the reader's language. */
   anyClientName?: string
+  /** The server signs clients in with OAuth (#1352): a client that can is shown that way, with no key. */
+  oauth?: boolean
 }
 
 export interface McpClientGuide {
@@ -56,6 +58,8 @@ export interface McpClientGuide {
   docs: string
   /** The config a repository can commit (#1348), or why this client has none. */
   projectConfig: ProjectConfig | { refused: ProjectRefusal }
+  /** Signs in through the browser (#1352): no key step, the client gets its own grant. */
+  oauth?: true
 }
 
 /**
@@ -83,8 +87,8 @@ const json = (value: unknown) => JSON.stringify(value, null, 2)
  * Each client's project config (#1348), checked against its vendor's docs in
  * November 2026. A client gets one only where the docs state both a
  * project-level file and an env reference for the key there, and its file is
- * the same JSON as its user-level config. Not yet run per client (#1351):
- * Claude Code and Kimi ask to approve or trust a folder's servers first.
+ * the same JSON as its user-level config. Run per client in #1351: Claude Code,
+ * Kimi and pi ask to approve or trust a folder's servers first.
  */
 const PROJECT: Record<string, { path: string; docs: string } | ProjectRefusal> = {
   'claude-code': { path: '.mcp.json', docs: 'https://code.claude.com/docs/en/mcp#environment-variable-expansion-in-mcp-json' },
@@ -103,8 +107,8 @@ const PROJECT: Record<string, { path: string; docs: string } | ProjectRefusal> =
   'claude-desktop': 'no-project-config',
   // `.devin/mcp_config.json` exists, but `${env:}` is documented for OAuth fields only.
   windsurf: 'no-env-in-headers',
-  // The docs now nest servers under `mcp.servers`; the table's shape is not re-checked yet.
-  opencode: 'no-project-config',
+  // The V1 `mcp.<name>` shape: opencode 1.x rejects V2's `mcp.servers`, and 2.x still reads V1 (#1351).
+  opencode: { path: 'opencode.json', docs: 'https://opencode.ai/docs/config/' },
   zed: 'no-env-in-headers',
   http: 'no-project-config',
 }
@@ -213,7 +217,7 @@ function clientTable(input: McpClientInput): Omit<McpClientGuide, 'projectConfig
       name: 'DeepSeek Harness',
       command: null,
       config: {
-        path: '$DSH_HOME/cordis.patch.yml',
+        path: '$DSH_HOME/cordis.patch.yml  (~/.dsh when unset)',
         lang: 'yaml',
         code: [
           '- insert:',
@@ -226,7 +230,8 @@ function clientTable(input: McpClientInput): Omit<McpClientGuide, 'projectConfig
           ...(auth ? ['        headers:', `          Authorization: !!js '\`Bearer \${process.env.${KEY_ENV}}\`'`] : []),
         ].join('\n'),
       },
-      skillDir: null,
+      // dsh-skill-filesystem reads ~/.agents/skills beside its own $DSH_HOME/skills (#1351).
+      skillDir: SKILL_DIRS.agents,
       usesEnv: auth,
       captureKit: null,
       note: 'deepseek',
@@ -239,7 +244,12 @@ function clientTable(input: McpClientInput): Omit<McpClientGuide, 'projectConfig
       config: {
         path: '~/.pi/agent/mcp.json',
         lang: 'json',
-        code: json({ mcpServers: { [name]: { url, ...header(`\${${KEY_ENV}}`) } } }),
+        // pi defers MCP tools behind its search; the two a ticket starts with stay in view (#1362).
+        code: json({
+          mcpServers: {
+            [name]: { url, ...header(`\${${KEY_ENV}}`), toolExposure: { knowledge_whoami: 'direct', knowledge_context: 'direct' } },
+          },
+        }),
       },
       skillDir: SKILL_DIRS.agents,
       usesEnv: auth,
@@ -322,7 +332,22 @@ function clientTable(input: McpClientInput): Omit<McpClientGuide, 'projectConfig
       note: 'vscode',
       docs: 'https://code.visualstudio.com/docs/copilot/customization/mcp-servers',
     },
-    {
+    // With OAuth on (#1352), Desktop connects natively as a custom connector and
+    // signs the person in through the browser: no key, no mcp-remote.
+    input.oauth
+      ? {
+          id: 'claude-desktop',
+          name: 'Claude Desktop',
+          command: null,
+          config: { path: 'Settings → Connectors → Add custom connector', lang: 'yaml', code: url },
+          skillDir: null,
+          usesEnv: false,
+          captureKit: null,
+          note: 'claudeDesktopOauth',
+          docs: 'https://claude.com/docs/connectors/building',
+          oauth: true,
+        }
+      : {
       id: 'claude-desktop',
       name: 'Claude Desktop',
       command: null,

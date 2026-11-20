@@ -280,6 +280,8 @@ import type {
   MyLiveDraftResponse,
   NotificationPreferences,
   NotificationUnreadCountResponse,
+  OAuthDecisionResponse,
+  OAuthRequestView,
   PageInsightsResponse,
   PlaudAuthorizeResponse,
   PlaudImportsResponse,
@@ -677,6 +679,8 @@ export interface ContractResponses {
   MyLiveDraftResponse: MyLiveDraftResponse;
   NotificationPreferences: NotificationPreferences;
   NotificationUnreadCountResponse: NotificationUnreadCountResponse;
+  OAuthDecisionResponse: OAuthDecisionResponse;
+  OAuthRequestView: OAuthRequestView;
   PageInsightsResponse: PageInsightsResponse;
   PlaudAuthorizeResponse: PlaudAuthorizeResponse;
   PlaudImportsResponse: PlaudImportsResponse;

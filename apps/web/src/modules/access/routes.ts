@@ -11,6 +11,9 @@ export const routes: RouteRecordRaw[] = [
   // Connecting an AI client (#1225): a full-screen wizard, so `focus` drops the
   // shell. `?client=` opens it on that client; `?next=` is where Close goes.
   { path: CONNECT_SETUP_PATH, component: () => import('./pages/ConnectWizardPage.vue'), meta: { focus: true } },
+  // OAuth consent for an MCP client (#1352): opened by the client in a browser tab,
+  // `?request=` names the pending sign-in. Signed out, the guard sends it to /login first.
+  { path: '/oauth/authorize', component: () => import('./pages/OAuthConsentPage.vue'), meta: { focus: true } },
   // A person, inside this workspace. `/u` with no id is your own — the
   // avatar menu's target, and a link that stays right after a rename.
   { path: '/u', component: () => import('./pages/ProfilePage.vue') },

@@ -64,6 +64,14 @@
 		reverse_proxy api:3000
 	}
 
+	# OAuth discovery for MCP clients (#1352, MCP_OAUTH_ENABLED). The issuer is
+	# this site's origin, so the two documents live at the root, not under /api.
+	# `handle`, not `handle_path`: the API serves them at these exact paths.
+	# Without this route they fall through to the SPA and answer HTML.
+	handle /.well-known/oauth-* {
+		reverse_proxy api:3000
+	}
+
 	# Object storage, for presigned URLs only (#144). The API signs browser
 	# URLs for S3_PUBLIC_ENDPOINT (this site), path-style, so every one starts
 	# with /<bucket>/. `handle`, not `handle_path`: MinIO needs the bucket

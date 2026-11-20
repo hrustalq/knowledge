@@ -6,7 +6,8 @@
  * Setting a client up — key, config, skill, capture kit — is the full-screen
  * wizard at /setup/connect (#1225), and `?client=` on this URL (printed in
  * every SKILL.md already handed out) goes straight there. This page is where
- * you come back to: revoke a key, see what a key reaches.
+ * you come back to: revoke a key, see what a key reaches, run the skill
+ * commands again (#1343).
  *
  * Everything here acts on the caller. Keys are yours; the tool list is what
  * *your* credential would be offered. Nothing on this page needs a workspace
@@ -23,7 +24,16 @@ import { useQueryClient } from '@tanstack/vue-query'
 import { api, fetchApi } from '@/shared/api/queries'
 import { getProjectId, getWorkspaceId } from '@/shared/api/api'
 import { formatDate, formatRelative } from '@/shared/utils/format'
-import { CopyBlock, KEY_ENV } from '@/entities/access'
+import {
+  CopyBlock,
+  KEY_ENV,
+  SKILL_NAME,
+  captureKitInstallCommand,
+  mcpClients,
+  skillDirGuides,
+  skillInstallCommand,
+  skillStackInstallCommand,
+} from '@/entities/access'
 import { useWorkspacesStore } from '@/stores/workspaces'
 import { useProjectsStore } from '@/stores/projects'
 import { useFeaturesStore } from '@/stores/features'
@@ -42,6 +52,7 @@ import {
   AlertDialogTitle,
 } from '@knowledge/ui/alert-dialog'
 import { CONNECT_SETUP_PATH } from '../model/connect-setup-path'
+import ChoiceCards from '../components/connect/ChoiceCards.vue'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -114,6 +125,27 @@ function workspaceName(id: string | null): string {
   if (!id) return t('connect.keys.allWorkspaces')
   return workspaces.items.find((w) => w.workspaceId === id)?.name ?? id.slice(0, 8)
 }
+
+/* ------------------------------------------------------------------ skills */
+
+/*
+ * The wizard's skill commands, to run again (#1343): the skill is fetched, so a
+ * re-run is how it learns a new workspace or toolset. They read the key from
+ * the environment; this page never shows one.
+ */
+const skillDirs = computed(() =>
+  connection.value
+    ? skillDirGuides(mcpClients({ url: connection.value.url, serverName: connection.value.serverName, auth: needsKey.value, key: null }))
+    : [],
+)
+const skillDirOptions = computed(() => skillDirs.value.map((g) => ({ value: g.dir, label: g.dir, hint: g.clients.join(', ') })))
+const pickedDir = ref<string | null>(null)
+const skillDir = computed(() => skillDirs.value.find((g) => g.dir === pickedDir.value) ?? skillDirs.value[0] ?? null)
+const skillStack = computed(() =>
+  connection.value && skillDir.value ? skillStackInstallCommand(connection.value.url, skillDir.value.dir, needsKey.value) : null,
+)
+/** A kit is refused to a credential offered no capture tool (403 `capture-not-offered`). */
+const capturesOffered = computed(() => connection.value?.tools.some((tool) => tool.toolset === 'captures') ?? false)
 
 /* ---------------------------------------------------------------- llms.txt */
 
@@ -254,6 +286,42 @@ const canManageFeatures = usePermission('workspace:admin')
             </Button>
           </li>
         </ul>
+      </section>
+
+      <!-- The skill, to install again or somewhere new (#1343). --------------- -->
+      <section v-if="skillDir" class="min-w-0 rounded-xl border bg-card px-5 py-4">
+        <h2 class="font-display text-base font-semibold tracking-tight">{{ t('connect.skill.manage.title') }}</h2>
+        <p class="kn-measure mt-0.5 text-xs text-muted-foreground">{{ t('connect.skill.hint') }}</p>
+        <div class="mt-3 grid min-w-0 gap-3">
+          <ChoiceCards
+            :model-value="skillDir.dir"
+            name="kn-connect-skill-dir"
+            compact
+            :legend="t('connect.skill.manage.dirLegend')"
+            :options="skillDirOptions"
+            @update:model-value="(dir) => (pickedDir = dir as string)"
+          />
+          <div class="grid min-w-0 gap-2">
+            <CopyBlock v-if="needsKey" :code="`export ${KEY_ENV}=<your-api-key>`" :label="t('connect.clients.step.env')" />
+            <CopyBlock
+              :code="skillInstallCommand(`${connection.url}/skill`, skillDir.dir, needsKey)"
+              :label="t('connect.skill.manage.single', { path: `${skillDir.dir}/${SKILL_NAME}/SKILL.md` })"
+            />
+            <template v-if="skillStack">
+              <CopyBlock :code="skillStack" :label="t('connect.skill.manage.stack', { path: skillDir.dir })" />
+              <p class="kn-measure text-caption text-muted-foreground">{{ t('connect.skill.stackHint') }}</p>
+            </template>
+            <template v-if="capturesOffered">
+              <CopyBlock
+                v-for="kit in skillDir.kits"
+                :key="kit.client"
+                :code="captureKitInstallCommand(`${connection.url}/capture-kit`, kit.client, needsKey)"
+                :label="t('connect.skill.manage.kit', { client: kit.name })"
+              />
+            </template>
+          </div>
+          <p class="kn-measure text-caption text-muted-foreground">{{ t('connect.skill.alsoServed') }}</p>
+        </div>
       </section>
 
       <!-- Plain HTTP for tools that fetch URLs instead of speaking MCP. ------ -->

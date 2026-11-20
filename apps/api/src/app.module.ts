@@ -48,6 +48,7 @@ import { AnalyticsModule } from './analytics/analytics.module.js';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { McpHttpModule } from './mcp/mcp-http.module.js';
+import { OAuthModule } from './oauth/oauth.module.js';
 import { AiReadableModule } from './ai-readable/ai-readable.module.js';
 import { FeedbackModule } from './feedback/feedback.module.js';
 import { VerificationModule } from './verification/verification.module.js';
@@ -152,6 +153,8 @@ import { MemoryModule } from './memory/memory.module.js';
     // MCP over Streamable HTTP at /v1/mcp (docs/features/33) — the stdio
     // server's tools, bound per request to the caller's principal.
     McpHttpModule,
+    // OAuth for MCP clients (#1352): the consent routes; main.ts mounts the protocol endpoints.
+    OAuthModule,
     // Usage analytics (#79): the page-view beacon. API-only; recording is
     // AnalyticsCoreModule's, which search, MCP and the worker load.
     AnalyticsModule,

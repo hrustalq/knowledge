@@ -4940,6 +4940,23 @@
     }
   },
   "connect": {
+    "oauth": {
+      "bar": "Connect an AI client",
+      "title": "Allow {client} to use your knowledge base?",
+      "verified": "Identified by {domain}",
+      "unverified": "This name is what the client calls itself; nothing has verified it. Allow only if you just started connecting it yourself.",
+      "returnTo": "You'll return to",
+      "limit": "Limit it to chosen toolsets",
+      "allow": "Allow",
+      "allowing": "Allowing…",
+      "deny": "Deny",
+      "denying": "Denying…",
+      "leaving": "Returning you to {client}…",
+      "goneTitle": "This sign-in can't continue",
+      "missing": "This page opens from an AI client's sign-in. Start the connection again from your AI client.",
+      "toConnect": "Go to Connect AI",
+      "via": "via OAuth"
+    },
     "wizard": {
       "title": "Connect an AI client",
       "close": "Close",
@@ -5404,6 +5421,7 @@
         "gemini": "Streamable HTTP needs httpUrl; plain url means SSE. The CLI defaults to project scope, hence --scope user. Check with `/mcp` in a session. An untrusted folder disables every MCP server, user-level ones too: trust the folder first.",
         "cursor": "Cursor expands ${'{'}env:VAR{'}'} in headers. Restart Cursor after exporting the variable so it inherits it, then enable the server under Settings → MCP.",
         "vscode": "VS Code asks for the key once and stores it encrypted. ${'{'}env:…{'}'} in headers is currently sent literally by VS Code, so this uses a prompted input instead.",
+        "claudeDesktopOauth": "Paste this URL as a custom connector in Claude Desktop (Settings → Connectors). Claude opens your browser to sign you in here, where you choose what it may do — no key, no mcp-remote.",
         "claudeDesktop": "Claude Desktop's config file runs local servers only, so mcp-remote bridges to this endpoint (Node.js required). The key is written into the file — keep it private. Restart Claude after saving.",
         "windsurf": "Newer builds read ~/.config/devin/mcp_config.json; older Windsurf builds ~/.codeium/windsurf/mcp_config.json. Refresh the MCP list in Cascade after saving.",
         "opencode": "oauth: false stops opencode trying OAuth against a key-authenticated server. Place it in opencode.json at the project root, or globally. If opencode reports the config invalid, its error prints the key with the variable filled in: do not paste that error anywhere.",
@@ -7627,6 +7645,8 @@
         "publishing_settings_updated": "Publishing switches changed",
         "api-key_created": "API key created",
         "api-key_revoked": "API key revoked",
+        "oauth_granted": "OAuth access granted to an AI client",
+        "oauth_revoked": "OAuth access of an AI client ended",
         "audit_exported": "Audit log exported",
         "ai_settings_updated": "AI settings changed",
         "ai_provider_created": "AI provider added",

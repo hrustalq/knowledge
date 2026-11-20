@@ -17,6 +17,15 @@ in the pull request that introduces them — see
 
 ### Added
 
+- **AI clients can sign in with OAuth instead of a key (#1352).** With `MCP_OAUTH_ENABLED=true`, a client that speaks
+  the MCP authorization flow connects to `/v1/mcp` by opening your browser: Claude Desktop and claude.ai as a native
+  custom connector with no `mcp-remote`, or any other client that implements the flow. A consent screen
+  (`/oauth/authorize`) lets you narrow the client exactly as a key form does: read-only, read & propose or read & write,
+  one workspace or all, chosen toolsets, and an expiry (90 days by default). Each grant is listed beside your keys on
+  Connect AI, marked "via OAuth", and is revoked with the same button. The next call after revocation fails.
+  Under enforced SSO, a grant counts as the sign-in that approved it: one made through a password or another IdP is
+  refused even where keys are allowed, and the session age cap counts from consent. API keys are unchanged.
+
 - **opencode gets a project file (#1351).** The setup command's `scope=project` now writes the server into the
   repository's `opencode.json` (key read through `{env:KNOWLEDGE_API_KEY}`, never written) instead of refusing
   opencode. The snippet keeps opencode's V1 `mcp.<name>` shape, the only one both opencode 1.x and 2.x accept.
@@ -38,6 +47,17 @@ in the pull request that introduces them — see
 - **The setup command for DeepSeek Harness stopped before printing anything (#1351)** with `DSH_HOME: unbound
   variable` when `DSH_HOME` was not set, which is dsh's default (it then uses `~/.dsh`). It now prints the path as
   text, and installs the skill stack into `~/.agents/skills`, which dsh reads, instead of saying it reads no skills.
+
+### Operations
+
+- **#1352 OAuth for MCP clients.** One migration (`20270210100000_mcp_oauth`). It is expand-only and survives a
+  rollback: it adds three tables and three nullable `api_keys` columns, and drops `NOT NULL` from `api_keys.key_hash`.
+  Off by default. To turn it on:
+  1. Set `MCP_OAUTH_ENABLED=true` (needs `AUTH_MODE=api-key`).
+  2. Route `/.well-known/oauth-*` to the API **unstripped**. The repo's `Caddyfile` has the line; the homelab ingress
+     needs the same, or discovery answers with the SPA's HTML.
+  3. Allow Anthropic's egress range (160.79.104.0/21) to reach `/.well-known/*` and `/api/oauth/*` if a WAF sits in
+     front.
 
 ## [0.62.0] — 2026-11-20
 

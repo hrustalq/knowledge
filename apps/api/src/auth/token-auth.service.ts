@@ -10,6 +10,12 @@ import { UrlTicketsService } from './url-tickets.service.js';
 import { asLocale } from '../i18n/locale.js';
 import { t } from '../i18n/t.js';
 import { hashToken } from './auth-tokens.js';
+import { oauthEnabled, oauthUrls } from './oauth-urls.js';
+import type { ApiKey, User } from '@prisma/client';
+
+/** `ko_` access tokens of an OAuth grant (#1352); `kor_` refresh tokens are accepted only by the token endpoint. */
+export const OAUTH_ACCESS_PREFIX = 'ko_';
+export const OAUTH_REFRESH_PREFIX = 'kor_';
 
 /**
  * Token → Principal resolution, shared by the HTTP AuthGuard and the live
@@ -41,11 +47,25 @@ export class TokenAuthService {
     if (this.config.get('AUTH_MODE') !== 'api-key') return DEV_PRINCIPAL;
     if (!token) throw new UnauthorizedException(t('error.auth.missingBearer'));
     if (token.startsWith('ks_')) return this.resolveSession(token);
-    const principal = await this.resolveApiKey(token);
-    if (principal.apiKey?.toolsets && !opts.mcp) {
-      throw new ForbiddenException({ statusCode: 403, message: t('error.auth.apiKeyMcpOnly'), reason: 'apiKeyMcpOnly' });
+    const principal = token.startsWith(OAUTH_ACCESS_PREFIX) ? await this.resolveOAuth(token) : await this.resolveApiKey(token);
+    // An OAuth token is MCP-only the same way (#1352): its audience is `/v1/mcp`.
+    if ((principal.apiKey?.toolsets || principal.apiKey?.oauth) && !opts.mcp) {
+      throw new ForbiddenException({
+        statusCode: 403,
+        message: t(principal.apiKey?.oauth ? 'error.auth.oauthMcpOnly' : 'error.auth.apiKeyMcpOnly'),
+        reason: 'apiKeyMcpOnly',
+      });
     }
     return principal;
+  }
+
+  /**
+   * The `WWW-Authenticate` value a 401 from the MCP endpoint carries (#1352,
+   * RFC 9728), or null while OAuth is off: it points the client at the
+   * resource metadata, which names this API's authorization server.
+   */
+  mcpChallenge(): string | null {
+    return oauthEnabled(this.config) ? `Bearer resource_metadata="${oauthUrls(this.config).resourceMetadata}"` : null;
   }
 
   /**
@@ -141,6 +161,10 @@ export class TokenAuthService {
     if (!row || row.revokedAt || (row.expiresAt && row.expiresAt <= now)) {
       throw new UnauthorizedException(t('error.auth.unknownApiKey'));
     }
+    return this.keyPrincipal(row, now);
+  }
+
+  private keyPrincipal(row: ApiKey & { user: User }, now: Date): Principal {
     const { user } = row;
     if (user.disabledAt) throw new UnauthorizedException(t('error.auth.accountDisabled'));
     this.touch(row.id, now);
@@ -161,6 +185,34 @@ export class TokenAuthService {
         toolsets: keyToolsetsOf(row.toolsets),
       },
     };
+  }
+
+  /**
+   * A `ko_` access token (#1352): the grant row it points at is resolved
+   * exactly like a key, so every narrowing, toolset and revocation rule a key
+   * obeys applies unchanged. Off under MCP_OAUTH_ENABLED=false, where it reads
+   * as an unknown key.
+   */
+  private async resolveOAuth(token: string): Promise<Principal> {
+    const now = new Date();
+    const row = oauthEnabled(this.config)
+      ? await this.prisma.oAuthToken.findUnique({
+          where: { tokenHash: hashToken(token) },
+          include: { apiKey: { include: { user: true } } },
+        })
+      : null;
+    const grant = row?.apiKey;
+    if (!row || row.kind !== 'access' || row.expiresAt <= now || !grant?.oauthClientId || grant.revokedAt || (grant.expiresAt && grant.expiresAt <= now)) {
+      throw new UnauthorizedException(t('error.auth.unknownApiKey'));
+    }
+    const principal = this.keyPrincipal(grant, now);
+    principal.apiKey!.oauth = {
+      clientId: grant.oauthClientId,
+      signInMethod: grant.signInMethod ? authMethodOf(grant.signInMethod) : null,
+      signInProviderId: grant.signInProviderId,
+      grantedAt: grant.createdAt.toISOString(),
+    };
+    return principal;
   }
 
   /**

@@ -179,6 +179,7 @@ export const WORKSPACE_TEARDOWN = {
   SiteVersion: 'parent',
   SiteAudienceRule: 'parent',
   UserIdentity: 'parent',
+  OAuthToken: 'parent',
   SsoAuthRequest: 'parent',
   ScimGroupMember: 'parent',
   UserGroupMember: 'parent',
@@ -188,6 +189,10 @@ export const WORKSPACE_TEARDOWN = {
   Workspace: 'platform',
   User: 'platform',
   Session: 'platform',
+  // OAuth for MCP (#1352): clients are global; a request is a minutes-long
+  // authorize attempt by a person; tokens leave with their grant (an api_keys row).
+  OAuthClient: 'platform',
+  OAuthRequest: 'platform',
   PasswordResetToken: 'platform',
   EmailVerificationToken: 'platform',
   // A person's sign-in (#857): the workspace's connections go, the credential stays with its owner.

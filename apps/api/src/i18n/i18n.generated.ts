@@ -748,6 +748,9 @@ export type I18nTranslations = {
             "apiKeyPinnedNoCreate": string;
             "apiKeyNeedsSession": string;
             "apiKeyNotFound": string;
+            "oauthMcpOnly": string;
+            "oauthRequestGone": string;
+            "oauthClientGone": string;
             "apiKeyWorkspaceNotMember": string;
             "apiKeyProjectsNeedCapture": string;
             "apiKeyProjectNotAllowed": string;

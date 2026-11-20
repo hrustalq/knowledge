@@ -1,4 +1,4 @@
-import { ForbiddenException, HttpStatus, Injectable, type CanActivate, type ExecutionContext } from '@nestjs/common';
+import { ForbiddenException, HttpStatus, Injectable, UnauthorizedException, type CanActivate, type ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { SESSION_COOKIE } from '@knowledge/contracts';
 import { MCP_KEY_OK_META, PUBLIC_META, QUERY_TOKEN_OK_META, UNVERIFIED_OK_META } from './access.decorator.js';
@@ -51,13 +51,22 @@ export class AuthGuard implements CanActivate {
 
     // Only the MCP controller admits a key limited to toolsets (#945).
     const mcp = this.reflector.getAllAndOverride<boolean>(MCP_KEY_OK_META, [ctx.getHandler(), ctx.getClass()]) === true;
-    req.principal = bearer
-      ? await this.tokenAuth.resolve(bearer, { mcp })
-      : queryToken
-        ? await this.tokenAuth.resolveTicket(queryToken)
-        : cookieToken
-          ? await this.tokenAuth.resolveSessionCookie(cookieToken)
-          : await this.tokenAuth.resolve(undefined);
+    try {
+      req.principal = bearer
+        ? await this.tokenAuth.resolve(bearer, { mcp })
+        : queryToken
+          ? await this.tokenAuth.resolveTicket(queryToken)
+          : cookieToken
+            ? await this.tokenAuth.resolveSessionCookie(cookieToken)
+            : await this.tokenAuth.resolve(undefined);
+    } catch (err) {
+      // RFC 9728 (#1352): a 401 from the MCP endpoint points an OAuth-capable
+      // client at the resource metadata, which names this API's authorization
+      // server. Claude honours the pointer only on a 401.
+      const challenge = mcp && err instanceof UnauthorizedException ? this.tokenAuth.mcpChallenge() : null;
+      if (challenge) ctx.switchToHttp().getResponse().setHeader('WWW-Authenticate', challenge);
+      throw err;
+    }
     // A request that names a language is answered in it, models included (#1185).
     // A copy: the dev principal is one shared object.
     const asked = requestedLocale(req);

@@ -4973,7 +4973,8 @@
         "preferences": "Install",
         "configure": "Configure",
         "skill": "Skill",
-        "verify": "Check"
+        "verify": "Check",
+        "signIn": "Sign-in"
       },
       "role": {
         "title": "What do you mostly do?",
@@ -5148,7 +5149,11 @@
             "fix": "The server and key are fine; the tool's config is the problem. Restart the tool, check it read the file you edited, and look below."
           }
         },
-        "checkDev": "Terminal — calls knowledge_whoami"
+        "checkDev": "Terminal — calls knowledge_whoami",
+        "signInWaiting": "Waiting for {client} to sign in…",
+        "signInWaitingHint": "Start {client}, sign in when it opens your browser and approve it here. This turns green on its first call.",
+        "signInSlow": "Still nothing? Check that {client} lists the server, then start its sign-in by hand: {command}. A client run headless (claude -p, CI) cannot sign in: use an API key there.",
+        "signInSlowAuto": "Still nothing? Check that {client} lists the server and restart it to get the sign-in prompt. A client run headless cannot sign in: use an API key there."
       },
       "pane": {
         "title": "Your config",
@@ -5353,6 +5358,24 @@
         "title": "Leave the setup?",
         "body": "The key you created is shown only here. If you have not copied it, it cannot be shown again: you would revoke it and create another.",
         "action": "Leave"
+      },
+      "signIn": {
+        "title": "How will {client} sign in?",
+        "hint": "In the browser, {client} gets its own access when you approve it here: no key to copy or keep. You choose what it may do on the approval screen, and revoke it under Connect AI like a key.",
+        "oauth": {
+          "label": "In the browser",
+          "hint": "Recommended. {client} opens this site to sign you in, and its config holds nothing secret."
+        },
+        "key": {
+          "label": "With an API key",
+          "hint": "For a machine with no browser, a script, or a client run headless."
+        },
+        "browserNote": "No key to create. The next steps give you a config with no credential, and a setup key that lasts an hour for the skill installer.",
+        "installName": "{client} setup",
+        "installHint": "The key above is a setup key: it only fetches the installers and stops working in an hour. {client} itself signs in through the browser.",
+        "installFailed": "Could not create the setup key. Go back a step and forward again to retry.",
+        "command": "Then sign in: run this in {client}",
+        "auto": "{client} opens your browser to sign you in the first time it connects."
       }
     },
     "title": "Connect AI",
@@ -5406,7 +5429,8 @@
         "always": "always included"
       },
       "mcpOnly": "MCP only",
-      "toolsets": "Toolsets: {list}"
+      "toolsets": "Toolsets: {list}",
+      "install": "Setup key"
     },
     "clients": {
       "docs": "Client docs",
@@ -5433,6 +5457,21 @@
         "omp": "Oh My Pi expands environment variables in headers. Use ~/.omp/agent/mcp.json, not the older ~/.omp/mcp.json, then run `/mcp reload` and `/mcp list` in a session. The first session after you add the server may see none of its tools; start a new one.",
         "hermes": "Hermes expands the variable from your environment or ~/.hermes/.env. Run `/reload-mcp` in a chat after editing. Install Hermes with its MCP extra (`pipx install 'hermes-agent[mcp]'`): without it the server fails with “mcp.client.streamable_http is not available”.",
         "http": "Any MCP client that speaks Streamable HTTP works: POST JSON-RPC with the bearer header. This call answers who the key acts as — a quick way to test a key."
+      },
+      "oauthNotes": {
+        "claudeCode": "No --header: Claude Code signs in itself. Run `/mcp` in a session, pick knowledge and choose Authenticate; your browser opens. `claude -p` and the SDK cannot sign in: give those an API key.",
+        "codex": "Codex signs in with `codex mcp login knowledge` (add --no-browser on a machine without one). Verify with `codex mcp list`. The capture kit's hooks still run only once the project and each hook are trusted in /hooks.",
+        "gemini": "Gemini CLI starts the sign-in on its first connection and opens your browser; `/mcp auth knowledge` starts it again. It needs a local browser, so it fails over SSH. Trust the folder first: an untrusted folder disables every MCP server.",
+        "qwen": "Qwen Code signs in from the `/mcp` dialog. Its callback listens on localhost:7777, so that port must be free. Check with `qwen mcp list`.",
+        "kimi": "Run `/mcp-config login knowledge` in a session to sign in through the browser. Use ~/.kimi-code/mcp.json, or .kimi-code/mcp.json for one repository.",
+        "pi": "Run `/mcp`, choose knowledge and Sign in, or `pi mcp login knowledge`. Over SSH, paste the address the browser lands on back into the sign-in screen. A repository's .pi/mcp.json is ignored until the project is trusted.",
+        "omp": "Run `/mcp reauth knowledge` to sign in. Its callback listens on port 3000, so that port must be free. Use ~/.omp/agent/mcp.json, then `/mcp reload`.",
+        "hermes": "auth: oauth makes Hermes sign in on its first connection; `hermes mcp login knowledge` signs in again. Install Hermes with its MCP extra (`pipx install 'hermes-agent[mcp]'`).",
+        "cursor": "No headers: Cursor asks you to sign in when it first connects, under Settings → MCP. Its callback uses localhost:8787. In the Cursor CLI, `agent mcp login knowledge`.",
+        "vscode": "Nothing to type in: VS Code opens your browser on the first connection. If it does not, choose Authenticate from the server's actions in the MCP view.",
+        "windsurf": "Devin signs in on first use; `devin mcp login knowledge` signs in again, and Authenticate appears in the MCP list once a sign-in expires. Refresh the list in Cascade after saving.",
+        "opencode": "With no oauth: false and no header, opencode signs in: run `/mcps` and select knowledge, or `opencode mcp auth knowledge`. Place it in opencode.json at the project root, or globally.",
+        "zed": "With no Authorization header, Zed asks you to sign in when it first connects. Or add the URL from Settings → AI → MCP Servers."
       }
     },
     "skill": {

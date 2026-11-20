@@ -7,6 +7,10 @@
  *
  * With no call after a while, the diagnostics open on their own: a curl the
  * person runs from the same shell, and what each reply means.
+ *
+ * A client signing in through the browser (#1371) has no key to watch: the
+ * connection is a grant (`oauth`) made after the wizard opened, once used.
+ * The wizard's setup key is never it — its use is the installer curl.
  */
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -22,6 +26,8 @@ const props = defineProps<{
   /** Polls only while the step is on screen. */
   active: boolean
   needsKey: boolean
+  /** Signing in through the browser: the client's sign-in command, '' when it asks by itself; null for a key. */
+  signIn: string | null
   clientName: string
   /** The key minted in this wizard; null watches every key the caller has. */
   keyId: string | null
@@ -45,7 +51,8 @@ const started = ref<number | null>(null)
 const now = ref(Date.now())
 const asked = ref(false)
 const slow = computed(() => !hit.value && (asked.value || (started.value !== null && now.value - started.value > SLOW_MS)))
-const showCheck = computed(() => !props.needsKey || slow.value)
+const watching = computed(() => props.needsKey || props.signIn !== null)
+const showCheck = computed(() => props.signIn === null && (!props.needsKey || slow.value))
 
 let timer: ReturnType<typeof setInterval> | undefined
 function stop() {
@@ -57,7 +64,14 @@ async function poll() {
   now.value = Date.now()
   try {
     const { keys } = await fetchApi(queryClient, '/v1/me/api-keys', {}, { fresh: true })
-    const used = (k: ApiKeyInfo) => !!k.lastUsedAt && (props.keyId ? k.id === props.keyId : Date.parse(k.lastUsedAt) >= props.since)
+    const used = (k: ApiKeyInfo) =>
+      !!k.lastUsedAt &&
+      !k.install &&
+      (props.signIn !== null
+        ? k.oauth && Date.parse(k.createdAt) >= props.since
+        : props.keyId
+          ? k.id === props.keyId
+          : Date.parse(k.lastUsedAt) >= props.since)
     const found = keys.find(used)
     if (!found) return
     hit.value = found
@@ -73,9 +87,9 @@ async function poll() {
 }
 
 watch(
-  () => [props.active, props.needsKey, hit.value] as const,
-  ([active, needsKey, done]) => {
-    if (!active || !needsKey || done) return stop()
+  () => [props.active, watching.value, hit.value] as const,
+  ([active, watch, done]) => {
+    if (!active || !watch || done) return stop()
     started.value ??= Date.now()
     if (!timer) {
       void poll()
@@ -93,7 +107,7 @@ const statuses = computed(() => (props.needsKey ? STATUSES : STATUSES.filter((s)
 
 <template>
   <div class="grid min-w-0 gap-4">
-    <div v-if="needsKey" class="flex items-start gap-3 rounded-lg border bg-card px-4 py-3.5" role="status" aria-live="polite">
+    <div v-if="watching" class="flex items-start gap-3 rounded-lg border bg-card px-4 py-3.5" role="status" aria-live="polite">
       <template v-if="hit">
         <CircleCheck class="mt-0.5 size-5 shrink-0 text-panel-tip" aria-hidden="true" />
         <div class="min-w-0">
@@ -107,8 +121,12 @@ const statuses = computed(() => (props.needsKey ? STATUSES : STATUSES.filter((s)
         <!-- Waiting is work in progress: the status dot's pulse, not a spinner (DESIGN.md: one thing moves at rest). -->
         <span class="mt-1.5 size-2.5 shrink-0 animate-pulse rounded-full bg-panel-note motion-reduce:animate-none" aria-hidden="true" />
         <div class="min-w-0">
-          <p class="text-sm font-medium">{{ t('connect.wizard.verify.waiting', { client: clientName }) }}</p>
-          <p class="mt-0.5 text-xs text-muted-foreground">{{ t('connect.wizard.verify.waitingHint', { client: clientName }) }}</p>
+          <p class="text-sm font-medium">
+            {{ signIn !== null ? t('connect.wizard.verify.signInWaiting', { client: clientName }) : t('connect.wizard.verify.waiting', { client: clientName }) }}
+          </p>
+          <p class="mt-0.5 text-xs text-muted-foreground">
+            {{ signIn !== null ? t('connect.wizard.verify.signInWaitingHint', { client: clientName }) : t('connect.wizard.verify.waitingHint', { client: clientName }) }}
+          </p>
         </div>
       </template>
     </div>
@@ -117,9 +135,15 @@ const statuses = computed(() => (props.needsKey ? STATUSES : STATUSES.filter((s)
       <p class="kn-measure text-xs leading-relaxed text-muted-foreground">{{ t('connect.wizard.verify.devMode', { n: sessionTools }) }}</p>
     </div>
 
+    <!-- The terminal check needs a key in the shell: a browser sign-in has none, its help opens by itself. -->
     <div v-if="needsKey && !hit && !slow">
       <Button variant="outline" size="sm" @click="asked = true">{{ t('connect.wizard.verify.showCheck') }}</Button>
     </div>
+
+    <!-- No curl to offer a browser sign-in: the shell holds no credential for it. -->
+    <p v-if="signIn !== null && slow && !hit" class="kn-measure text-xs leading-relaxed text-muted-foreground">
+      {{ signIn ? t('connect.wizard.verify.signInSlow', { client: clientName, command: signIn }) : t('connect.wizard.verify.signInSlowAuto', { client: clientName }) }}
+    </p>
 
     <section v-if="showCheck && !hit" class="grid min-w-0 gap-3">
       <p v-if="needsKey" class="kn-measure text-xs text-muted-foreground">{{ t('connect.wizard.verify.slow') }}</p>

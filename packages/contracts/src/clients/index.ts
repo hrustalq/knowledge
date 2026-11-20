@@ -37,8 +37,13 @@ export interface McpClientInput {
   key: string | null
   /** The generic client's name in the reader's language. */
   anyClientName?: string
-  /** The server signs clients in with OAuth (#1352): a client that can is shown that way, with no key. */
-  oauth?: boolean
+  /**
+   * How the person chose to connect (#1371), meaningful only while the server
+   * signs clients in with OAuth (#1352): `oauth` renders every client whose
+   * docs describe MCP OAuth with no credential at all, and marks it `oauth`; a
+   * client that cannot keeps its key snippet. Absent = `key`.
+   */
+  signIn?: 'key' | 'oauth'
 }
 
 export interface McpClientGuide {
@@ -58,7 +63,15 @@ export interface McpClientGuide {
   docs: string
   /** The config a repository can commit (#1348), or why this client has none. */
   projectConfig: ProjectConfig | { refused: ProjectRefusal }
-  /** Signs in through the browser (#1352): no key step, the client gets its own grant. */
+  /**
+   * How the client starts a browser sign-in (#1371), checked against its
+   * vendor's docs on 2026-11-20: a command to run (in the client, or a shell
+   * for its CLI), or null when it asks by itself on the first connection.
+   * Set on both renderings, so a page can offer the choice; absent when its
+   * docs describe no MCP OAuth, so it always takes a key.
+   */
+  signIn?: { command: string | null }
+  /** Rendered for browser sign-in (#1352, #1371): no key step, no header, the client gets its own grant. */
   oauth?: true
 }
 
@@ -114,13 +127,18 @@ const PROJECT: Record<string, { path: string; docs: string } | ProjectRefusal> =
 }
 
 export function mcpClients(input: McpClientInput): McpClientGuide[] {
-  return clientTable(input).map((c) => {
+  // Browser sign-in is the credential-free rendering (an Authorization header turns
+  // OAuth off in every one of these clients), taken only where the client can sign in.
+  const signedIn = input.signIn === 'oauth' && input.auth ? clientTable({ ...input, auth: false }, true) : null
+  return clientTable(input, false).map((keyed, i) => {
+    const c = signedIn?.[i]?.signIn ? { ...signedIn[i]!, oauth: true as const } : keyed
     const p = PROJECT[c.id] ?? 'no-project-config'
     return { ...c, projectConfig: typeof p === 'string' ? { refused: p } : { ...p, code: c.config.code } }
   })
 }
 
-function clientTable(input: McpClientInput): Omit<McpClientGuide, 'projectConfig'>[] {
+/** `oauth`: the rendering a browser sign-in uses, for the few clients whose OAuth config is more than "no header". */
+function clientTable(input: McpClientInput, oauth: boolean): Omit<McpClientGuide, 'projectConfig'>[] {
   const { url, serverName: name, auth } = input
   const literal = input.key ?? '<your-api-key>'
   const header = (value: string) => (auth ? { headers: { Authorization: `Bearer ${value}` } } : {})
@@ -142,6 +160,7 @@ function clientTable(input: McpClientInput): Omit<McpClientGuide, 'projectConfig
       captureKit: 'claude-code',
       note: 'claudeCode',
       docs: 'https://code.claude.com/docs/en/mcp',
+      signIn: { command: '/mcp' },
     },
     {
       id: 'codex',
@@ -159,6 +178,7 @@ function clientTable(input: McpClientInput): Omit<McpClientGuide, 'projectConfig
       captureKit: 'codex',
       note: 'codex',
       docs: 'https://developers.openai.com/codex/mcp',
+      signIn: { command: `codex mcp login ${name}` },
     },
     {
       id: 'gemini',
@@ -176,6 +196,7 @@ function clientTable(input: McpClientInput): Omit<McpClientGuide, 'projectConfig
       captureKit: null,
       note: 'gemini',
       docs: 'https://geminicli.com/docs/tools/mcp-server/',
+      signIn: { command: `/mcp auth ${name}` },
     },
     {
       // A Gemini CLI fork: `httpUrl` is Streamable HTTP, `$VAR` expands in headers.
@@ -194,6 +215,7 @@ function clientTable(input: McpClientInput): Omit<McpClientGuide, 'projectConfig
       captureKit: null,
       note: 'qwen',
       docs: 'https://qwenlm.github.io/qwen-code-docs/en/users/features/mcp/',
+      signIn: { command: '/mcp' },
     },
     {
       // A `url` without `transport` is HTTP; the key is read from the named variable.
@@ -210,6 +232,7 @@ function clientTable(input: McpClientInput): Omit<McpClientGuide, 'projectConfig
       captureKit: null,
       note: 'kimi',
       docs: 'https://www.kimi.com/code/docs/en/kimi-code-cli/customization/mcp.html',
+      signIn: { command: `/mcp-config login ${name}` },
     },
     {
       // One dsh-mcp-client row in a Cordis patch layer; `!!js` reads the key from the environment.
@@ -256,6 +279,7 @@ function clientTable(input: McpClientInput): Omit<McpClientGuide, 'projectConfig
       captureKit: null,
       note: 'pi',
       docs: 'https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/mcp.md',
+      signIn: { command: `/mcp login ${name}` },
     },
     {
       id: 'omp',
@@ -271,6 +295,7 @@ function clientTable(input: McpClientInput): Omit<McpClientGuide, 'projectConfig
       captureKit: null,
       note: 'omp',
       docs: 'https://github.com/can1357/oh-my-pi/blob/main/docs/mcp-config.md',
+      signIn: { command: `/mcp reauth ${name}` },
     },
     {
       // `${VAR}` expands from the environment or ~/.hermes/.env.
@@ -284,6 +309,7 @@ function clientTable(input: McpClientInput): Omit<McpClientGuide, 'projectConfig
           'mcp_servers:',
           `  ${name}:`,
           `    url: "${url}"`,
+          ...(oauth ? ['    auth: oauth'] : []),
           ...(auth ? ['    headers:', `      Authorization: "Bearer \${${KEY_ENV}}"`] : []),
         ].join('\n'),
       },
@@ -292,6 +318,7 @@ function clientTable(input: McpClientInput): Omit<McpClientGuide, 'projectConfig
       captureKit: null,
       note: 'hermes',
       docs: 'https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp',
+      signIn: { command: `hermes mcp login ${name}` },
     },
     {
       id: 'cursor',
@@ -307,6 +334,7 @@ function clientTable(input: McpClientInput): Omit<McpClientGuide, 'projectConfig
       captureKit: 'cursor',
       note: 'cursor',
       docs: 'https://cursor.com/docs/context/mcp',
+      signIn: { command: null },
     },
     {
       id: 'vscode',
@@ -331,10 +359,11 @@ function clientTable(input: McpClientInput): Omit<McpClientGuide, 'projectConfig
       captureKit: null,
       note: 'vscode',
       docs: 'https://code.visualstudio.com/docs/copilot/customization/mcp-servers',
+      signIn: { command: null },
     },
-    // With OAuth on (#1352), Desktop connects natively as a custom connector and
-    // signs the person in through the browser: no key, no mcp-remote.
-    input.oauth
+    // Signing in (#1352), Desktop connects natively as a custom connector and
+    // opens the browser itself: no key, no mcp-remote.
+    oauth
       ? {
           id: 'claude-desktop',
           name: 'Claude Desktop',
@@ -345,7 +374,7 @@ function clientTable(input: McpClientInput): Omit<McpClientGuide, 'projectConfig
           captureKit: null,
           note: 'claudeDesktopOauth',
           docs: 'https://claude.com/docs/connectors/building',
-          oauth: true,
+          signIn: { command: null },
         }
       : {
       id: 'claude-desktop',
@@ -379,6 +408,8 @@ function clientTable(input: McpClientInput): Omit<McpClientGuide, 'projectConfig
       captureKit: null,
       note: 'claudeDesktop',
       docs: 'https://github.com/geelen/mcp-remote',
+      // The same client: it can still sign in through the browser instead (#1371).
+      signIn: { command: null },
     },
     {
       id: 'windsurf',
@@ -394,6 +425,7 @@ function clientTable(input: McpClientInput): Omit<McpClientGuide, 'projectConfig
       captureKit: null,
       note: 'windsurf',
       docs: 'https://docs.devin.ai/desktop/cascade/mcp',
+      signIn: { command: null },
     },
     {
       id: 'opencode',
@@ -405,7 +437,8 @@ function clientTable(input: McpClientInput): Omit<McpClientGuide, 'projectConfig
         code: json({
           $schema: 'https://opencode.ai/config.json',
           mcp: {
-            [name]: { type: 'remote', url, enabled: true, oauth: false, ...header(`{env:${KEY_ENV}}`) },
+            // `oauth: false` keeps opencode from trying a sign-in over a key; omitted, it signs in (#1371).
+            [name]: { type: 'remote', url, enabled: true, ...(oauth ? {} : { oauth: false }), ...header(`{env:${KEY_ENV}}`) },
           },
         }),
       },
@@ -414,6 +447,7 @@ function clientTable(input: McpClientInput): Omit<McpClientGuide, 'projectConfig
       captureKit: null,
       note: 'opencode',
       docs: 'https://opencode.ai/docs/mcp-servers/',
+      signIn: { command: `opencode mcp auth ${name}` },
     },
     {
       id: 'zed',
@@ -429,6 +463,7 @@ function clientTable(input: McpClientInput): Omit<McpClientGuide, 'projectConfig
       captureKit: null,
       note: 'zed',
       docs: 'https://zed.dev/docs/ai/mcp',
+      signIn: { command: null },
     },
     {
       id: 'http',
@@ -505,21 +540,23 @@ export function skillStackInstallCommand(mcpUrl: string, dir: string, auth: bool
 /**
  * The one setup command (#1347): registers the server with `client`, installs
  * the skill and, inside a git repository, the capture kit. `single`,
- * `kit: false` and `project` (#1348: write the repository's committable
- * config instead of registering per user) carry the wizard's answers; the
+ * `kit: false`, `project` (#1348: write the repository's committable
+ * config instead of registering per user) and `oauth` (#1371) carry the wizard's answers; the
  * server renders the rest.
  */
 export function setupInstallCommand(
   mcpUrl: string,
   client: string,
   auth: boolean,
-  opts: { single?: boolean; kit?: boolean; project?: boolean } = {},
+  opts: { single?: boolean; kit?: boolean; project?: boolean; oauth?: boolean } = {},
 ): string {
   const query = [
     `client=${client}`,
     ...(opts.single ? ['skill=single'] : []),
     ...(opts.kit === false ? ['kit=no'] : []),
     ...(opts.project ? ['scope=project'] : []),
+    // #1371: register with no credential and print how the client signs in; the curl still carries the setup key.
+    ...(opts.oauth ? ['signIn=oauth'] : []),
   ].join('&')
   return `curl -fsSL${auth ? ` -H "Authorization: Bearer $${KEY_ENV}"` : ''} \\\n  "${mcpUrl}/setup/install?${query}" | sh`
 }

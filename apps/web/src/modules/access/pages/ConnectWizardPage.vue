@@ -12,6 +12,11 @@
  * the key minted here stays in memory until the page goes; on reload it is
  * gone, by design. What the answers mean (scope, toolsets, which steps apply)
  * is `connect-plan.ts`, pure and spec'd.
+ *
+ * While the server signs clients in with OAuth, the key step first asks how a
+ * client that can sign in will (#1371). In the browser there is no key to
+ * make: the configs carry no credential, and a setup key that lives an hour
+ * (minted on reaching the skill step) fetches the installers.
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -23,7 +28,7 @@ import type { ApiKeyInfo, McpConnectionInfo } from '@knowledge/contracts'
 import { Button } from '@knowledge/ui/button'
 import { confirm } from '@knowledge/ui/confirm'
 import { Skeleton } from '@knowledge/ui/skeleton'
-import { fetchApi } from '@/shared/api/queries'
+import { api, fetchApi } from '@/shared/api/queries'
 import { ownPath } from '@/shared/utils/own-path'
 import {
   CONNECT_ROLES,
@@ -60,7 +65,9 @@ const since = Date.now()
 const connection = ref<McpConnectionInfo | null>(null)
 const loading = ref(true)
 const auth = computed(() => connection.value?.authMode === 'api-key')
-/** A client that signs in through the browser (#1352) gets its own grant there: no key step. */
+/** The server signs clients in with OAuth (#1352). */
+const offersSignIn = computed(() => auth.value && !!connection.value?.oauth)
+/** A client that signs in through the browser gets its own grant there: no key to make. */
 const needsKey = computed(() => auth.value && !client.value?.oauth)
 
 onMounted(async () => {
@@ -102,6 +109,8 @@ const workflows = computed<ConnectWorkflow[]>({
   set: (v) => (workflowPick.value = v),
 })
 const keyMode = ref<'new' | 'existing'>('new')
+/** How a client that can sign in will (#1371): the browser unless the person picks a key. */
+const signIn = ref<'oauth' | 'key'>('oauth')
 const fresh = ref<{ key: ApiKeyInfo; apiKey: string } | null>(null)
 const skillFormat = ref<'single' | 'stack'>('single')
 const kit = ref<'yes' | 'no'>('yes')
@@ -115,12 +124,16 @@ const clients = computed(() =>
         serverName: connection.value.serverName,
         auth: auth.value,
         key: fresh.value?.apiKey ?? null,
-        oauth: connection.value.oauth,
+        signIn: offersSignIn.value ? signIn.value : 'key',
         anyClientName: t('connect.wizard.client.anyName'),
       })
     : [],
 )
 const client = computed(() => clients.value.find((c) => c.id === clientId.value) ?? null)
+/** The key step asks how to sign in: the server offers it and this client's docs describe it. */
+const canSignIn = computed(() => offersSignIn.value && !!client.value?.signIn)
+/** The key step is "Sign-in" when it asks how to sign in. */
+const stepLabel = (s: ConnectStep) => (s === 'key' && canSignIn.value ? t('connect.wizard.steps.signIn') : t(`connect.wizard.steps.${s}`))
 /** A client whose project config its vendor documents, with the key read from the environment. */
 const projectable = computed(() => !!client.value && hasProjectConfig(client.value))
 const forRepo = computed(() => projectable.value && where.value === 'project')
@@ -133,13 +146,37 @@ const check = computed(() => {
   return exported + http
 })
 
+/* ---------------------------------------------------------------- setup key */
+
+/**
+ * Signing in through the browser leaves the shell with no credential for the
+ * installer curls, so the skill step mints a setup key (#1371): an hour, the
+ * installer routes only, the scope the workflows suggest (the skill describes
+ * the credential that fetched it, and a read key is refused the kit). Minted
+ * once per client and scope; one left behind simply expires.
+ */
+const setupKey = ref<{ key: ApiKeyInfo; apiKey: string; for: string } | null>(null)
+async function mintSetupKey(forWhat: string) {
+  try {
+    const res = await api.post('/v1/me/api-keys', {
+      body: { name: t('connect.wizard.signIn.installName', { client: client.value?.name ?? 'AI' }), scope: scopeFor(workflows.value), install: true },
+    })
+    setupKey.value = { key: res.key, apiKey: res.apiKey, for: forWhat }
+  } catch {
+    toast.error(t('connect.wizard.signIn.installFailed'))
+  }
+}
+/** The credential the installer curls carry: the key made here, else the setup key. */
+const installKey = computed(() => fresh.value ?? (needsKey.value ? null : setupKey.value))
+
 /* -------------------------------------------------------------------- steps */
 
 /** A skill directory the server can install the stack into (the claude and agents dirs); others take one SKILL.md. */
 const stackable = computed(
   () => !!(connection.value && client.value?.skillDir && skillStackInstallCommand(connection.value.url, client.value.skillDir, false)),
 )
-const steps = computed(() => stepsFor({ needsKey: needsKey.value }))
+// The key step stays whenever the server takes keys: it is where the sign-in choice is made.
+const steps = computed(() => stepsFor({ needsKey: auth.value }))
 const preferences = computed(() =>
   hasPreferences({
     client: client.value && { stackable: stackable.value, captureKit: client.value.captureKit, project: projectable.value },
@@ -148,12 +185,18 @@ const preferences = computed(() =>
 )
 const index = ref(0)
 const step = computed<ConnectStep>(() => steps.value[Math.min(index.value, steps.value.length - 1)]!)
+watch(
+  () => (step.value === 'skill' && auth.value && !needsKey.value && client.value ? `${client.value.id}:${scopeFor(workflows.value)}` : null),
+  (forWhat) => {
+    if (forWhat && setupKey.value?.for !== forWhat) void mintSetupKey(forWhat)
+  },
+)
 
 function ok(s: ConnectStep): boolean {
   if (s === 'role') return !!role.value
   if (s === 'client') return !!client.value
   if (s === 'workflow') return workflows.value.length > 0
-  if (s === 'key') return !!fresh.value || keyMode.value === 'existing'
+  if (s === 'key') return !needsKey.value || !!fresh.value || keyMode.value === 'existing'
   return true
 }
 /** A step is open once every step before it is answered. */
@@ -202,12 +245,13 @@ const showPane = computed(() => steps.value.indexOf(step.value) < steps.value.in
 watch(
   [step, () => t('connect.wizard.title')],
   ([now, title]) => {
-    if (typeof document !== 'undefined') document.title = `${t(`connect.wizard.steps.${now}`)} · ${title} · Knowledge`
+    if (typeof document !== 'undefined') document.title = `${stepLabel(now)} · ${title} · Knowledge`
   },
   { immediate: true },
 )
 
 /* ---------------------------------------------------------------- the words */
+
 
 const titles = computed<Record<ConnectStep, string>>(() => {
   const name = client.value?.name ?? ''
@@ -215,7 +259,7 @@ const titles = computed<Record<ConnectStep, string>>(() => {
     role: t('connect.wizard.role.title'),
     client: t('connect.wizard.client.title'),
     workflow: t('connect.wizard.workflow.title'),
-    key: t('connect.wizard.key.title'),
+    key: canSignIn.value ? t('connect.wizard.signIn.title', { client: name }) : t('connect.wizard.key.title'),
     preferences: t('connect.wizard.preferences.title'),
     configure: t('connect.wizard.configure.title', { client: name }),
     skill: t('connect.wizard.skill.title', { client: name }),
@@ -249,6 +293,13 @@ const whereOptions = computed(() =>
     }),
   })),
 )
+const signInOptions = computed(() =>
+  (['oauth', 'key'] as const).map((v) => ({
+    value: v,
+    label: t(`connect.wizard.signIn.${v}.label`),
+    hint: t(`connect.wizard.signIn.${v}.hint`, { client: client.value?.name ?? '' }),
+  })),
+)
 const kitOptions = computed(() =>
   (['yes', 'no'] as const).map((v) => ({
     value: v,
@@ -262,7 +313,9 @@ const answers = computed<Partial<Record<ConnectStep, string>>>(() => ({
   role: role.value ? t(`connect.wizard.role.options.${role.value}.label`) : undefined,
   client: client.value?.name,
   workflow: workflows.value.map((w) => t(`connect.wizard.workflow.options.${w}.label`)).join(', '),
-  key: fresh.value?.key.name ?? (keyMode.value === 'existing' ? t('connect.wizard.key.have') : undefined),
+  key: !needsKey.value
+    ? t('connect.wizard.signIn.oauth.label')
+    : (fresh.value?.key.name ?? (keyMode.value === 'existing' ? t('connect.wizard.key.have') : undefined)),
   preferences: forRepo.value
     ? t('connect.wizard.preferences.where.project.label')
     : stackable.value
@@ -297,7 +350,7 @@ const help = computed(() => [
         @change="go(Number(($event.target as HTMLSelectElement).value))"
       >
         <option v-for="(s, i) in steps" :key="s" :value="i" :disabled="!reachable(i)">
-          {{ i + 1 }}. {{ t(`connect.wizard.steps.${s}`) }}
+          {{ i + 1 }}. {{ stepLabel(s) }}
         </option>
       </select>
       <ChevronDown class="pointer-events-none absolute right-2 size-3.5 text-muted-foreground" aria-hidden="true" />
@@ -337,7 +390,7 @@ const help = computed(() => [
               <template v-else>{{ i + 1 }}</template>
             </span>
             <span class="min-w-0">
-              <span class="block text-ui font-medium">{{ t(`connect.wizard.steps.${s}`) }}</span>
+              <span class="block text-ui font-medium">{{ stepLabel(s) }}</span>
               <span v-if="i < index && answers[s]" class="block truncate text-caption text-muted-foreground">{{ answers[s] }}</span>
             </span>
           </button>
@@ -354,7 +407,9 @@ const help = computed(() => [
           <p v-if="step === 'role'" class="kn-measure text-sm text-muted-foreground">{{ t('connect.wizard.role.hint') }}</p>
           <p v-else-if="step === 'client'" class="kn-measure text-sm text-muted-foreground">{{ t('connect.wizard.client.hint') }}</p>
           <p v-else-if="step === 'workflow'" class="kn-measure text-sm text-muted-foreground">{{ t('connect.wizard.workflow.hint') }}</p>
-          <p v-else-if="step === 'key'" class="kn-measure text-sm text-muted-foreground">{{ t('connect.wizard.key.hint') }}</p>
+          <p v-else-if="step === 'key'" class="kn-measure text-sm text-muted-foreground">
+            {{ canSignIn ? t('connect.wizard.signIn.hint', { client: client?.name ?? '' }) : t('connect.wizard.key.hint') }}
+          </p>
           <p v-else-if="step === 'configure'" class="kn-measure text-sm text-muted-foreground">
             {{ t('connect.wizard.configure.hint', { client: client?.name ?? '' }) }}
           </p>
@@ -376,6 +431,10 @@ const help = computed(() => [
             :note="needsKey && workflows.length ? t('connect.wizard.workflow.needs', { scope: t(`connect.keys.scopes.${scopeFor(workflows)}`) }) : undefined"
             :options="workflowOptions"
           />
+        </div>
+        <div v-if="canSignIn" v-show="step === 'key'">
+          <ChoiceCards v-model="signIn" name="kn-wiz-sign-in" quiet-legend :legend="stepLabel('key')" :options="signInOptions" />
+          <p v-if="!needsKey" class="kn-measure mt-4 text-xs text-muted-foreground">{{ t('connect.wizard.signIn.browserNote') }}</p>
         </div>
         <div v-if="needsKey" v-show="step === 'key'">
           <KeyStep
@@ -414,9 +473,9 @@ const help = computed(() => [
           <SkillStep
             :url="connection.url"
             :client="client"
-            :needs-key="needsKey"
-            :api-key="fresh?.apiKey ?? null"
-            :key-scope="fresh?.key.scope ?? null"
+            :auth="auth"
+            :api-key="installKey?.apiKey ?? null"
+            :key-scope="installKey?.key.scope ?? null"
             :format="skillFormat"
             :kit="wantsKit"
             :project="forRepo"
@@ -427,6 +486,7 @@ const help = computed(() => [
           <VerifyPanel
             :active="step === 'verify'"
             :needs-key="needsKey"
+            :sign-in="client?.oauth ? (client.signIn?.command ?? '') : null"
             :client-name="client?.name ?? ''"
             :key-id="fresh?.key.id ?? null"
             :api-key="fresh?.apiKey ?? null"

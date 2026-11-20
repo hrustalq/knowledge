@@ -8,6 +8,7 @@ export const PLATFORM_ADMIN_META = 'knowledge:platform-admin';
 export const READ_KEY_OK_META = 'knowledge:read-key-ok';
 export const SESSION_ONLY_META = 'knowledge:session-only';
 export const MCP_KEY_OK_META = 'knowledge:mcp-key-ok';
+export const INSTALL_KEY_OK_META = 'knowledge:install-key-ok';
 export const QUERY_TOKEN_OK_META = 'knowledge:query-token-ok';
 export const UNVERIFIED_OK_META = 'knowledge:unverified-ok';
 export const FEATURE_META = 'knowledge:feature';
@@ -106,6 +107,13 @@ export const ReadKeyOk = () => SetMetadata(READ_KEY_OK_META, true);
  * AuthGuard refuses such a key, since its list narrows nothing outside MCP.
  */
 export const McpKeyOk = () => SetMetadata(MCP_KEY_OK_META, true);
+
+/**
+ * The skill and capture-kit installers (#1371): the only routes a Connect
+ * wizard setup key may call. Per handler, never per class: the MCP endpoint
+ * beside them must keep refusing it.
+ */
+export const InstallKeyOk = () => SetMetadata(INSTALL_KEY_OK_META, true);
 
 /**
  * A route that may authenticate with `?token=` instead of an `Authorization`

@@ -78,6 +78,11 @@ export interface Principal {
      * toolset list, and judged by enforced SSO as the sign-in that approved it.
      */
     oauth?: { clientId: string; signInMethod: AuthMethod | null; signInProviderId: string | null; grantedAt: string };
+    /**
+     * A Connect wizard setup key (#1371): `TokenAuthService.resolve` refuses it
+     * at every door but the installer routes (`@InstallKeyOk`).
+     */
+    install?: true;
   };
 }
 

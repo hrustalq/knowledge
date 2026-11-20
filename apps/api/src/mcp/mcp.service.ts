@@ -351,16 +351,25 @@ export class McpService extends McpServices {
    * refuses it. `skill: 'single'` and `kit: 'no'` follow the wizard's answers.
    * `scope: 'project'` (#1348) writes the client's committable config into the
    * repository instead; a client with none is refused with the reason, never
-   * given the user-level setup in its place.
+   * given the user-level setup in its place. `signIn: 'oauth'` (#1371)
+   * registers the server with no credential and prints how the client signs
+   * in; refused while the server signs nobody in, never quietly a key setup.
    */
   async setupInstallerFor(
     principal: Principal,
     clientId: string,
-    opts: { skill?: string; kit?: string; scope?: string } = {},
+    opts: { skill?: string; kit?: string; scope?: string; signIn?: string } = {},
     extras: McpExtras = {},
   ): Promise<string> {
     const auth = this.config.get('AUTH_MODE') === 'api-key';
-    const clients = mcpClients({ url: this.publicUrl(), serverName: MCP_SERVER_NAME, auth, key: null });
+    if (opts.signIn !== undefined && opts.signIn !== 'key' && opts.signIn !== 'oauth') {
+      throw new BadRequestException({ statusCode: 400, message: t('error.capture.setupSignIn', { signIn: opts.signIn }), reason: 'setup-sign-in' });
+    }
+    if (opts.signIn === 'oauth' && !(auth && this.config.get('MCP_OAUTH_ENABLED') === true)) {
+      throw new BadRequestException({ statusCode: 400, message: t('error.capture.setupSignInOff'), reason: 'setup-sign-in-off' });
+    }
+    const signIn = opts.signIn === 'oauth' ? 'oauth' : 'key';
+    const clients = mcpClients({ url: this.publicUrl(), serverName: MCP_SERVER_NAME, auth, key: null, signIn });
     const client = clients.find((c) => c.id === clientId);
     if (!client) {
       throw new BadRequestException({
@@ -397,7 +406,8 @@ export class McpService extends McpServices {
       client,
       url: this.publicUrl(),
       serverName: MCP_SERVER_NAME,
-      auth,
+      // A client signing in carries no credential, so no placeholder to replace.
+      auth: auth && !client.oauth,
       skillStack: stackDir ? await this.skillStackInstallerFor(principal, stackDir, extras) : null,
       skill: !stackDir && client.skillDir ? await this.skillFor(principal, undefined, extras) : null,
       kit,

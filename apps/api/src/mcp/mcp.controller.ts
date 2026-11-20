@@ -4,7 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import type { Request, Response } from 'express';
 import { CAPTURE_KIT_CLIENTS, SKILL_DIR_KEYS, type CaptureKitResponse, type McpConnectionInfo, type SkillStackResponse } from '@knowledge/contracts';
-import { CurrentPrincipal, McpKeyOk, ReadKeyOk } from '../auth/access.decorator.js';
+import { CurrentPrincipal, InstallKeyOk, McpKeyOk, ReadKeyOk } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { MCP_SERVER_NAME, toolsetsNotOffered } from './mcp-tools.js';
 import { noTrackOf } from '../analytics/analytics.recorder.js';
@@ -115,6 +115,7 @@ export class McpController {
   }
 
   @Get('skill')
+  @InstallKeyOk()
   @Header('Content-Type', 'text/markdown; charset=utf-8')
   @ApiProduces('text/markdown')
   @ApiOperation({
@@ -132,6 +133,7 @@ export class McpController {
    * the one-file default.
    */
   @Get('skills')
+  @InstallKeyOk()
   @Returns('SkillStackResponse')
   @ApiQuery({ name: 'dir', enum: SKILL_DIR_KEYS, required: false })
   @ApiOperation({
@@ -142,6 +144,7 @@ export class McpController {
   }
 
   @Get('skills/install')
+  @InstallKeyOk()
   @Header('Content-Type', 'text/x-shellscript; charset=utf-8')
   @ApiProduces('text/x-shellscript')
   @ApiQuery({ name: 'dir', enum: SKILL_DIR_KEYS, required: false })
@@ -158,6 +161,7 @@ export class McpController {
    * installers above, composed, plus the register step.
    */
   @Get('setup/install')
+  @InstallKeyOk()
   @Header('Content-Type', 'text/x-shellscript; charset=utf-8')
   @ApiProduces('text/x-shellscript')
   @ApiQuery({ name: 'client', type: String, description: 'A client id from the Connect AI table (claude-code, codex, cursor, …)' })
@@ -169,6 +173,12 @@ export class McpController {
     required: false,
     description: "project writes the client's committable config into the git repository it runs in (#1348) instead of registering per user; user is the default",
   })
+  @ApiQuery({
+    name: 'signIn',
+    enum: ['key', 'oauth'],
+    required: false,
+    description: 'oauth registers the server with no credential and prints how the client signs in through the browser (#1371); needs MCP_OAUTH_ENABLED. key is the default',
+  })
   @ApiOperation({
     summary: 'One POSIX shell script that registers the MCP server with a client, installs the skill and, inside a git repository, the capture kit',
   })
@@ -178,11 +188,12 @@ export class McpController {
     @Query('skill') skill?: string,
     @Query('kit') kit?: string,
     @Query('scope') scope?: string,
+    @Query('signIn') signIn?: string,
   ): Promise<string> {
     return this.mcp.setupInstallerFor(
       principal,
       client ?? '',
-      { ...(skill ? { skill } : {}), ...(kit ? { kit } : {}), ...(scope ? { scope } : {}) },
+      { ...(skill ? { skill } : {}), ...(kit ? { kit } : {}), ...(scope ? { scope } : {}), ...(signIn ? { signIn } : {}) },
       this.extras,
     );
   }
@@ -194,6 +205,7 @@ export class McpController {
    * script, for `curl … | sh` from the repository root.
    */
   @Get('capture-kit')
+  @InstallKeyOk()
   @Returns('CaptureKitResponse')
   @ApiQuery({ name: 'client', enum: CAPTURE_KIT_CLIENTS })
   @ApiOperation({
@@ -205,6 +217,7 @@ export class McpController {
   }
 
   @Get('capture-kit/install')
+  @InstallKeyOk()
   @Header('Content-Type', 'text/x-shellscript; charset=utf-8')
   @ApiProduces('text/x-shellscript')
   @ApiQuery({ name: 'client', enum: CAPTURE_KIT_CLIENTS })

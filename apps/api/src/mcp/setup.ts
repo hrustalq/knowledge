@@ -142,6 +142,14 @@ function kitStep(input: SetupInput): string {
   return `echo "  skipped: ${why}."`;
 }
 
+/** How a client rendered for browser sign-in (#1371) finishes connecting: no key, its own sign-in. */
+function signInLine(client: McpClientGuide): string {
+  const command = client.signIn?.command;
+  return command
+    ? `In ${client.name}, run ${command}: it opens your browser to sign you in.`
+    : `${client.name} opens your browser to sign you in the first time it connects.`;
+}
+
 export function renderSetupInstaller(input: SetupInput): string {
   const { client, project } = input;
   const commit = project ? [project.path, ...('files' in input.kit ? input.kit.files : [])] : [];
@@ -191,8 +199,14 @@ ${
   project
     ? `echo "Setup done. Commit these files (they hold no key):"
 for f in ${commit.map((f) => `'${f}'`).join(' ')}; do [ -e "$f" ] && echo "  $f"; done
-echo "Each teammate exports ${KEY_ENV} with their own key. ${client.name} may ask to approve or trust the project's server the first time."`
-    : `echo "Setup done. Start a new ${client.name} session and ask it to call knowledge_whoami."`
+echo "${
+        client.oauth
+          ? `Each teammate signs in through the browser: ${signInLine(client)}`
+          : `Each teammate exports ${KEY_ENV} with their own key.`
+      } ${client.name} may ask to approve or trust the project's server the first time."`
+    : client.oauth
+      ? `echo "Setup done. Start a new ${client.name} session. ${signInLine(client)} Then ask it to call knowledge_whoami."`
+      : `echo "Setup done. Start a new ${client.name} session and ask it to call knowledge_whoami."`
 }
 }
 

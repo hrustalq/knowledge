@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, type ApiKey } from '@prisma/client';
-import { apiKeyScopeOf, keyToolsetsOf, type ApiKeyInfo, type CreateApiKeyResponse, type ListApiKeysResponse } from '@knowledge/contracts';
+import { INSTALL_KEY_TTL_MINUTES, apiKeyScopeOf, keyToolsetsOf, type ApiKeyInfo, type CreateApiKeyResponse, type ListApiKeysResponse } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type { Principal } from './principal.js';
 import type { CreateApiKeyDto } from './api-keys.dto.js';
@@ -28,15 +28,28 @@ export class ApiKeysService {
   async list(principal: Principal): Promise<ListApiKeysResponse> {
     this.requireSession(principal);
     const rows = await this.prisma.apiKey.findMany({
-      where: { userId: principal.userId, revokedAt: null },
+      where: liveRows(principal.userId),
       orderBy: { createdAt: 'desc' },
     });
     return { keys: rows.map(toInfo) };
   }
 
+  /**
+   * `install` (#1371) is a setup key: the installer routes only, for
+   * INSTALL_KEY_TTL_MINUTES. Its own expiry, so a lifetime asked for beside it
+   * is refused rather than silently ignored.
+   */
   async create(principal: Principal, dto: CreateApiKeyDto): Promise<CreateApiKeyResponse> {
+    if (dto.install && dto.expiresInDays !== undefined) {
+      throw new BadRequestException({ statusCode: 400, message: t('error.auth.installKeyExpiry'), reason: 'install-key-expiry' });
+    }
     const { token: apiKey, tokenHash: keyHash } = mintToken('kn_', 24);
-    const row = await this.insert(principal, dto, { keyHash, prefix: apiKey.slice(0, 11) }, { action: 'api-key.created' });
+    const credential = {
+      keyHash,
+      prefix: apiKey.slice(0, 11),
+      ...(dto.install ? { purpose: 'install', expiresAt: new Date(Date.now() + INSTALL_KEY_TTL_MINUTES * 60_000) } : {}),
+    };
+    const row = await this.insert(principal, dto, credential, { action: 'api-key.created' });
     return { key: toInfo(row), apiKey };
   }
 
@@ -59,7 +72,10 @@ export class ApiKeysService {
   private async insert(
     principal: Principal,
     dto: CreateApiKeyDto,
-    credential: Pick<Prisma.ApiKeyUncheckedCreateInput, 'keyHash' | 'prefix' | 'oauthClientId' | 'signInMethod' | 'signInProviderId'>,
+    credential: Pick<
+      Prisma.ApiKeyUncheckedCreateInput,
+      'keyHash' | 'prefix' | 'oauthClientId' | 'signInMethod' | 'signInProviderId' | 'purpose' | 'expiresAt'
+    >,
     audit: { action: 'api-key.created' | 'oauth.granted' },
   ): Promise<ApiKey> {
     this.requireSession(principal);
@@ -73,7 +89,7 @@ export class ApiKeysService {
     }
     const projectIds = dto.projectIds?.length ? [...new Set(dto.projectIds)] : null;
     if (projectIds) await this.assertProjectPin(principal, dto, projectIds);
-    const active = await this.prisma.apiKey.count({ where: { userId: principal.userId, revokedAt: null } });
+    const active = await this.prisma.apiKey.count({ where: liveRows(principal.userId) });
     if (active >= MAX_ACTIVE_KEYS) {
       throw new BadRequestException(t('error.auth.apiKeyLimit', { max: MAX_ACTIVE_KEYS }));
     }
@@ -82,7 +98,6 @@ export class ApiKeysService {
     // only the SHA-256 ever reaches PostgreSQL.
     const row = await this.prisma.apiKey.create({
       data: {
-        ...credential,
         userId: principal.userId,
         name: dto.name,
         scope: dto.scope ?? 'write',
@@ -91,6 +106,7 @@ export class ApiKeysService {
         // No list, or an empty one, is every toolset; a list always holds `core` (#945).
         toolsets: dto.toolsets?.length ? keyToolsetsOf(dto.toolsets)! : Prisma.DbNull,
         expiresAt: dto.expiresInDays ? new Date(Date.now() + dto.expiresInDays * 86_400_000) : null,
+        ...credential,
       },
     });
     // Filed under the workspace it is pinned to, so that workspace's admins see it (#1251); else a platform event.
@@ -106,6 +122,7 @@ export class ApiKeysService {
         toolsets: row.toolsets,
         expiresAt: row.expiresAt,
         ...(row.oauthClientId ? { client: row.oauthClientId } : {}),
+        ...(row.purpose === 'install' ? { install: true } : {}),
       },
       target: row.id,
       ok: true,
@@ -187,6 +204,15 @@ export class ApiKeysService {
   }
 }
 
+/**
+ * The caller's keys that still count: not revoked, and not a setup key past its
+ * hour (#1371) — one is minted per wizard run, so the list and the 50-key cap
+ * would otherwise fill with dead ones. An ordinary expired key stays listed, as before.
+ */
+function liveRows(userId: string): Prisma.ApiKeyWhereInput {
+  return { userId, revokedAt: null, OR: [{ purpose: null }, { expiresAt: { gt: new Date() } }] };
+}
+
 function toInfo(row: ApiKey): ApiKeyInfo {
   return {
     id: row.id,
@@ -197,6 +223,7 @@ function toInfo(row: ApiKey): ApiKeyInfo {
     projectIds: projectPinOf(row.projectIds),
     toolsets: keyToolsetsOf(row.toolsets),
     oauth: row.oauthClientId !== null,
+    install: row.purpose === 'install',
     expiresAt: row.expiresAt?.toISOString() ?? null,
     lastUsedAt: row.lastUsedAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),

@@ -18,7 +18,7 @@ const props = defineProps<{
   /** The key minted in this wizard, while it is on screen. */
   apiKey: string | null
 }>()
-const { t } = useI18n()
+const { t, te } = useI18n()
 
 interface Block {
   id: string
@@ -36,7 +36,16 @@ const blocks = computed<Block[]>(() => {
       : []),
     ...(c.command ? [{ id: 'command', label: t('connect.clients.step.command'), code: c.command }] : []),
     { id: 'file', label: c.config.path, code: c.config.code, secret: !c.usesEnv && !!props.apiKey },
+    // Browser sign-in (#1371): the client's own step, after the config it reads.
+    ...(c.oauth && c.signIn?.command ? [{ id: 'sign-in', label: t('connect.wizard.signIn.command', { client: c.name }), code: c.signIn.command }] : []),
   ]
+})
+
+/** Under browser sign-in the key notes would mislead: each client has its own (#1371). */
+const note = computed(() => {
+  const c = props.client
+  if (!c) return ''
+  return c.oauth && te(`connect.clients.oauthNotes.${c.note}`) ? t(`connect.clients.oauthNotes.${c.note}`) : t(`connect.clients.notes.${c.note}`)
 })
 
 /** Placeholder still in a file the client cannot point at a variable. */
@@ -74,8 +83,9 @@ onBeforeUnmount(() => timers.forEach(clearTimeout))
         <CopyBlock :code="b.code" :label="b.label" :secret="b.secret" />
       </div>
       <p v-if="placeholder" class="text-caption text-panel-warning-ink">{{ t('connect.clients.placeholder') }}</p>
+      <p v-if="client.oauth && !client.signIn?.command" class="text-caption text-muted-foreground">{{ t('connect.wizard.signIn.auto', { client: client.name }) }}</p>
       <p class="text-caption text-muted-foreground">
-        <template v-for="(span, i) in codeSpans(t(`connect.clients.notes.${client.note}`))" :key="i">
+        <template v-for="(span, i) in codeSpans(note)" :key="i">
           <code v-if="span.code" class="font-mono">{{ span.text }}</code>
           <template v-else>{{ span.text }}</template>
         </template>

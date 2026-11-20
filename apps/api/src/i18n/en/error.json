@@ -41,6 +41,8 @@
     "apiKeyNeedsSession": "API keys are managed from a signed-in session, not with another API key.",
     "apiKeyNotFound": "API key {id} not found.",
     "oauthMcpOnly": "This OAuth token was issued for the MCP endpoint (/v1/mcp) and works only there.",
+    "apiKeyInstallOnly": "This is a setup key from the Connect wizard: it only fetches the skill and capture-kit installers, for an hour. The client signs in through the browser instead.",
+    "installKeyExpiry": "A setup key lasts an hour; it takes no expiresInDays.",
     "oauthRequestGone": "This sign-in request has expired or was already answered. Start the connection again from your AI client.",
     "oauthClientGone": "The AI client behind this request is no longer registered. Start the connection again from your AI client.",
     "apiKeyWorkspaceNotMember": "You can only pin a key to a workspace you belong to ({workspaceId}).",
@@ -810,6 +812,8 @@
     "skillsDir": "No skills directory \"{dir}\". Choose one of: {dirs}.",
     "setupClient": "No setup for the client \"{client}\". Choose one of: {clients}.",
     "setupScope": "No setup scope \"{scope}\". Choose user or project.",
+    "setupSignIn": "No sign-in \"{signIn}\". Choose key or oauth.",
+    "setupSignInOff": "This server does not sign clients in through the browser (MCP_OAUTH_ENABLED is off). Use signIn=key.",
     "setupProject": {
       "noFile": "{client} has no project-level config this setup can write: its vendor documents none, or it is not JSON, or its documented shape is not checked yet. Use the user setup (scope=user) instead.",
       "noEnv": "{client} is not documented to read the key from an environment variable in a project config, so a committed file would have to hold the key. Use the user setup (scope=user) instead."

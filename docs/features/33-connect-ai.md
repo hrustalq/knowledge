@@ -26,7 +26,7 @@ and work in its knowledge base **as the person who connected it**:
   wizard. It asks who you are, which tool connects and what the agent will do, then
   derives the key (scope, suggested toolsets), shows that client's command and config
   file live beside the questions with the fresh key in them, installs the skill (and,
-  for Claude Code and Cursor, the capture kit, below), and ends by **waiting for the
+  for Claude Code, Cursor and Codex, the capture kit, below), and ends by **waiting for the
   key's first call**. Every step carries a "Something not working?" panel: symptom →
   fix, for the step and for the chosen client.
 - **Settings → AI → Connect AI** (`/settings/ai/connect`; it was its own settings row
@@ -158,16 +158,17 @@ bearer header, so the install command can be re-run to pick up new workspaces.
 **The capture kit is a reminder, not an agent.** The wizard's skill step runs
 `curl -H "Authorization: Bearer …" $API_PUBLIC_URL/v1/mcp/capture-kit/install?client=… | sh`.
 `GET /v1/mcp/capture-kit?client=` returns the same files as JSON
-(`CaptureKitResponse`). The kit is a skill (Claude Code) or an agent-requested
+(`CaptureKitResponse`). The kit is a skill (Claude Code, Codex) or an agent-requested
 rule (Cursor) carrying the capture playbook, plus a hook script that reminds
 the model, once per session and only after it edited a file, to propose what
 it learned. The script holds no key and calls nothing: the model captures
 through the MCP server it is already connected to. Kits exist for
-`claude-code` and `cursor` only (`CAPTURE_KIT_CLIENTS`); other clients get 400
+`claude-code`, `cursor` and `codex` only (`CAPTURE_KIT_CLIENTS`); other clients get 400
 and rely on the skill's "Capture memory" section. A credential offered no
 capture tool gets 403 `capture-not-offered`. The installer never overwrites
-`.claude/settings.json` or `.cursor/hooks.json`: it merges its entries with
-`jq`, or prints them when `jq` is missing. The exact hook behaviour is in
+`.claude/settings.json`, `.cursor/hooks.json` or `.codex/hooks.json`: it merges its entries with
+`jq`, or prints them when `jq` is missing. Codex's hook file is JSON even though its
+config is TOML (#1350). Codex skips a hook until the person trusts it in `/hooks`, and the installer says so. The exact hook behaviour is in
 [50 §The capture kit](50-agent-memory.md#the-capture-kit).
 
 **One setup command** (#1347). `GET /v1/mcp/setup/install?client=<id>` returns
@@ -328,7 +329,7 @@ so instead of claiming a result.
 | -------------------------- | ------- | ----------- | ----------- | ------------ | ------------------- | ----------- |
 | Claude Code                | 2.1.328 | pass        | pass        | pass ¹       | pass, one gap #1340 | pass ²      |
 | Kimi Code                  | 2.6.3   | pass ³      | pass        | fail #1341   | n/a (no hook)       | fail #1341  |
-| Codex                      | —       | not checked | not checked | not checked  | n/a (no hook)       | not checked |
+| Codex                      | —       | not checked | not checked | not checked  | not checked ⁴       | not checked |
 | Cursor                     | —       | not checked | not checked | not checked  | not checked         | not checked |
 | Every other client (below) | —       | not checked | not checked | not checked  | n/a (no hook)       | not checked |
 
@@ -351,6 +352,9 @@ title prefix followed the key owner's account locale (ru), not the session's lan
 ("Trust this folder" or `KIMI_CODE_TRUST_WORKSPACE=1`); an untrusted folder skips a project-level server with a
 warning. The model's tool list then held no MCP tools at all, headless (`kimi -p`) or over ACP, so it reported the
 server as not connected. #1341 tracks the cause.
+
+⁴ Codex has had a capture kit since v5 (#1350), checked against Codex's documented hook stdin in
+`capture-kit.spec.ts`, never in a live session. Codex runs the hooks only after they are trusted in `/hooks`.
 
 The hook gap (#1340): `gh issue view 128; gh issue view 131` in one command nudges only for the first ticket. Separate
 commands nudge correctly, and a ticket pasted as the prompt (`ORION-140 — …`) got its one `UserPromptSubmit` nudge.

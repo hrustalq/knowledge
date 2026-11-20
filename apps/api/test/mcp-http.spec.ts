@@ -1835,15 +1835,15 @@ describe('renderSkill', () => {
 describe('capture kit (#73)', () => {
   it('refuses a client it has no kit for', async () => {
     const { mcp } = service(accessWith('editor'));
-    await expect(mcp.captureKitFor(keyPrincipal({ id: 'k', scope: 'write', workspaceId: null }), 'codex')).rejects.toMatchObject({
+    await expect(mcp.captureKitFor(keyPrincipal({ id: 'k', scope: 'write', workspaceId: null }), 'gemini')).rejects.toMatchObject({
       status: 400,
       response: { reason: 'capture-kit-client' },
     });
   });
 
-  it('refuses a read-only key, whose kit would describe calls it cannot make', async () => {
+  it.each(['cursor', 'codex'])('refuses a read-only key a %s kit, which would describe calls it cannot make', async (client) => {
     const { mcp } = service(accessWith('editor'));
-    await expect(mcp.captureKitFor(keyPrincipal({ id: 'k', scope: 'read', workspaceId: null }), 'cursor')).rejects.toMatchObject({
+    await expect(mcp.captureKitFor(keyPrincipal({ id: 'k', scope: 'read', workspaceId: null }), client)).rejects.toMatchObject({
       status: 403,
       response: { reason: 'capture-not-offered' },
     });

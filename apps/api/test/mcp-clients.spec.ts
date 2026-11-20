@@ -50,7 +50,10 @@ describe('skill directories', () => {
 
   it('offers a capture kit only where a client has one', () => {
     expect(of(SKILL_DIRS.claude)?.kits).toEqual([{ client: 'claude-code', name: 'Claude Code' }]);
-    expect(of(SKILL_DIRS.agents)?.kits).toEqual([{ client: 'cursor', name: 'Cursor' }]);
+    expect(of(SKILL_DIRS.agents)?.kits).toEqual([
+      { client: 'codex', name: 'Codex' },
+      { client: 'cursor', name: 'Cursor' },
+    ]);
     expect(of('~/.qwen/skills')?.kits).toEqual([]);
   });
 

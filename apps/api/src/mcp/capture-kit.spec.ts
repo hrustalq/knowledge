@@ -25,7 +25,7 @@ const fileOf = (client: CaptureKitClient, suffix: string) => {
 const hasJq = spawnSync('sh', ['-c', 'command -v jq']).status === 0;
 
 describe('renderCaptureKit', () => {
-  it.each(['claude-code', 'cursor'] as const)('renders the %s kit', (client) => {
+  it.each(['claude-code', 'cursor', 'codex'] as const)('renders the %s kit', (client) => {
     const kit = renderCaptureKit(input(client));
     expect(kit.version).toBe(CAPTURE_KIT_VERSION);
     expect(kit.files.map((f) => [f.path, f.mode, f.executable])).toMatchSnapshot();
@@ -56,6 +56,15 @@ describe('renderCaptureKit', () => {
         stop: [{ command: '.cursor/hooks/knowledge-capture.sh stop' }],
       },
     });
+    // Codex: Claude Code's layout, `Edit|Write` being its alias for apply_patch, the path resolved from the session's cwd.
+    const codex = JSON.parse(fileOf('codex', 'hooks.json').content);
+    expect(codex.hooks.PostToolUse.map((e: { matcher: string }) => e.matcher)).toEqual(['Edit|Write', TICKET_TOOL_MATCHER]);
+    expect(codex.hooks.Stop[0].hooks[0]).toEqual({
+      type: 'command',
+      command: '"$(git rev-parse --show-toplevel)/.codex/hooks/knowledge-capture.sh" stop',
+      timeout: 5,
+    });
+    expect(fileOf('codex', 'SKILL.md').path).toBe('.agents/skills/knowledge-capture/SKILL.md');
   });
 
   it('matches the tools that read tickets, not the ones that edit code', () => {
@@ -65,7 +74,7 @@ describe('renderCaptureKit', () => {
   });
 
   it('holds no key and makes no network call', () => {
-    for (const client of ['claude-code', 'cursor'] as const) {
+    for (const client of ['claude-code', 'cursor', 'codex'] as const) {
       const script = fileOf(client, 'knowledge-capture.sh').content;
       expect(script).not.toMatch(/\b(curl|wget|nc)\b|Authorization|kn_/);
     }
@@ -173,6 +182,30 @@ describe('the hook script', () => {
     expect(run('ticket', { conversation_id: 'c-1', tool_name: 'Read', tool_input: { path: 'ENG-1.md' } })).toBe('');
   });
 
+  it('reminds a Codex session once after an edit, as a continuation prompt', () => {
+    install('codex');
+    const stop = (session: string, active = false) => ({ session_id: session, hook_event_name: 'Stop', turn_id: 't', stop_hook_active: active, last_assistant_message: null });
+    expect(run('stop', stop('x-1'))).toBe('');
+    expect(run('edited', { session_id: 'x-1', hook_event_name: 'PostToolUse', tool_name: 'apply_patch', tool_input: { command: '*** Begin Patch' } })).toBe('');
+    const out = JSON.parse(run('stop', stop('x-1')));
+    expect(out.decision).toBe('block');
+    expect(out.reason).toContain('session.client codex, session.sessionId x-1');
+    expect(out.reason).toContain('knowledge-capture skill');
+    // The turn Codex continued stops again: silent, as is a later edit's stop.
+    expect(run('stop', stop('x-1', true))).toBe('');
+    run('edited', { session_id: 'x-1', tool_name: 'apply_patch' });
+    expect(run('stop', stop('x-1'))).toBe('');
+  });
+
+  it('nudges a Codex session after a ticket read and for a prompt naming one, as additional context', () => {
+    install('codex');
+    const first = JSON.parse(run('ticket', bash('x-1', 'gh issue view 9 --repo o/r', 'mentions ABC-1')));
+    expect(first.hookSpecificOutput).toEqual({ hookEventName: 'PostToolUse', additionalContext: expect.stringMatching(/^Ticket 9: .*knowledge_context/) });
+    expect(run('ticket', bash('x-1', 'gh issue view 9'))).toBe('');
+    const prompt = JSON.parse(run('ticket-prompt', { session_id: 'x-1', hook_event_name: 'UserPromptSubmit', turn_id: 't', prompt: 'start on PAY-12' }));
+    expect(prompt.hookSpecificOutput.additionalContext).toContain('Ticket PAY-12');
+  });
+
   it('follows up a completed Cursor turn once, and never an aborted one', () => {
     install('cursor');
     run('edited', { conversation_id: 'c-1', file_path: '/repo/a.ts' });
@@ -237,9 +270,24 @@ describe('renderCaptureKitInstaller', () => {
     expect(merged.hooks.postToolUse).toHaveLength(1);
   });
 
-  it('tells a Cursor user what the hook cannot cover', () => {
+  it('tells a Cursor user what the hook cannot cover, and a Codex user to trust the hooks', () => {
     expect(installer('cursor')).toContain('cannot add context to a prompt');
-    expect(installer('claude-code')).not.toContain('cannot add context');
+    expect(installer('claude-code')).not.toContain('Note:');
+    expect(installer('codex')).toContain('Open /hooks in Codex and trust the four knowledge-capture.sh hooks');
+  });
+
+  it.runIf(hasJq)('installs the Codex kit and merges into existing Codex hooks without duplicating', () => {
+    mkdirSync(join(repo, '.codex'));
+    const own = { description: 'team hooks', hooks: { PostToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: 'lint.sh' }] }] } };
+    writeFileSync(join(repo, '.codex/hooks.json'), JSON.stringify(own));
+    runIn(repo, installer('codex'));
+    runIn(repo, installer('codex'));
+    const merged = JSON.parse(readFileSync(join(repo, '.codex/hooks.json'), 'utf8'));
+    expect(merged.description).toBe('team hooks');
+    expect(merged.hooks.PostToolUse.map((e: { hooks: { command: string }[] }) => e.hooks[0].command.split(' ').pop())).toEqual(['lint.sh', 'edited', 'ticket']);
+    expect(merged.hooks.Stop).toHaveLength(1);
+    expect(statSync(join(repo, '.codex/hooks/knowledge-capture.sh')).mode & 0o111).not.toBe(0);
+    expect(readFileSync(join(repo, '.agents/skills/knowledge-capture/SKILL.md'), 'utf8')).toBe(fileOf('codex', 'SKILL.md').content);
   });
 
   it('refuses to run outside a git repository', () => {

@@ -63283,7 +63283,8 @@
         "type": "string",
         "enum": [
           "claude-code",
-          "cursor"
+          "cursor",
+          "codex"
         ]
       },
       "CaptureKitFile": {

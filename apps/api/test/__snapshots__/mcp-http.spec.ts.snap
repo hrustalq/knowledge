@@ -430,8 +430,8 @@ person or agent would otherwise have to rediscover:
    \`webUrl\`, the merge request a person will review.
 5. A \`429\` means the capture budget is spent for now. Say so and move on; do not retry in a loop.
 
-For Claude Code and Cursor, a hook can remind the model to do this once per session. Install it from the repository
-root: \`curl -fsSL -H "Authorization: Bearer $KNOWLEDGE_API_KEY" "https://kb.example.com/api/v1/mcp/capture-kit/install?client=claude-code" | sh\` (or \`client=cursor\`).
+For Claude Code, Cursor and Codex, a hook can remind the model to do this once per session. Install it from the repository
+root: \`curl -fsSL -H "Authorization: Bearer $KNOWLEDGE_API_KEY" "https://kb.example.com/api/v1/mcp/capture-kit/install?client=claude-code" | sh\` (or \`client=cursor\`, \`client=codex\`).
 
 ## Git
 
@@ -466,7 +466,7 @@ Over MCP the same text is the resources \`knowledge://documents/<documentId>.md\
 
 ## Keeping this skill current
 
-This skill was generated with stamp \`ceeacbd75382\`. \`knowledge_whoami\` returns \`skill.stamp\`, the stamp the server
+This skill was generated with stamp \`428de98198a8\`. \`knowledge_whoami\` returns \`skill.stamp\`, the stamp the server
 would generate for you now. If the two differ, something changed since it was installed: a workspace you joined or
 left, a section or tool switched off, a playbook rewritten. Tell the person once, then carry on with this file. Do not
 fetch it yourself. The command that refreshes it:
@@ -1051,8 +1051,8 @@ person or agent would otherwise have to rediscover:
    \`webUrl\`, the merge request a person will review.
 5. A \`429\` means the capture budget is spent for now. Say so and move on; do not retry in a loop.
 
-For Claude Code and Cursor, a hook can remind the model to do this once per session. Install it from the repository
-root: \`curl -fsSL -H "Authorization: Bearer $KNOWLEDGE_API_KEY" "https://kb.example.com/api/v1/mcp/capture-kit/install?client=claude-code" | sh\` (or \`client=cursor\`).
+For Claude Code, Cursor and Codex, a hook can remind the model to do this once per session. Install it from the repository
+root: \`curl -fsSL -H "Authorization: Bearer $KNOWLEDGE_API_KEY" "https://kb.example.com/api/v1/mcp/capture-kit/install?client=claude-code" | sh\` (or \`client=cursor\`, \`client=codex\`).
 
 ## Git
 
@@ -1096,7 +1096,7 @@ Over MCP the same text is the resources \`knowledge://documents/<documentId>.md\
 
 ## Keeping this skill current
 
-This skill was generated with stamp \`dea51ad314e2\`. \`knowledge_whoami\` returns \`skill.stamp\`, the stamp the server
+This skill was generated with stamp \`b7bf4ac9fbbd\`. \`knowledge_whoami\` returns \`skill.stamp\`, the stamp the server
 would generate for you now. If the two differ, something changed since it was installed: a workspace you joined or
 left, a section or tool switched off, a playbook rewritten. Tell the person once, then carry on with this file. Do not
 fetch it yourself. The command that refreshes it:
@@ -1416,8 +1416,8 @@ person or agent would otherwise have to rediscover:
    \`webUrl\`, the merge request a person will review.
 5. A \`429\` means the capture budget is spent for now. Say so and move on; do not retry in a loop.
 
-For Claude Code and Cursor, a hook can remind the model to do this once per session. Install it from the repository
-root: \`curl -fsSL -H "Authorization: Bearer $KNOWLEDGE_API_KEY" "https://kb.example.com/api/v1/mcp/capture-kit/install?client=claude-code" | sh\` (or \`client=cursor\`).
+For Claude Code, Cursor and Codex, a hook can remind the model to do this once per session. Install it from the repository
+root: \`curl -fsSL -H "Authorization: Bearer $KNOWLEDGE_API_KEY" "https://kb.example.com/api/v1/mcp/capture-kit/install?client=claude-code" | sh\` (or \`client=cursor\`, \`client=codex\`).
 
 ## Git
 
@@ -1452,7 +1452,7 @@ Over MCP the same text is the resources \`knowledge://documents/<documentId>.md\
 
 ## Keeping this skill current
 
-This skill was generated with stamp \`3b6e370f4cb8\`. \`knowledge_whoami\` returns \`skill.stamp\`, the stamp the server
+This skill was generated with stamp \`3a299adee33a\`. \`knowledge_whoami\` returns \`skill.stamp\`, the stamp the server
 would generate for you now. If the two differ, something changed since it was installed: a workspace you joined or
 left, a section or tool switched off, a playbook rewritten. Tell the person once, then carry on with this file. Do not
 fetch it yourself. The command that refreshes it:
@@ -2065,8 +2065,8 @@ person or agent would otherwise have to rediscover:
    \`webUrl\`, the merge request a person will review.
 5. A \`429\` means the capture budget is spent for now. Say so and move on; do not retry in a loop.
 
-For Claude Code and Cursor, a hook can remind the model to do this once per session. Install it from the repository
-root: \`curl -fsSL -H "Authorization: Bearer $KNOWLEDGE_API_KEY" "https://kb.example.com/api/v1/mcp/capture-kit/install?client=claude-code" | sh\` (or \`client=cursor\`).
+For Claude Code, Cursor and Codex, a hook can remind the model to do this once per session. Install it from the repository
+root: \`curl -fsSL -H "Authorization: Bearer $KNOWLEDGE_API_KEY" "https://kb.example.com/api/v1/mcp/capture-kit/install?client=claude-code" | sh\` (or \`client=cursor\`, \`client=codex\`).
 
 ## Git
 
@@ -2110,7 +2110,7 @@ Over MCP the same text is the resources \`knowledge://documents/<documentId>.md\
 
 ## Keeping this skill current
 
-This skill was generated with stamp \`a7d23557f77b\`. \`knowledge_whoami\` returns \`skill.stamp\`, the stamp the server
+This skill was generated with stamp \`062b98954fc0\`. \`knowledge_whoami\` returns \`skill.stamp\`, the stamp the server
 would generate for you now. If the two differ, something changed since it was installed: a workspace you joined or
 left, a section or tool switched off, a playbook rewritten. Tell the person once, then carry on with this file. Do not
 fetch it yourself. The command that refreshes it:

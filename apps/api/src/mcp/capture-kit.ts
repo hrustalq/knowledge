@@ -1,4 +1,5 @@
 import type { CaptureKitClient, CaptureKitFile, CaptureKitResponse } from '@knowledge/contracts';
+import { PUT_FN } from './installer-shell.js';
 
 /**
  * The capture kit (issue #73, phase 5): what a coding agent installs in a
@@ -127,20 +128,23 @@ export function renderCaptureKitInstaller(kit: CaptureKitResponse, kitUrl: strin
     if (file.mode === 'write') {
       return [
         `mkdir -p '${dir}'`,
-        `cat > '${file.path}' ${heredoc}`,
+        `put '${file.path}' '${file.path}' ${heredoc}`,
         ...(file.executable ? [`chmod +x '${file.path}'`] : []),
-        `echo "  wrote ${file.path}"`,
       ].join('\n');
     }
     return [
       `entries=$(mktemp)`,
       `cat > "$entries" ${heredoc}`,
       `if [ ! -f '${file.path}' ]; then`,
-      `  mkdir -p '${dir}' && cp "$entries" '${file.path}'`,
-      `  echo "  wrote ${file.path}"`,
+      `  mkdir -p '${dir}' && put '${file.path}' '${file.path}' < "$entries"`,
       `elif command -v jq >/dev/null 2>&1; then`,
-      `  jq --slurpfile kit "$entries" '(($kit[0] | del(.hooks)) + .) | reduce ($kit[0].hooks | to_entries[]) as $e (.; .hooks[$e.key] = ([(.hooks[$e.key] // [])[] | select(tostring | contains("${HOOK_FILE}") | not)] + $e.value))' '${file.path}' > "$entries.out" \\`,
-      `    && mv "$entries.out" '${file.path}' && echo "  merged the hooks into ${file.path}"`,
+      `  if jq --slurpfile kit "$entries" '(($kit[0] | del(.hooks)) + .) | reduce ($kit[0].hooks | to_entries[]) as $e (.; .hooks[$e.key] = ([(.hooks[$e.key] // [])[] | select(tostring | contains("${HOOK_FILE}") | not)] + $e.value))' '${file.path}' > "$entries.out"; then`,
+      `    put '${file.path}' 'the hooks in ${file.path}' < "$entries.out"`,
+      `  else`,
+      `    echo "  could not read ${file.path} as JSON. Merge these entries into it by hand:"`,
+      `    cat "$entries"`,
+      `  fi`,
+      `  rm -f "$entries.out"`,
       `else`,
       `  echo "  ${file.path} exists and jq is not installed. Merge these entries into it by hand:"`,
       `  cat "$entries"`,
@@ -157,6 +161,7 @@ set -eu
 root=$(git rev-parse --show-toplevel 2>/dev/null) || { echo "Run this inside the git repository the agent works in." >&2; exit 1; }
 cd "$root"
 echo "Installing the knowledge capture kit into $root"
+${PUT_FN}
 
 ${body.join('\n\n')}
 

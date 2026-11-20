@@ -2,6 +2,7 @@ import { MCP_TOOLSET_KEYS, SKILL_NAME } from '@knowledge/contracts';
 import type { ApiKeyScope, McpToolset, McpToolSummary, PublishMode, WorkspaceRole } from '@knowledge/contracts';
 import { CAPTURE_TOOLS, authoringOf } from './mcp-tools.js';
 import { TOOLSET_SKILLS, cell, joinSections, skillSections, type SkillSection } from './skill-sections.js';
+import { PUT_FN } from './installer-shell.js';
 
 /** knowledge_whoami's answer — also the "your access" table in the skill. */
 export interface McpWhoami {
@@ -331,8 +332,7 @@ export function renderSkillStackInstaller(skills: readonly StackSkill[], dir: st
       `  echo "  skipped ${skill.name}: $dir/${skill.name} exists and this installer did not write it" >&2`,
       `else`,
       `  mkdir -p "$dir/${skill.name}"`,
-      `  cat > "$dir/${skill.name}/SKILL.md" <<'${eof}'\n${skill.content.replace(/\n$/, '')}\n${eof}`,
-      `  echo "  wrote ${skill.name}"`,
+      `  put "$dir/${skill.name}/SKILL.md" ${skill.name} <<'${eof}'\n${skill.content.replace(/\n$/, '')}\n${eof}`,
       `fi`,
     ].join('\n');
   });
@@ -345,6 +345,7 @@ dir="\${KNOWLEDGE_SKILLS_DIR:-${dir.replace(/^~/, '$HOME')}}"
 mkdir -p "$dir"
 echo "Installing the knowledge skill stack into $dir"
 ours() { [ -f "$1/SKILL.md" ] && grep -q '${STACK_MARKER}' "$1/SKILL.md"; }
+${PUT_FN}
 
 # A stack skill from an earlier run that this connection is no longer offered.
 for old in "$dir"/knowledge-*; do

@@ -420,6 +420,21 @@ export function skillStackInstallCommand(mcpUrl: string, dir: string, auth: bool
 }
 
 /**
+ * The one setup command (#1347): registers the server with `client`, installs
+ * the skill and, inside a git repository, the capture kit. `single` and
+ * `kit: false` carry the wizard's answers; the server renders the rest.
+ */
+export function setupInstallCommand(
+  mcpUrl: string,
+  client: string,
+  auth: boolean,
+  opts: { single?: boolean; kit?: boolean } = {},
+): string {
+  const query = [`client=${client}`, ...(opts.single ? ['skill=single'] : []), ...(opts.kit === false ? ['kit=no'] : [])].join('&')
+  return `curl -fsSL${auth ? ` -H "Authorization: Bearer $${KEY_ENV}"` : ''} \\\n  "${mcpUrl}/setup/install?${query}" | sh`
+}
+
+/**
  * Install the capture kit (issue #73) into the repository the command runs in.
  * The server renders the installer, so a re-run picks up a new kit version,
  * and it never overwrites a settings file the person already has.

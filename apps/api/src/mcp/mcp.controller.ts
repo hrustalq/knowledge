@@ -149,6 +149,29 @@ export class McpController {
   }
 
   /*
+   * One setup command (#1347): registers the server with one client, installs
+   * the skill and, inside a git repository, the capture kit. The two
+   * installers above, composed, plus the register step.
+   */
+  @Get('setup/install')
+  @Header('Content-Type', 'text/x-shellscript; charset=utf-8')
+  @ApiProduces('text/x-shellscript')
+  @ApiQuery({ name: 'client', type: String, description: 'A client id from the Connect AI table (claude-code, codex, cursor, …)' })
+  @ApiQuery({ name: 'skill', enum: ['stack', 'single'], required: false, description: 'single installs one SKILL.md where a stack is available; stack is the default' })
+  @ApiQuery({ name: 'kit', enum: ['yes', 'no'], required: false, description: 'no leaves the capture kit out; yes is the default' })
+  @ApiOperation({
+    summary: 'One POSIX shell script that registers the MCP server with a client, installs the skill and, inside a git repository, the capture kit',
+  })
+  setupInstaller(
+    @CurrentPrincipal() principal: Principal,
+    @Query('client') client: string,
+    @Query('skill') skill?: string,
+    @Query('kit') kit?: string,
+  ): Promise<string> {
+    return this.mcp.setupInstallerFor(principal, client ?? '', { ...(skill ? { skill } : {}), ...(kit ? { kit } : {}) }, this.extras);
+  }
+
+  /*
    * The capture kit (issue #73): a skill or rule, a hook script and the hook
    * entries for one coding agent, generated for the caller like the skill.
    * The JSON is for a person or a tool; `install` is the same files as a

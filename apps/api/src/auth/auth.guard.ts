@@ -1,7 +1,7 @@
 import { ForbiddenException, HttpStatus, Injectable, UnauthorizedException, type CanActivate, type ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { SESSION_COOKIE } from '@knowledge/contracts';
-import { MCP_KEY_OK_META, PUBLIC_META, QUERY_TOKEN_OK_META, UNVERIFIED_OK_META } from './access.decorator.js';
+import { INSTALL_KEY_OK_META, MCP_KEY_OK_META, PUBLIC_META, QUERY_TOKEN_OK_META, UNVERIFIED_OK_META } from './access.decorator.js';
 import { readCookie } from '../common/cookies.js';
 import { requestedLocale } from '../i18n/locale.js';
 import { t } from '../i18n/t.js';
@@ -51,9 +51,11 @@ export class AuthGuard implements CanActivate {
 
     // Only the MCP controller admits a key limited to toolsets (#945).
     const mcp = this.reflector.getAllAndOverride<boolean>(MCP_KEY_OK_META, [ctx.getHandler(), ctx.getClass()]) === true;
+    // And only the installers admit a setup key (#1371).
+    const install = this.reflector.getAllAndOverride<boolean>(INSTALL_KEY_OK_META, [ctx.getHandler()]) === true;
     try {
       req.principal = bearer
-        ? await this.tokenAuth.resolve(bearer, { mcp })
+        ? await this.tokenAuth.resolve(bearer, { mcp, install })
         : queryToken
           ? await this.tokenAuth.resolveTicket(queryToken)
           : cookieToken

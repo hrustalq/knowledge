@@ -25,7 +25,16 @@ exact command and config file for Claude Code, Codex, Gemini CLI, Qwen Code, Kim
 DeepSeek Harness, pi, Oh My Pi, Hermes Agent, Cursor, VS Code, Claude Desktop, Windsurf,
 opencode and Zed — with the key already filled in, the one time it is
 on screen. Its last step waits for the client's first call and, if none comes, tells you
-what the server's reply means. The shape every one of them boils down to:
+what the server's reply means.
+
+When the server signs clients in with OAuth (`MCP_OAUTH_ENABLED`), the wizard first asks how a
+client will sign in. **In the browser** is the default for every client above except DeepSeek
+Harness: its config holds no credential, the client opens this site for you to approve what it
+may do, and you revoke it on Connect AI like a key. The skill installer then runs with a setup
+key that only fetches installers and stops working after an hour. **With an API key** is still
+there for a machine with no browser, a script, or a client run headless (`claude -p`, CI).
+
+With a key, the shape every client boils down to:
 
 ```json
 {

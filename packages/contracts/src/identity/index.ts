@@ -1045,6 +1045,9 @@ export function apiKeyScopeOf(stored: string): ApiKeyScope {
 /** How many projects a `capture` key may be pinned to. */
 export const API_KEY_MAX_PROJECTS = 20;
 
+/** How long a Connect wizard setup key lives (#1371): long enough to run the installer, short enough to be worth nothing in a shell history. */
+export const INSTALL_KEY_TTL_MINUTES = 60;
+
 export interface ApiKeyInfo {
   id: string;
   name: string;
@@ -1070,6 +1073,12 @@ export interface ApiKeyInfo {
    * Revoked the same way.
    */
   oauth: boolean;
+  /**
+   * A setup key the Connect wizard minted for a browser sign-in (#1371): it
+   * fetches the skill and capture-kit installers for an hour and is refused
+   * everywhere else, MCP calls included. Never a client's connection.
+   */
+  install: boolean;
   expiresAt: string | null;
   /** Coarse — refreshed at most once a minute, so it answers "is this still in use", not "when exactly". */
   lastUsedAt: string | null;

@@ -4,7 +4,9 @@
  * installs the skill in the format picked under Preferences and the capture
  * hook when it was asked for (#1347); the same steps one by one behind a
  * disclosure; and what a developer's agent does when a ticket starts. Fetched as the key just minted when there is one,
- * because the SKILL.md describes the credential that reads it.
+ * because the SKILL.md describes the credential that reads it. For a client
+ * that signs in through the browser that key is the wizard's setup key (#1371):
+ * the installers need a credential even when the client does not.
  */
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -30,7 +32,8 @@ import {
 const props = defineProps<{
   url: string
   client: McpClientGuide
-  needsKey: boolean
+  /** The server takes keys, so every installer curl carries one. */
+  auth: boolean
   apiKey: string | null
   keyScope: ApiKeyScope | null
   format: 'single' | 'stack'
@@ -60,17 +63,18 @@ watch(
 )
 
 const dir = computed(() => props.client.skillDir)
-const stack = computed(() => (dir.value && props.format === 'stack' ? skillStackInstallCommand(props.url, dir.value, props.needsKey) : null))
+const stack = computed(() => (dir.value && props.format === 'stack' ? skillStackInstallCommand(props.url, dir.value, props.auth) : null))
 
 /** A read key is refused the kit, so the one command leaves it out (#1347). */
 const kitIncluded = computed(() => props.kit && !!props.client.captureKit && props.keyScope !== 'read')
 const setup = computed(() => {
-  const command = setupInstallCommand(props.url, props.client.id, props.needsKey, {
+  const command = setupInstallCommand(props.url, props.client.id, props.auth, {
     single: props.format === 'single',
     ...(props.client.captureKit && !props.kit ? { kit: false } : {}),
     ...(props.project ? { project: true } : {}),
+    ...(props.client.oauth ? { oauth: true } : {}),
   })
-  return props.needsKey ? `export ${KEY_ENV}=${props.apiKey ?? '<your-api-key>'}\n${command}` : command
+  return props.auth ? `export ${KEY_ENV}=${props.apiKey ?? '<your-api-key>'}\n${command}` : command
 })
 const projectPath = computed(() => (props.project && hasProjectConfig(props.client) ? props.client.projectConfig.path : null))
 const setupLabel = computed(() =>
@@ -91,6 +95,9 @@ function download() {
 
     <div class="grid min-w-0 gap-2">
       <CopyBlock :code="setup" :secret="!!apiKey" :label="setupLabel" />
+      <p v-if="client.oauth && apiKey" class="kn-measure text-caption text-muted-foreground">
+        {{ t('connect.wizard.signIn.installHint', { client: client.name }) }}
+      </p>
       <p v-if="projectPath" class="kn-measure text-caption text-muted-foreground">
         {{ t('connect.setup.projectHint', { client: client.name }) }}
       </p>
@@ -124,14 +131,14 @@ function download() {
             <CopyBlock v-if="stack" :code="stack" :label="t('connect.skill.stackFor', { client: client.name, path: dir })" />
             <CopyBlock
               v-else
-              :code="skillInstallCommand(`${url}/skill`, dir, needsKey)"
+              :code="skillInstallCommand(`${url}/skill`, dir, auth)"
               :label="t('connect.skill.installFor', { client: client.name, path: `${dir}/${SKILL_NAME}/SKILL.md` })"
             />
             <p v-if="stack" class="kn-measure text-caption text-muted-foreground">{{ t('connect.skill.stackHint') }}</p>
           </template>
           <CopyBlock
             v-if="kitIncluded && client.captureKit"
-            :code="captureKitInstallCommand(`${url}/capture-kit`, client.captureKit, needsKey)"
+            :code="captureKitInstallCommand(`${url}/capture-kit`, client.captureKit, auth)"
             :label="t('connect.wizard.skill.kitTitle')"
           />
         </div>

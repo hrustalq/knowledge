@@ -41,9 +41,11 @@ export class TokenAuthService {
    * anywhere else — a REST route, the git remote, the live socket, a
    * plain-markdown URL — the same key would read and write past it. Refused
    * here, where every door resolves its bearer, so a new door is closed to it
-   * until it says otherwise.
+   * until it says otherwise. `install` is said only by the skill and
+   * capture-kit installers (#1371): a setup key is refused everywhere else, MCP
+   * calls included, by the same rule.
    */
-  async resolve(token: string | undefined, opts: { mcp?: boolean } = {}): Promise<Principal> {
+  async resolve(token: string | undefined, opts: { mcp?: boolean; install?: boolean } = {}): Promise<Principal> {
     if (this.config.get('AUTH_MODE') !== 'api-key') return DEV_PRINCIPAL;
     if (!token) throw new UnauthorizedException(t('error.auth.missingBearer'));
     if (token.startsWith('ks_')) return this.resolveSession(token);
@@ -55,6 +57,9 @@ export class TokenAuthService {
         message: t(principal.apiKey?.oauth ? 'error.auth.oauthMcpOnly' : 'error.auth.apiKeyMcpOnly'),
         reason: 'apiKeyMcpOnly',
       });
+    }
+    if (principal.apiKey?.install && !opts.install) {
+      throw new ForbiddenException({ statusCode: 403, message: t('error.auth.apiKeyInstallOnly'), reason: 'apiKeyInstallOnly' });
     }
     return principal;
   }
@@ -183,6 +188,7 @@ export class TokenAuthService {
         workspaceId: row.workspaceId,
         projectIds: projectPinOf(row.projectIds),
         toolsets: keyToolsetsOf(row.toolsets),
+        ...(row.purpose === 'install' ? { install: true as const } : {}),
       },
     };
   }

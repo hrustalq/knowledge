@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { ArrayMaxSize, IsArray, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
 import { API_KEY_MAX_PROJECTS, API_KEY_SCOPES, MCP_TOOLSET_KEYS, type ApiKeyScope, type McpToolset } from '@knowledge/contracts';
 import { vmsg } from '../common/validation.js';
 
@@ -57,4 +57,15 @@ export class CreateApiKeyDto {
   @Min(1)
   @Max(365)
   expiresInDays?: number;
+
+  @ApiPropertyOptional({
+    type: Boolean,
+    description:
+      'A setup key (#1371): accepted only by the skill and capture-kit installer routes, and only for an hour ' +
+      '(INSTALL_KEY_TTL_MINUTES). The Connect wizard mints one for a client that signs in through the browser. ' +
+      'Refused together with expiresInDays.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  install?: boolean;
 }

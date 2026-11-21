@@ -13,6 +13,31 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.64.0] — 2026-11-21
+
+### Added
+
+- **Every AI client that can sign in through the browser now can, from the Connect wizard (#1371).** With
+  `MCP_OAUTH_ENABLED=true`, the wizard's key step asks how the client will sign in. *In the browser* is the default
+  for Claude Code, Codex, Gemini CLI, Qwen Code, Kimi Code, pi, Oh My Pi, Hermes Agent, Cursor, VS Code, Windsurf,
+  opencode, Zed and Claude Desktop. It gives a config with no credential, the client's own sign-in step
+  (`codex mcp login knowledge`, `/mcp`, …) and a note for that client. *With an API key* is unchanged. DeepSeek
+  Harness and the generic HTTP entry stay key-only: their docs describe no MCP OAuth. The skill step's one setup
+  command runs with a **setup key** the wizard mints: it fetches only the skill and capture-kit installers, stops
+  working after an hour, and is refused everywhere else, MCP calls included. The check step waits for the client to
+  sign in, not for the installer to run. `GET /v1/mcp/setup/install` takes `signIn=oauth` for the same setup by hand.
+
+### Fixed
+
+- **Claude Desktop's OAuth entry in the Connect wizard (#1371).** Its setup command carried no credential, so it
+  failed with a 401, and its check step showed the text meant for a server with no sign-in at all.
+
+### Operations
+
+- **#1371 setup keys.** One migration (`20270211100000_install_keys`): a nullable `api_keys.purpose`. It is
+  expand-only and survives a rollback; the previous release never reads it. Nothing changes while
+  `MCP_OAUTH_ENABLED` is off.
+
 ## [0.63.0] — 2026-11-20
 
 ### Added
@@ -8182,7 +8207,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.63.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.64.0...HEAD
+[0.64.0]: https://github.com/hrustalq/knowledge/compare/v0.63.0...v0.64.0
 [0.63.0]: https://github.com/hrustalq/knowledge/compare/v0.62.0...v0.63.0
 [0.62.0]: https://github.com/hrustalq/knowledge/compare/v0.61.0...v0.62.0
 [0.61.0]: https://github.com/hrustalq/knowledge/compare/v0.60.0...v0.61.0

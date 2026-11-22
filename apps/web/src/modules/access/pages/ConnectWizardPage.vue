@@ -134,7 +134,7 @@ const client = computed(() => clients.value.find((c) => c.id === clientId.value)
 const canSignIn = computed(() => offersSignIn.value && !!client.value?.signIn)
 /** The key step is "Sign-in" when it asks how to sign in. */
 const stepLabel = (s: ConnectStep) => (s === 'key' && canSignIn.value ? t('connect.wizard.steps.signIn') : t(`connect.wizard.steps.${s}`))
-/** A client whose project config its vendor documents, with the key read from the environment. */
+/** A client whose project config its vendor documents or source shows, with the key read from the environment. */
 const projectable = computed(() => !!client.value && hasProjectConfig(client.value))
 const forRepo = computed(() => projectable.value && where.value === 'project')
 const wantsKit = computed(() => !!client.value?.captureKit && workflows.value.includes('capture') && kit.value === 'yes')

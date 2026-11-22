@@ -201,7 +201,7 @@ reads stdin cannot swallow the rest of a `curl | sh`, and it never prints the ke
 into the git repository the script runs in (it `cd`s to the top level and refuses
 outside one, before writing anything) instead of registering per user. Each client's
 `projectConfig` in the contracts table is either `{ path, code, docs }` or
-`{ refused }`. A client gets a path only where its vendor's docs state both a
+`{ refused }`. A client gets a path where its vendor's docs or source show both a
 project-level file and an env reference for the key there, and that file is the
 same JSON as its user-level config, so the key is always `KNOWLEDGE_API_KEY` in the
 client's own syntax:
@@ -213,15 +213,23 @@ client's own syntax:
 | Kimi Code | `.kimi-code/mcp.json` | `bearerTokenEnvVar` |
 | pi | `.pi/mcp.json` | `${KNOWLEDGE_API_KEY}` |
 | Oh My Pi | `.omp/mcp.json` | `${KNOWLEDGE_API_KEY}` |
+| Gemini CLI | `.gemini/settings.json` | `$KNOWLEDGE_API_KEY` in `headers` (only in a trusted folder; an untrusted one drops every server) |
+| Qwen Code | `.qwen/settings.json` | `$KNOWLEDGE_API_KEY` in `headers` (only in a trusted folder; approve once with `qwen mcp approve knowledge`, and the approval binds to that config) |
 | opencode | `opencode.json` | `{env:KNOWLEDGE_API_KEY}` (the V1 `mcp.<name>` shape: 1.x rejects V2's `mcp.servers`, 2.x still reads V1) |
 
 Every other client is 400 `setup-project-unsupported` with `refused`:
-`no-env-in-headers` (VS Code, Zed, Devin/Windsurf; Gemini CLI and Qwen Code document
-expansion for settings strings in general, not MCP headers) or `no-project-config`
+`no-env-in-headers` (VS Code, Zed, Devin/Windsurf) or `no-project-config`
 (Codex's project file is TOML, which the `jq` merge cannot handle; Claude Desktop,
-Hermes, DeepSeek Harness, the raw HTTP entry). Gemini CLI and Qwen Code did expand the
-key in a project file when run (#1364), but nothing documents it yet. It is never given the per-user
+Hermes, DeepSeek Harness, the raw HTTP entry). It is never given the per-user
 setup in its place. An unknown scope is 400 `setup-scope`.
+
+Gemini CLI and Qwen Code qualify on their source, not their docs (#1364): Gemini
+runs every MCP header value through `expandEnvVars` (`packages/core/src/tools/mcp-client.ts`)
+and merges a workspace settings file only when the folder is trusted
+(`packages/cli/src/config/settings.ts`); Qwen runs `resolveEnvVarsInObject` over the
+whole workspace settings object before the merge (`packages/cli/src/config/settings.ts`).
+Neither vendor documents expansion in MCP headers, so `projectConfig.docs` cites those
+lines instead of a docs page.
 
 The file is created when absent; when present, `jq` merges it one level deep, so
 every other server and top-level setting is kept and this server's entry is replaced
@@ -230,11 +238,15 @@ hand (the capture kit's rule). The skill step still installs per caller, and say
 so: it is generated for each key. The script ends with the files to commit (the
 config plus the capture kit's files). The spec renders every project config and
 project script with a real-looking key in the input and asserts it appears in
-neither. A trust step comes first in two clients: Claude Code shows the server as
-"Pending approval" until someone runs `claude` in the folder and approves it, and Kimi
-skips it until the folder is trusted; pi ignores `.pi/mcp.json` until the project is
-trusted. Run live in #1351: Claude Code, pi, Oh My Pi and opencode connect from their
-project file once approved or trusted; Cursor's is not run ([§Client checks](#client-checks)).
+neither. A trust or approval step comes first in five clients: Claude Code shows the
+server as "Pending approval" until someone runs `claude` in the folder and approves it;
+Kimi skips it until the folder is trusted; pi ignores `.pi/mcp.json` until the project is
+trusted; Gemini CLI does not read a workspace settings file in an untrusted folder; and
+Qwen Code skips MCP connections there and asks to approve its project server once
+(`qwen mcp approve knowledge`), binding the approval to that config, so a changed key
+returns it to Pending. Run live in #1351: Claude Code, pi, Oh My Pi and opencode connect
+from their project file once approved or trusted; Gemini CLI and Qwen Code connected from
+theirs once trusted or approved (#1364); Cursor's is not run ([§Client checks](#client-checks)).
 The UI says a client may ask to approve or trust the repository's server first.
 
 Every installer writes a file through one `put` helper (`PUT_FN`, `apps/api/src/mcp/installer-shell.ts`)

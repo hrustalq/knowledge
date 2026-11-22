@@ -2032,7 +2032,7 @@ esac
     const projectClients = mcpClients({ url: 'https://kb.example.com/api/v1/mcp', serverName: 'knowledge', auth: true, key: KEY }).filter(hasProjectConfig);
 
     it('never puts a key in a project config or its script, for every client that has one', async () => {
-      expect(projectClients.map((c) => c.id)).toEqual(['claude-code', 'kimi', 'pi', 'omp', 'cursor', 'opencode']);
+      expect(projectClients.map((c) => c.id)).toEqual(['claude-code', 'gemini', 'qwen', 'kimi', 'pi', 'omp', 'cursor', 'opencode']);
       for (const c of projectClients) {
         // Rendered with a real-looking key minted on the page: the project config must still hold only a reference.
         expect(c.projectConfig.code, c.id).not.toContain(KEY);
@@ -2041,6 +2041,16 @@ esac
         expect(sh, c.id).not.toContain(KEY);
         expect(sh, c.id).toContain(`put '${c.projectConfig.path}'`);
         expect(sh, c.id).not.toContain(' mcp add ');
+      }
+    });
+
+    it('gives Gemini CLI and Qwen Code the user config as their project file', () => {
+      const byId = new Map(projectClients.map((c) => [c.id, c]));
+      expect(byId.get('gemini')?.projectConfig.path).toBe('.gemini/settings.json');
+      expect(byId.get('qwen')?.projectConfig.path).toBe('.qwen/settings.json');
+      for (const id of ['gemini', 'qwen']) {
+        const c = byId.get(id)!;
+        expect(JSON.parse(c.projectConfig.code), id).toEqual(JSON.parse(c.config.code));
       }
     });
 
@@ -2061,10 +2071,10 @@ esac
     describe('run', () => {
       let home: string;
       let repo: string;
-      const run = async (cwd: string, env: Record<string, string> = { KNOWLEDGE_API_KEY: KEY }) => {
+      const run = async (cwd: string, env: Record<string, string> = { KNOWLEDGE_API_KEY: KEY }, clientId = 'claude-code') => {
         const res = spawnSync('sh', ['-s'], {
           cwd,
-          input: await script(writer, 'claude-code', { scope: 'project' }),
+          input: await script(writer, clientId, { scope: 'project' }),
           env: { PATH: process.env.PATH, HOME: home, TMPDIR: home, ...env },
         });
         return { status: res.status, out: res.stdout.toString() + res.stderr.toString() };
@@ -2080,6 +2090,22 @@ esac
       afterEach(() => {
         rmSync(home, { recursive: true, force: true });
         rmSync(repo, { recursive: true, force: true });
+      });
+
+      it('writes a Gemini or Qwen project file that holds only the variable', async () => {
+        for (const [client, path] of [
+          ['gemini', '.gemini/settings.json'],
+          ['qwen', '.qwen/settings.json'],
+        ] as const) {
+          const res = await run(repo, { KNOWLEDGE_API_KEY: KEY }, client);
+          expect(res.status, res.out).toBe(0);
+          const raw = readFileSync(join(repo, path), 'utf8');
+          expect(raw).not.toContain(KEY);
+          expect(JSON.parse(raw).mcpServers.knowledge).toEqual({
+            httpUrl: 'https://kb.example.com/api/v1/mcp',
+            headers: { Authorization: 'Bearer $KNOWLEDGE_API_KEY' },
+          });
+        }
       });
 
       it('merges into an existing .mcp.json, keeps its servers, lists the files to commit and holds no key', async () => {

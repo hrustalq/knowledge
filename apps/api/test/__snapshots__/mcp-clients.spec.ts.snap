@@ -90,7 +90,18 @@ bearer_token_env_var = "KNOWLEDGE_API_KEY"",
     "name": "Gemini CLI",
     "note": "gemini",
     "projectConfig": {
-      "refused": "no-env-in-headers",
+      "code": "{
+  "mcpServers": {
+    "kb": {
+      "httpUrl": "https://kb.test/v1/mcp",
+      "headers": {
+        "Authorization": "Bearer $KNOWLEDGE_API_KEY"
+      }
+    }
+  }
+}",
+      "docs": "https://github.com/google-gemini/gemini-cli/blob/eecccfcd5aff25de5e78135ca20f7abe3f566955/packages/core/src/tools/mcp-client.ts#L1013-L1016",
+      "path": ".gemini/settings.json",
     },
     "signIn": {
       "command": "/mcp auth kb",
@@ -120,7 +131,18 @@ bearer_token_env_var = "KNOWLEDGE_API_KEY"",
     "name": "Qwen Code",
     "note": "qwen",
     "projectConfig": {
-      "refused": "no-env-in-headers",
+      "code": "{
+  "mcpServers": {
+    "kb": {
+      "httpUrl": "https://kb.test/v1/mcp",
+      "headers": {
+        "Authorization": "Bearer $KNOWLEDGE_API_KEY"
+      }
+    }
+  }
+}",
+      "docs": "https://github.com/QwenLM/qwen-code/blob/62b0d73b7281e18afcde16a971bf331d75364a38/packages/cli/src/config/settings.ts#L1596-L1600",
+      "path": ".qwen/settings.json",
     },
     "signIn": {
       "command": "/mcp",
@@ -708,7 +730,18 @@ bearer_token_env_var = "KNOWLEDGE_API_KEY"",
     "name": "Gemini CLI",
     "note": "gemini",
     "projectConfig": {
-      "refused": "no-env-in-headers",
+      "code": "{
+  "mcpServers": {
+    "knowledge": {
+      "httpUrl": "https://kb.test/v1/mcp",
+      "headers": {
+        "Authorization": "Bearer $KNOWLEDGE_API_KEY"
+      }
+    }
+  }
+}",
+      "docs": "https://github.com/google-gemini/gemini-cli/blob/eecccfcd5aff25de5e78135ca20f7abe3f566955/packages/core/src/tools/mcp-client.ts#L1013-L1016",
+      "path": ".gemini/settings.json",
     },
     "signIn": {
       "command": "/mcp auth knowledge",
@@ -738,7 +771,18 @@ bearer_token_env_var = "KNOWLEDGE_API_KEY"",
     "name": "Qwen Code",
     "note": "qwen",
     "projectConfig": {
-      "refused": "no-env-in-headers",
+      "code": "{
+  "mcpServers": {
+    "knowledge": {
+      "httpUrl": "https://kb.test/v1/mcp",
+      "headers": {
+        "Authorization": "Bearer $KNOWLEDGE_API_KEY"
+      }
+    }
+  }
+}",
+      "docs": "https://github.com/QwenLM/qwen-code/blob/62b0d73b7281e18afcde16a971bf331d75364a38/packages/cli/src/config/settings.ts#L1596-L1600",
+      "path": ".qwen/settings.json",
     },
     "signIn": {
       "command": "/mcp",
@@ -1316,7 +1360,15 @@ url = "https://kb.test/v1/mcp"",
     "name": "Gemini CLI",
     "note": "gemini",
     "projectConfig": {
-      "refused": "no-env-in-headers",
+      "code": "{
+  "mcpServers": {
+    "knowledge": {
+      "httpUrl": "https://kb.test/v1/mcp"
+    }
+  }
+}",
+      "docs": "https://github.com/google-gemini/gemini-cli/blob/eecccfcd5aff25de5e78135ca20f7abe3f566955/packages/core/src/tools/mcp-client.ts#L1013-L1016",
+      "path": ".gemini/settings.json",
     },
     "signIn": {
       "command": "/mcp auth knowledge",
@@ -1343,7 +1395,15 @@ url = "https://kb.test/v1/mcp"",
     "name": "Qwen Code",
     "note": "qwen",
     "projectConfig": {
-      "refused": "no-env-in-headers",
+      "code": "{
+  "mcpServers": {
+    "knowledge": {
+      "httpUrl": "https://kb.test/v1/mcp"
+    }
+  }
+}",
+      "docs": "https://github.com/QwenLM/qwen-code/blob/62b0d73b7281e18afcde16a971bf331d75364a38/packages/cli/src/config/settings.ts#L1596-L1600",
+      "path": ".qwen/settings.json",
     },
     "signIn": {
       "command": "/mcp",

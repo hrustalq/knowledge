@@ -13,6 +13,16 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Added
+
+- **Gemini CLI and Qwen Code get a committed project file (#1364).** The Connect wizard's `scope=project` now
+  writes `.gemini/settings.json` or `.qwen/settings.json` with the key read from `$KNOWLEDGE_API_KEY`, never
+  stored. Gemini reads the file only in a trusted folder; Qwen skips MCP in an untrusted one and asks for
+  `qwen mcp approve knowledge` once, binding the approval to that config — changing the key returns it to
+  Pending. Neither vendor documents header expansion, so the client table cites the loader that resolves it.
+
 ## [0.64.0] — 2026-11-21
 
 ### Added

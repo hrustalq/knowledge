@@ -79,7 +79,9 @@ export interface McpClientGuide {
  * A project-level MCP config: a JSON file at `path` (from the repository root)
  * whose credential is always a reference to KNOWLEDGE_API_KEY in the client's
  * own syntax, never a key, so it is safe to commit. `docs` is the vendor page
- * that says the client reads this file and expands the variable there.
+ * or source line that shows the client reads this file and expands the variable
+ * there. Where the vendor documents expansion only for `env` and not for
+ * headers, it cites the loader that resolves the whole settings object instead.
  */
 export interface ProjectConfig {
   path: string
@@ -97,11 +99,12 @@ export function hasProjectConfig(c: McpClientGuide): c is McpClientGuide & { pro
 const json = (value: unknown) => JSON.stringify(value, null, 2)
 
 /**
- * Each client's project config (#1348), checked against its vendor's docs in
- * November 2026. A client gets one only where the docs state both a
- * project-level file and an env reference for the key there, and its file is
- * the same JSON as its user-level config. Run per client in #1351: Claude Code,
- * Kimi and pi ask to approve or trust a folder's servers first.
+ * Each client's project config (#1348, #1364), checked against its vendor's
+ * docs or source in November 2026. A client gets one only where the vendor
+ * states or shows both a project-level file and an env reference for the key
+ * there, and its file is the same JSON as its user-level config. Run per client
+ * in #1351 and #1364: Claude Code, Kimi, pi, Gemini CLI and Qwen Code ask to
+ * approve or trust a folder's file first.
  */
 const PROJECT: Record<string, { path: string; docs: string } | ProjectRefusal> = {
   'claude-code': { path: '.mcp.json', docs: 'https://code.claude.com/docs/en/mcp#environment-variable-expansion-in-mcp-json' },
@@ -111,9 +114,20 @@ const PROJECT: Record<string, { path: string; docs: string } | ProjectRefusal> =
   omp: { path: '.omp/mcp.json', docs: 'https://github.com/can1357/oh-my-pi/blob/main/docs/mcp-config.md' },
   // TOML (`.codex/config.toml`, trusted projects only): no jq merge for it.
   codex: 'no-project-config',
-  // Expansion is documented for settings strings in general, not for MCP headers.
-  gemini: 'no-env-in-headers',
-  qwen: 'no-env-in-headers',
+  // #1364: a workspace file is merged only in a trusted folder
+  // (packages/cli/src/config/settings.ts, mergeSettings); the MCP transport
+  // expands every header value with expandEnvVars (mcp-client.ts).
+  gemini: {
+    path: '.gemini/settings.json',
+    docs: 'https://github.com/google-gemini/gemini-cli/blob/eecccfcd5aff25de5e78135ca20f7abe3f566955/packages/core/src/tools/mcp-client.ts#L1013-L1016',
+  },
+  // #1364: resolveEnvVarsInObject runs over the whole workspace settings object
+  // before the merge (packages/cli/src/config/settings.ts); the project server
+  // then needs `qwen mcp approve knowledge`.
+  qwen: {
+    path: '.qwen/settings.json',
+    docs: 'https://github.com/QwenLM/qwen-code/blob/62b0d73b7281e18afcde16a971bf331d75364a38/packages/cli/src/config/settings.ts#L1596-L1600',
+  },
   deepseek: 'no-project-config',
   hermes: 'no-project-config',
   vscode: 'no-env-in-headers',

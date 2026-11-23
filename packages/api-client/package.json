@@ -17,17 +17,17 @@
     "@knowledge/contracts": "workspace:*"
   },
   "peerDependencies": {
-    "@tanstack/vue-query": "^5.102.8",
+    "@tanstack/vue-query": "^5.108.2",
     "axios": "^1.21.1",
-    "vue": "^3.5.32"
+    "vue": "^3.5.46"
   },
   "devDependencies": {
     "@knowledge/tsconfig": "workspace:*",
-    "@tanstack/vue-query": "^5.102.8",
+    "@tanstack/vue-query": "^5.108.2",
     "axios": "^1.21.1",
     "openapi-typescript": "^7.13.0",
     "openapi-typescript-helpers": "^0.1.0",
     "typescript": "~6.0.2",
-    "vue": "^3.5.32"
+    "vue": "^3.5.46"
   }
 }

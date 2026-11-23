@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@knowledge/contracts": "workspace:*",
-    "xstate": "^5.32.6"
+    "xstate": "^5.33.4"
   },
   "devDependencies": {
     "@knowledge/tsconfig": "workspace:*",

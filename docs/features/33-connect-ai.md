@@ -463,19 +463,25 @@ Claude Code on Haiku; every other client on DeepSeek (`deepseek-flash`) through 
 pinned to a real workspace, so Capture ran only where noted, and each merge request it opened was closed at once.
 
 The Ticket first failures marked #1362 ran before the rule reached the skill description and the server instructions
-(see Ticket context above). Those rows are re-run on the release that ships the change.
+(see Ticket context above). Those five rows were re-run on prod **v0.64.0**, 2026-11-25, in fresh throwaway homes
+with the same client versions and fixture; Codex ran with `kit=no`. The earlier DeepSeek key was no longer valid, so
+these runs used Kimi `k3.1-pro` (through each client's OpenAI-compatible provider, Codex's Responses API, and a local
+Gemini-to-Kimi shim). Codex without the kit, pi, Gemini and Qwen passed: the first content call was
+`knowledge_context`, with the fixture's scp-style `repo`. Hermes still failed: `hermes mcp test knowledge` listed the
+tools, but its fresh `-z` session exposed none, so the model stopped after reading the ticket; that vendor race stays
+with #1365. The other cells were not re-run.
 
 | Client                 | Version    | Connect                    | Skill    | Ticket first                     | Hook nudge          | Capture            |
 | ---------------------- | ---------- | -------------------------- | -------- | -------------------------------- | ------------------- | ------------------ |
 | Claude Code            | 2.1.329    | pass ¹                     | pass     | pass                             | pass ²              | pass on v0.61.0; not re-run, #1363 |
-| Codex                  | 0.171.0    | pass                       | pass     | pass with the kit; fail without, #1362 | pass ³        | not run #1363      |
+| Codex                  | 0.171.0    | pass                       | pass     | pass with the kit; pass without it on v0.64.0 | pass ³ | not run #1363      |
 | DeepSeek Harness       | 0.2.2-rc.5 | pass ⁴                     | pass ⁵   | pass                             | n/a (no hook)       | pass               |
 | opencode               | 1.14.48    | pass ⁶                     | pass     | pass                             | n/a (no hook)       | not run #1363      |
 | Oh My Pi               | 16.3.0     | pass, from the second session, #1365 | pass | pass                       | n/a (no hook)       | not run #1363      |
-| pi                     | 1.6.0      | pass                       | pass ⁵   | fail #1362 ⁷                     | n/a (no hook)       | not run #1363      |
-| Gemini CLI             | 0.70.0     | pass ⁸                     | pass     | fail #1362 (no `repo`)           | n/a (no hook)       | not run #1363      |
-| Qwen Code              | 0.28.0     | pass                       | pass     | fail #1362                       | n/a (no hook)       | not run #1363      |
-| Hermes Agent           | 0.19.0     | pass with the `mcp` extra, #1365 | pass | fail #1362, #1365              | n/a (no hook)       | not run #1363      |
+| pi                     | 1.6.0      | pass                       | pass ⁵   | pass on v0.64.0 ⁷                | n/a (no hook)       | not run #1363      |
+| Gemini CLI             | 0.70.0     | pass ⁸                     | pass     | pass on v0.64.0 ⁸                | n/a (no hook)       | not run #1363      |
+| Qwen Code              | 0.28.0     | pass                       | pass     | pass on v0.64.0                  | n/a (no hook)       | not run #1363      |
+| Hermes Agent           | 0.19.0     | pass with the `mcp` extra, #1365 | pass | fail on v0.64.0, #1365         | n/a (no hook)       | not run #1363      |
 | Kimi Code              | 2.6.3      | pass ⁹                     | pass     | fail #1341                       | n/a (no hook)       | fail #1341         |
 | Cursor                 | —          | not run: needs a GUI, #1363 | not run | not run                          | not run             | not run            |
 | VS Code, Claude Desktop, Windsurf, Zed | — | not run: needs a GUI, #1363 | not run | not run                  | n/a (no hook)       | not run            |
@@ -498,8 +504,8 @@ and `gh issue view 4821; gh issue view 4822` in one Bash call nudged once for bo
 runs each hook only after it is trusted in `/hooks`, which records a hash per hooks.json entry under the checkout's
 absolute path in the user's `config.toml` — so a moved or re-cloned repository needs trusting again. Headless, the
 check trusted them through `codex app-server` (`hooks/list` + `config/batchWrite`), the writer `/hooks` uses. On DeepSeek the hook turns ran through a local proxy that moves the hook's
-message after the tool output, because DeepSeek refuses Codex's order (#1365). Without the kit the model never opened
-the skill (#1362).
+message after the tool output, because DeepSeek refuses Codex's order (#1365). On v0.62.0, without the kit the model
+never opened the skill (#1362).
 
 ⁴ The printed `cordis.patch.yml` row validates against `dsh --dump-config-schema` and composes after the headless
 profile.
@@ -510,10 +516,10 @@ profile.
 shape is the one both accept (#1357). The same JSON in a repository's `opencode.json` connects.
 
 ⁷ pi hides MCP tool descriptions behind its tool search; marking `knowledge_whoami` and `knowledge_context`
-`toolExposure: "direct"` made one rerun pass (#1362).
+`toolExposure: "direct"` makes the ticket rule visible without that search. The v0.64.0 rerun passed (#1362).
 
 ⁸ Gemini CLI disables every MCP server, user-level ones too, in an untrusted folder. Its model cases ran through a
-local Gemini-to-DeepSeek API shim, not a Google sign-in (#1363).
+local Gemini-to-DeepSeek API shim on v0.62.0 and a Gemini-to-Kimi shim on v0.64.0, not a Google sign-in (#1363).
 
 ⁹ The pasted `.kimi-code/mcp.json` connects and Kimi discovers all 94 tools, but only once the folder is trusted
 ("Trust this folder" or `KIMI_CODE_TRUST_WORKSPACE=1`); an untrusted folder skips a project-level server with a

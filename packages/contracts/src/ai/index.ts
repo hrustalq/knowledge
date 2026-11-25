@@ -874,7 +874,7 @@ export const PROVIDER_DEFAULTS: Readonly<Record<string, { baseUrl: string; model
    * default rather than a constraint — `claude-sonnet-4-5`, `gemini-2-5-flash`
    * and the rest are all valid values for it.
    */
-  'gen-api': { baseUrl: 'https://proxy.gen-api.ru/v1', model: 'gpt-4-1' },
+  'gen-api': { baseUrl: 'https://proxy.gen-api.ru/v1', model: 'gpt-6-2-sol' },
 };
 
 /** The currencies a price or a cost is held in. No rate between them is kept, so they are never added together. */
@@ -912,7 +912,8 @@ const MODEL_LIST_PRICES: Readonly<
   'claude-sonnet-4-5': { prompt: 3, cachedPrompt: 0.3, completion: 15, currency: 'USD' },
   'claude-opus-4-5': { prompt: 5, cachedPrompt: 0.5, completion: 25, currency: 'USD' },
   // gen-api's own ids. A chat call reports what it was charged, so this only prices one that does not.
-  'gpt-4-1': { prompt: 400, completion: 1600, currency: 'RUB' },
+  // 636/2282 ₽ per 1M tokens: measured 2026-11-25 against gen-api's own billing (two probes, max_tokens=1).
+  'gpt-6-2-sol': { prompt: 636, completion: 2282, currency: 'RUB' },
   // TypeSafe Jev through gen-api (#530): input only, output is free.
   'jev-1-13': { prompt: 10.5, completion: 0, currency: 'RUB' },
   'jev-latest': { prompt: 10.5, completion: 0, currency: 'RUB' },

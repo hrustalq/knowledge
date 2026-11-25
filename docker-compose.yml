@@ -85,7 +85,7 @@ services:
   # Phase 5 optional BM25 layer (plan.md §11). Not started by default:
   # make infra-up-opensearch  (+ FULLTEXT_PROVIDER=opensearch in apps/api/.env)
   opensearch:
-    image: opensearchproject/opensearch:2@sha256:3bfa1ec74d56928c2e018033d45c460ce2c0ea65a5cedd577de3102326c31b89
+    image: opensearchproject/opensearch:3@sha256:02d6d6e40c820ae08233b60540aa5d3d9364d64e2dc724e38d6c8c794879b2a0
     profiles: ["opensearch"]
     ports: ["127.0.0.1:9200:9200"]
     environment:
@@ -134,7 +134,7 @@ services:
   # message lands in the inbox at http://localhost:8025 instead. Loopback only:
   # it relays nothing, but its UI shows every reset link it has ever caught.
   mailpit:
-    image: axllent/mailpit:v1.33@sha256:aef2aacc11f075ec0fb6874275ee4a421e688e11a96ebb296134d1735c7761ce
+    image: axllent/mailpit:v1.34@sha256:23a2ef85bc50853ab3093645d1d64679afd8887e89da5e48a88940c172591a4e
     profiles: ["mailpit"]
     ports: ["127.0.0.1:1025:1025", "127.0.0.1:8025:8025"]
 
@@ -159,7 +159,7 @@ services:
   # keycloak/realm-knowledge.json seeds test users ada/ada (verified) and
   # eve/eve (unverified address). Admin console: admin/admin. Loopback only.
   keycloak:
-    image: quay.io/keycloak/keycloak:26.8@sha256:c68e286cacd87b942ac1939a0a1481461109d6acd3a57dc496969a319a76bbf0
+    image: quay.io/keycloak/keycloak:26.8@sha256:7e66a96e4739239070aeaf72e4c5decf0f7f682cfc725b9f7ea2b336eaba38b3
     profiles: ["keycloak"]
     command: ["start-dev", "--import-realm", "--http-port=8180"]
     ports: ["127.0.0.1:8180:8180"]

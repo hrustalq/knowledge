@@ -477,11 +477,11 @@ with #1365. The other cells were not re-run.
 | Codex                  | 0.171.0    | pass                       | pass     | pass with the kit; pass without it on v0.64.0 | pass ³ | not run #1363      |
 | DeepSeek Harness       | 0.2.2-rc.5 | pass ⁴                     | pass ⁵   | pass                             | n/a (no hook)       | pass               |
 | opencode               | 1.14.48    | pass ⁶                     | pass     | pass                             | n/a (no hook)       | not run #1363      |
-| Oh My Pi               | 16.3.0     | pass, from the second session, #1365 | pass | pass                       | n/a (no hook)       | not run #1363      |
+| Oh My Pi               | 16.3.0     | pass from the second session; fixed in [can1357/oh-my-pi#12188](https://github.com/can1357/oh-my-pi/issues/12188) | pass | pass | n/a (no hook) | not run #1363 |
 | pi                     | 1.6.0      | pass                       | pass ⁵   | pass on v0.64.0 ⁷                | n/a (no hook)       | not run #1363      |
 | Gemini CLI             | 0.70.0     | pass ⁸                     | pass     | pass on v0.64.0 ⁸                | n/a (no hook)       | not run #1363      |
 | Qwen Code              | 0.28.0     | pass                       | pass     | pass on v0.64.0                  | n/a (no hook)       | not run #1363      |
-| Hermes Agent           | 0.19.0     | pass with the `mcp` extra, #1365 | pass | fail on v0.64.0, #1365         | n/a (no hook)       | not run #1363      |
+| Hermes Agent           | 0.19.0     | pass with the `mcp` extra; [NousResearch/hermes-agent#109026](https://github.com/NousResearch/hermes-agent/issues/109026) | pass | fail on v0.64.0; [NousResearch/hermes-agent#107515](https://github.com/NousResearch/hermes-agent/issues/107515) | n/a (no hook) | not run #1363 |
 | Kimi Code              | 2.6.3      | pass ⁹                     | pass     | fail #1341                       | n/a (no hook)       | fail #1341         |
 | Cursor                 | —          | not run: needs a GUI, #1363 | not run | not run                          | not run             | not run            |
 | VS Code, Claude Desktop, Windsurf, Zed | — | not run: needs a GUI, #1363 | not run | not run                  | n/a (no hook)       | not run            |
@@ -504,16 +504,22 @@ and `gh issue view 4821; gh issue view 4822` in one Bash call nudged once for bo
 runs each hook only after it is trusted in `/hooks`, which records a hash per hooks.json entry under the checkout's
 absolute path in the user's `config.toml` — so a moved or re-cloned repository needs trusting again. Headless, the
 check trusted them through `codex app-server` (`hooks/list` + `config/batchWrite`), the writer `/hooks` uses. On DeepSeek the hook turns ran through a local proxy that moves the hook's
-message after the tool output, because DeepSeek refuses Codex's order (#1365). On v0.62.0, without the kit the model
+message after the tool output, because DeepSeek refuses Codex's order
+([openai/codex#60420](https://github.com/openai/codex/issues/60420)). On v0.62.0, without the kit the model
 never opened the skill (#1362).
 
 ⁴ The printed `cordis.patch.yml` row validates against `dsh --dump-config-schema` and composes after the headless
-profile.
+profile. A launch-only variable in the invoking folder's `.env` still aborts startup;
+[deepseek-ai/deepseek-harness#190](https://github.com/deepseek-ai/deepseek-harness/discussions/190) tracks it.
 
 ⁵ After the quoting fix above; before it, 11 of the 12 stack skills loaded.
 
 ⁶ opencode 1.14.48 rejects the V2 `mcp.servers` shape and opencode 2.x still reads V1, so the snippet's `mcp.<name>`
-shape is the one both accept (#1357). The same JSON in a repository's `opencode.json` connects.
+shape is the one both accept (#1357). The same JSON in a repository's `opencode.json` connects. The V2-shape validation
+error prints env-expanded header secrets in 1.14.48;
+[anomalyco/opencode#66458](https://github.com/anomalyco/opencode/issues/66458) tracks that leak. The checking machine's
+Homebrew binary also needed an ad-hoc re-sign before launch; the signing defect was fixed in
+[anomalyco/opencode#46313](https://github.com/anomalyco/opencode/issues/46313).
 
 ⁷ pi hides MCP tool descriptions behind its tool search; marking `knowledge_whoami` and `knowledge_context`
 `toolExposure: "direct"` makes the ticket rule visible without that search. The v0.64.0 rerun passed (#1362).

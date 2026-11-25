@@ -55,7 +55,7 @@ describe('DecisionClient.routeFor', () => {
   });
 
   it('pins the default model, and drops the prices, when the routed model is no Jev release', async () => {
-    const route = await client({ config: { model: 'gpt-4-1', pricePromptPerMTok: 2 } }).decision.routeFor('ws');
+    const route = await client({ config: { model: 'gpt-6-2-sol', pricePromptPerMTok: 2 } }).decision.routeFor('ws');
     expect(route?.config.model).toBe(DECISION_DEFAULT_MODEL);
     expect(route?.config.pricePromptPerMTok).toBeNull();
     expect(route?.thresholds).toEqual(DECISION_THRESHOLDS);

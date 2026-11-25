@@ -93,7 +93,7 @@ describe('cached prompt tokens', () => {
 
 describe('a cost states its currency', () => {
   it("stores what gen-api says it charged, in rubles, over any estimate", async () => {
-    const row = await stored(config({ provider: 'gen-api', model: 'gpt-4-1' }), fromUsage(GEN_API_USAGE as never));
+    const row = await stored(config({ provider: 'gen-api', model: 'gpt-6-2-sol' }), fromUsage(GEN_API_USAGE as never));
     expect(row).toMatchObject({ costMicros: 10_500, costCurrency: 'RUB', promptTokens: 9, completionTokens: 3 });
   });
 
@@ -103,13 +103,13 @@ describe('a cost states its currency', () => {
   });
 
   it('estimates a GenAPI call that reports nothing in its list currency', async () => {
-    const row = await stored(config({ provider: 'gen-api', model: 'gpt-4-1' }), {
+    const row = await stored(config({ provider: 'gen-api', model: 'gpt-6-2-sol' }), {
       promptTokens: 1_000,
       completionTokens: 0,
       totalTokens: 1_000,
       estimated: true,
     });
-    expect(row).toMatchObject({ costMicros: 400_000, costCurrency: 'RUB' });
+    expect(row).toMatchObject({ costMicros: 636_000, costCurrency: 'RUB' });
   });
 
   it('prices a ruble provider in rubles, and a model with no price stays unpriced', async () => {

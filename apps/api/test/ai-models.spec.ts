@@ -213,7 +213,7 @@ describe('AiConfigService.connection', () => {
     const second = model({ id: 'b', code: 'on-chat' });
     expect((await config({ rows: [first, second] }).connection(WS, 'p1'))?.model).toBe('on-chat');
     expect((await config({ rows: [first] }).connection(WS, 'p1'))?.model).toBe('off-chat');
-    expect((await config({ rows: [] }).connection(WS, 'p1'))?.model).toBe('gpt-4-1');
+    expect((await config({ rows: [] }).connection(WS, 'p1'))?.model).toBe('gpt-6-2-sol');
   });
 
   it('has nothing to dial for a provider that is off', async () => {

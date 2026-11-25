@@ -18,7 +18,7 @@ interface CapabilityRule {
 
 const RULES: CapabilityRule[] = [
   // --- Vision-capable chat models -------------------------------------------
-  { match: ['gpt-4o', 'gpt-4-1', 'gpt-4.1', 'gpt-4-turbo', 'gpt-5', 'o4-mini'], capabilities: ['tools', 'json', 'vision'] },
+  { match: ['gpt-4o', 'gpt-4.1', 'gpt-4-turbo', 'gpt-5', 'o4-mini'], capabilities: ['tools', 'json', 'vision'] },
   { match: ['claude-3', 'claude-4', 'claude-sonnet', 'claude-opus', 'claude-haiku'], capabilities: ['tools', 'json', 'vision'] },
   { match: ['gemini-1-5', 'gemini-1.5', 'gemini-2', 'gemini-pro-vision'], capabilities: ['tools', 'json', 'vision'] },
   { match: ['llava', '-vl', 'vision', 'pixtral', 'qwen2-vl', 'qwen2.5-vl'], capabilities: ['json', 'vision'] },

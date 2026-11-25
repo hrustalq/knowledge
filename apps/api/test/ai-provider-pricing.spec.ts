@@ -17,7 +17,7 @@ describe('effectiveModelPrice', () => {
 
   it('uses the list for a known model, with its cached rate and currency', () => {
     expect(effectiveModelPrice('gpt-4o')).toEqual({ prompt: 2.5, cachedPrompt: 1.25, completion: 10, currency: 'USD', custom: false });
-    expect(effectiveModelPrice('gpt-4-1')).toEqual({ prompt: 400, cachedPrompt: null, completion: 1600, currency: 'RUB', custom: false });
+    expect(effectiveModelPrice('gpt-6-2-sol')).toEqual({ prompt: 636, cachedPrompt: null, completion: 2282, currency: 'RUB', custom: false });
   });
 
   it('has dropped the models DeepSeek no longer lists', () => {
@@ -40,7 +40,7 @@ describe('effectiveModelPrice', () => {
   });
 
   it('reads a price stored before currencies as USD, even on a model the list prices in rubles', () => {
-    expect(effectiveModelPrice('gpt-4-1', custom(2, 8))).toMatchObject({ prompt: 2, completion: 8, currency: 'USD' });
+    expect(effectiveModelPrice('gpt-6-2-sol', custom(2, 8))).toMatchObject({ prompt: 2, completion: 8, currency: 'USD' });
   });
 
   it('fills a side from the list only in its own currency: no rate is kept to convert it', () => {

@@ -23,6 +23,12 @@ in the pull request that introduces them — see
   `qwen mcp approve knowledge` once, binding the approval to that config — changing the key returns it to
   Pending. Neither vendor documents header expansion, so the client table cites the loader that resolves it.
 
+### Fixed
+
+- **The Oh My Pi setup note no longer prescribes a new session (#1365).** Upstream now waits for configured MCP
+  servers before headless turns; the workaround applied to 16.3.0 and earlier. Doc 33 links each remaining vendor
+  warning to its upstream report.
+
 ## [0.64.0] — 2026-11-21
 
 ### Added

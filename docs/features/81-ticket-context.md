@@ -106,8 +106,8 @@ shown.
 | Codex, Kimi, Claude Desktop, any MCP client | —                                                                                                                                | the skill's "Starting a ticket" step                   |
 
 - Checked live per client in [33 §Client checks](33-connect-ai.md#client-checks): Claude Code passes on v0.61.0; Kimi
-  Code CLI 2.6.3 never let its model call an MCP tool (#1341); a Bash command that read two tickets nudged only for
-  the first (#1340, fixed in kit v4, not re-checked live).
+  Code CLI 2.8.0 starts a ticket with `knowledge_context` from the generated skill (#1341); a Bash command that read
+  two tickets nudged only for the first (#1340, fixed in kit v4, not re-checked live).
 - The ticket is read from the tool's **input** only, never its output, which can name any number of other tickets; from
   the prompt, only text after `"prompt"`, so a path in `cwd` is not read as a ticket.
 - A ticket is the first of: a tracker URL (`/issues/N`, `/browse/KEY`, `/issue/KEY`), `owner/repo#N`, a `KEY-123` that

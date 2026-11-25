@@ -471,6 +471,12 @@ Gemini-to-Kimi shim). Codex without the kit, pi, Gemini and Qwen passed: the fir
 tools, but its fresh `-z` session exposed none, so the model stopped after reading the ticket; that vendor race stays
 with #1365. The other cells were not re-run.
 
+Kimi Code **2.8.0** was re-run on prod **v0.64.0**, 2026-11-25, with the generated skill and fixture on Kimi
+`k3.1-pro`. Two headless whoami checks passed with the unrelated user-level server disabled. The model received
+`select_tools`, dynamically loaded `knowledge_whoami` and called it. In a fresh throwaway `HOME`, the generated skill
+loaded, the first content call was `knowledge_context` with the scp-style `repo`, and a decision capture opened its
+merge request, which was closed at once (#1341).
+
 | Client                 | Version    | Connect                    | Skill    | Ticket first                     | Hook nudge          | Capture            |
 | ---------------------- | ---------- | -------------------------- | -------- | -------------------------------- | ------------------- | ------------------ |
 | Claude Code            | 2.1.329    | pass ¹                     | pass     | pass                             | pass ²              | pass on v0.61.0; not re-run, #1363 |
@@ -482,7 +488,7 @@ with #1365. The other cells were not re-run.
 | Gemini CLI             | 0.70.0     | pass ⁸                     | pass     | pass on v0.64.0 ⁸                | n/a (no hook)       | not run #1363      |
 | Qwen Code              | 0.28.0     | pass                       | pass     | pass on v0.64.0                  | n/a (no hook)       | not run #1363      |
 | Hermes Agent           | 0.19.0     | pass with the `mcp` extra; [NousResearch/hermes-agent#109026](https://github.com/NousResearch/hermes-agent/issues/109026) | pass | fail on v0.64.0; [NousResearch/hermes-agent#107515](https://github.com/NousResearch/hermes-agent/issues/107515) | n/a (no hook) | not run #1363 |
-| Kimi Code              | 2.6.3      | pass ⁹                     | pass     | fail #1341                       | n/a (no hook)       | fail #1341         |
+| Kimi Code              | 2.8.0      | pass ⁹                     | pass     | pass                             | n/a (no hook)       | pass               |
 | Cursor                 | —          | not run: needs a GUI, #1363 | not run | not run                          | not run             | not run            |
 | VS Code, Claude Desktop, Windsurf, Zed | — | not run: needs a GUI, #1363 | not run | not run                  | n/a (no hook)       | not run            |
 | Any MCP client (curl)  | —          | pass                       | n/a      | n/a                              | n/a (no hook)       | n/a                |
@@ -527,10 +533,10 @@ Homebrew binary also needed an ad-hoc re-sign before launch; the signing defect 
 ⁸ Gemini CLI disables every MCP server, user-level ones too, in an untrusted folder. Its model cases ran through a
 local Gemini-to-DeepSeek API shim on v0.62.0 and a Gemini-to-Kimi shim on v0.64.0, not a Google sign-in (#1363).
 
-⁹ The pasted `.kimi-code/mcp.json` connects and Kimi discovers all 94 tools, but only once the folder is trusted
-("Trust this folder" or `KIMI_CODE_TRUST_WORKSPACE=1`); an untrusted folder skips a project-level server with a
-warning. The model's tool list then held no MCP tools at all, headless (`kimi -p`) or over ACP, so it reported the
-server as not connected. #1341 tracks the cause.
+⁹ A project-level `.kimi-code/mcp.json` is skipped until the folder is trusted ("Trust this folder" or
+`KIMI_CODE_TRUST_WORKSPACE=1`). On 2.6.3 Kimi discovered all 94 tools but exposed no MCP tools to its model, headless
+or over ACP. On 2.8.0 it exposes `select_tools` and loads the Knowledge tools on demand; all four applicable checks
+passed (#1341).
 
 The wizard's "Context when a ticket starts" block was checked on the Skill step in en and ru (Claude Code, "I build
 software").

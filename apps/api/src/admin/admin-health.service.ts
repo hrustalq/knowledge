@@ -170,10 +170,10 @@ export class AdminHealthService implements OnModuleDestroy {
   private async queue(name: string): Promise<AdminQueue> {
     try {
       const c = await within(PROBE_TIMEOUT_MS, () =>
-        this.queueFor(name).getJobCounts('waiting', 'paused', 'prioritized', 'active', 'delayed', 'failed'),
+        this.queueFor(name).getJobCounts('waiting', 'prioritized', 'active', 'delayed', 'failed'),
       );
-      // A paused queue's jobs and a prioritized job sit in their own lists, but to an operator they are all waiting.
-      const waiting = (c.waiting ?? 0) + (c.paused ?? 0) + (c.prioritized ?? 0);
+      // BullMQ 6 reports jobs in a paused queue as waiting; prioritized jobs are waiting to an operator too.
+      const waiting = (c.waiting ?? 0) + (c.prioritized ?? 0);
       return { name, counts: { waiting, active: c.active ?? 0, delayed: c.delayed ?? 0, failed: c.failed ?? 0 } };
     } catch {
       return { name, counts: null };

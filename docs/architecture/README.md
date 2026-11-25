@@ -37,3 +37,4 @@ here. If a rule fits on one line and applies everywhere, it belongs there.
 | 12  | [CouchDB storage evaluation](12-couchdb-storage-evaluation.md) | Why PostgreSQL and MinIO stay; replication, offline sync and migration cost                    |
 | 13  | [microVM sandbox evaluation](13-sandbox-microvm-evaluation.md) | smolvm vs Firecracker, gVisor, Kata, microsandbox, E2B; why it is deferred and what to harden first |
 | 14  | [What "ontology" means](14-ontology-decision.md)             | Entity and relation types vs an ontology; why the word stays out of the product, and the vocabulary |
+| 15  | [Infrastructure requirements](15-infrastructure-requirements.md) | Workload inventory, scaffold vs serve, sizing from the manifests, external dependencies, operations |

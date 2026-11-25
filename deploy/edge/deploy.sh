@@ -1,16 +1,30 @@
 #!/bin/sh
 # Uploads worker.js as the `knowledge-edge` Worker, with EDGE_SECRET as its
-# secret binding, and binds it to knowledge.hrustalq.dev as a Workers Custom
-# Domain (which owns the DNS record, so any other record for that name must be
-# deleted first).
+# secret binding and EDGE_ORIGIN as its plain-text origin binding, and binds it
+# to knowledge.hrustalq.dev as a Workers Custom Domain (which owns the DNS
+# record, so any other record for that name must be deleted first).
 #
 #   EDGE_SECRET=<the production environment's EDGE_SECRET> ./deploy.sh
+#   EDGE_ORIGIN=https://eldars-mac-mini.tail92dbf3.ts.net ./deploy.sh
+#
+# EDGE_ORIGIN defaults to https://edge.tail92dbf3.ts.net (the homelab cluster's
+# Funnel). Production currently runs on the Mac mini, whose Funnel fronts caddy
+# on 127.0.0.1:8088, so pass that URL explicitly there.
 #
 # The token comes from CLOUDFLARE_API_TOKEN, else ~/Homelab/infra/cloudflare-api-token
-# (Workers Scripts:Edit + Workers Routes:Edit). Every upload replaces the
-# Worker's bindings, so the secret is sent each time rather than kept.
+# (Workers Scripts:Edit + Workers Routes:Edit + DNS edit). Every upload replaces
+# the Worker's bindings, so the secret is sent each time rather than kept.
 set -eu
 cd "$(dirname "$0")"
+
+DEFAULT_EDGE_ORIGIN=https://edge.tail92dbf3.ts.net
+EDGE_ORIGIN=${EDGE_ORIGIN:-$DEFAULT_EDGE_ORIGIN}
+# A trailing slash would double up when worker.js appends the path.
+EDGE_ORIGIN=$(printf '%s' "$EDGE_ORIGIN" | sed 's:/*$::')
+if ! printf '%s' "$EDGE_ORIGIN" | grep -Eq '^https://[^/[:space:]"]+$'; then
+  echo "EDGE_ORIGIN must be an https:// URL without a path (got '$EDGE_ORIGIN')" >&2
+  exit 1
+fi
 
 # Hex only: Caddy compares it with a `header` matcher, where a leading or
 # trailing `*` would turn the exact match into a prefix/suffix one.
@@ -29,14 +43,14 @@ HOST=knowledge.hrustalq.dev
 umask 077
 meta=$(mktemp)
 trap 'rm -f "$meta"' EXIT
-printf '{"main_module":"worker.js","compatibility_date":"2026-10-01","bindings":[{"type":"secret_text","name":"EDGE_SECRET","text":"%s"}]}' \
-  "$EDGE_SECRET" > "$meta"
+printf '{"main_module":"worker.js","compatibility_date":"2026-10-01","bindings":[{"type":"secret_text","name":"EDGE_SECRET","text":"%s"},{"type":"plain_text","name":"EDGE_ORIGIN","text":"%s"}]}' \
+  "$EDGE_SECRET" "$EDGE_ORIGIN" > "$meta"
 
 curl -sS --fail-with-body -X PUT "$API/accounts/$ACCOUNT/workers/scripts/knowledge-edge" \
   -H "Authorization: Bearer $TOKEN" \
   -F "metadata=@$meta;type=application/json" \
   -F 'worker.js=@worker.js;type=application/javascript+module' >/dev/null
-echo "uploaded knowledge-edge"
+echo "uploaded knowledge-edge (origin $EDGE_ORIGIN)"
 
 curl -sS --fail-with-body -X PUT "$API/accounts/$ACCOUNT/workers/domains" \
   -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \

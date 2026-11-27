@@ -13,6 +13,7 @@ import DOMPurify from 'dompurify'
 import { KN, carryDiagramLayout } from '@/core/markdown/nodes'
 import { useTheme } from '@/shared/utils/theme'
 import { mermaidConfig, mermaidSvg } from '@/shared/utils/mermaid'
+import { plantumlProblem, plantumlSvg } from '@/shared/utils/plantuml'
 import { DiagramLightbox, ImageLightbox, markDiagrams, markZoomable } from '@knowledge/ui/lightbox'
 import { LazyC4Diagram, takeC4Blocks, type C4Block } from '@/entities/document'
 
@@ -48,11 +49,37 @@ async function renderMermaid() {
   }
 }
 
+/**
+ * PlantUML (docs/features/87), drawn here as in the app: the server sent the
+ * source and its layout, and the engine is fetched on the reader's first
+ * diagram. A block that fails keeps its source, flagged, as mermaid's does.
+ */
+async function renderPlantuml() {
+  const root = host.value
+  if (!root) return
+  const blocks = [...root.querySelectorAll<HTMLElement>(`[${KN.plantuml}]`)]
+  if (blocks.length === 0) return
+  for (const block of blocks) {
+    try {
+      const svg = await plantumlSvg(block.textContent ?? '', theme.isDark.value)
+      const wrap = document.createElement('div')
+      wrap.className = 'kn-plantuml-figure'
+      wrap.innerHTML = DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } })
+      carryDiagramLayout(block, wrap)
+      block.replaceWith(wrap)
+    } catch (error) {
+      block.classList.add('kn-plantuml-broken')
+      block.title = plantumlProblem(error).message || t('shareReader.diagramFailed')
+    }
+  }
+}
+
 onMounted(async () => {
   if (host.value) markZoomable(host.value, t)
   if (host.value) c4.value = takeC4Blocks(host.value)
   await renderMermaid()
-  // Drawings came drawn from the server; mermaid figures exist only now.
+  await renderPlantuml()
+  // Drawings came drawn from the server; mermaid and PlantUML figures exist only now.
   if (host.value) markDiagrams(host.value, t)
 })
 </script>

@@ -34,6 +34,7 @@ export {
 /** data-* attribute names. One place, so a rename cannot desync the two directions. */
 export const KN = {
   mermaid: 'data-kn-mermaid',
+  plantuml: 'data-kn-plantuml',
   drawing: 'data-kn-drawing',
   panel: 'data-kn-panel',
   layout: 'data-kn-layout',

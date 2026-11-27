@@ -10,14 +10,17 @@ import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { canonicalEmbedUrl, parseEmbedUrl, type EmbedItem, type EmbedLayout } from '@knowledge/contracts'
 import {
   DEFAULT_MERMAID,
+  DEFAULT_PLANTUML,
   Drawing as DrawingSpec,
   Embed as EmbedSpec,
   FileEmbed as FileEmbedSpec,
   Mermaid as MermaidSpec,
+  Plantuml as PlantumlSpec,
   ResizableImage as ResizableImageSpec,
 } from '@knowledge/editor-schema'
 import { emptyScene, serializeScene } from '@/core/markdown/drawing'
 import MermaidNode from '../nodes/MermaidNode.vue'
+import PlantumlNode from '../nodes/PlantumlNode.vue'
 import DrawingNode from '../nodes/DrawingNode.vue'
 import FileNode from '../nodes/FileNode.vue'
 import EmbedNode from '../nodes/EmbedNode.vue'
@@ -35,6 +38,7 @@ declare module '@tiptap/core' {
   interface Commands<ReturnType> {
     knMedia: {
       setMermaid: (code?: string) => ReturnType
+      setPlantuml: (code?: string) => ReturnType
       setDrawing: (scene?: string) => ReturnType
       setFileEmbed: (attrs: FileEmbedAttributes) => ReturnType
     }
@@ -56,6 +60,21 @@ export const Mermaid = MermaidSpec.extend({
         (code) =>
         ({ commands }) =>
           commands.insertContent({ type: this.name, attrs: { code: code ?? DEFAULT_MERMAID } }),
+    }
+  },
+})
+
+export const Plantuml = PlantumlSpec.extend({
+  addNodeView() {
+    return VueNodeViewRenderer(PlantumlNode)
+  },
+
+  addCommands() {
+    return {
+      setPlantuml:
+        (code) =>
+        ({ commands }) =>
+          commands.insertContent({ type: this.name, attrs: { code: code ?? DEFAULT_PLANTUML } }),
     }
   },
 })

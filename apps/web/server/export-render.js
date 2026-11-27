@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { isInternalAddress } from './site-files.js'
 
@@ -31,6 +31,33 @@ export function mermaidScript() {
   return mermaid
 }
 
+let plantuml = null
+
+/**
+ * The vendored PlantUML engine and its two classic companions (public/plantuml,
+ * docs/features/87), read once and only when an export first needs them. A
+ * production image ships them in `dist/client/plantuml/` — Vite copies
+ * `public/` there — so that path is tried first, then the repo's own.
+ */
+export function plantumlScripts() {
+  plantuml ??= {
+    engine: plantumlFile('plantuml.js'),
+    viz: plantumlFile('viz-global.js'),
+    c4: plantumlFile('c4.min.js'),
+    themes: plantumlFile('themes.js'),
+  }
+  return plantuml
+}
+
+/** @param {string} name */
+function plantumlFile(name) {
+  for (const dir of ['../dist/client/plantuml/', '../public/plantuml/']) {
+    const url = new URL(dir + name, import.meta.url)
+    if (existsSync(url)) return readFileSync(url, 'utf8')
+  }
+  throw new Error(`plantuml: ${name} is in neither dist/client/plantuml nor public/plantuml`)
+}
+
 /**
  * @param {{ express: typeof import('express'), loadRenderer: () => Promise<(req: unknown, deps: unknown) => unknown>, logger: { warn: (o: object, m: string) => void } }} deps
  */
@@ -44,7 +71,7 @@ export function exportRenderRoute({ express, loadRenderer, logger }) {
     async (req, res) => {
       try {
         const render = await loadRenderer()
-        res.json(render(req.body, { mermaidScript }))
+        res.json(render(req.body, { mermaidScript, plantuml: plantumlScripts }))
       } catch (e) {
         logger.warn({ err: e }, 'export render failed')
         res.status(500).type('text/plain').send(String(e?.message ?? e).slice(0, 500))

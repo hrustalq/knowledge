@@ -23,6 +23,7 @@ const LINED = [
   'knPanel',
   'knExpand',
   'knMermaid',
+  'knPlantuml',
   'knDrawing',
 ]
 

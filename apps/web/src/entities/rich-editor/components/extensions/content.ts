@@ -14,7 +14,7 @@ import { withC4CodeBlocks } from './c4'
 import { CommentAnchors, type CommentAnchorsOptions } from './comment-anchors'
 import { GlossaryTerms } from './glossary-terms'
 import { AgentMention, DocMention, StatusMark, UserMention } from './inline'
-import { Drawing, Embed, FileEmbed, Mermaid, ResizableImage } from './media'
+import { Drawing, Embed, FileEmbed, Mermaid, Plantuml, ResizableImage } from './media'
 import { SourceLines } from './source-lines'
 
 export function contentExtensions(options: {
@@ -38,6 +38,7 @@ export function contentExtensions(options: {
     ApiContract.configure({ t }),
     ApiSection,
     Mermaid,
+    Plantuml,
     Drawing,
     FileEmbed,
     embed ? Embed.configure(embed) : Embed,

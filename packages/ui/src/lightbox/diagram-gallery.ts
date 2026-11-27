@@ -1,14 +1,18 @@
 /**
- * Diagrams a reader can open full-screen (#476): rendered mermaid blocks and
- * whiteboard drawings. The counterpart of ./image-gallery, and a separate
- * sequence — ←/→ in one never lands in the other.
+ * Diagrams a reader can open full-screen (#476, #1388): rendered mermaid and
+ * PlantUML blocks and whiteboard drawings. The counterpart of
+ * ./image-gallery, and a separate sequence — ←/→ in one never lands in the
+ * other.
  *
  * A surface marks a diagram with `DIAGRAM_ATTR` once its SVG is in the DOM, so
- * a mermaid fence that failed to parse (`.kn-mermaid-broken`, its source on
- * show) is never marked and opens nothing. The lightbox shows a copy of the SVG
- * the page drew, so it matches the page and costs no request.
+ * a fence that failed to parse (`.kn-mermaid-broken` / `.kn-plantuml-broken`,
+ * its source on show) is never marked and opens nothing. The lightbox shows a
+ * copy of the SVG the page drew, so it matches the page and costs no request.
  */
 export const DIAGRAM_ATTR = 'data-kn-diagram'
+
+/** Everything a surface draws as a diagram, once its SVG is in. */
+const DIAGRAM_SELECTOR = '.kn-mermaid-figure, .kn-plantuml-figure, .kn-drawing-canvas'
 
 type Translate = (key: string, named?: Record<string, unknown>) => string
 
@@ -19,7 +23,7 @@ export function diagramAttrs(t: Translate): Record<string, string> {
 
 /** Mark every rendered diagram under `root` (MarkdownView's and the public reader's markup). */
 export function markDiagrams(root: Element, t: Translate) {
-  for (const el of root.querySelectorAll('.kn-mermaid-figure, .kn-drawing-canvas')) {
+  for (const el of root.querySelectorAll(DIAGRAM_SELECTOR)) {
     if (!el.querySelector('svg')) continue
     for (const [name, value] of Object.entries(diagramAttrs(t))) el.setAttribute(name, value)
   }

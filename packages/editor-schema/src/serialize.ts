@@ -65,6 +65,13 @@ turndown.addRule('knMermaid', {
     `\n\n\`\`\`${diagramInfo('mermaid', diagramLayoutOf(node as HTMLElement))}\n${(node.textContent ?? '').trim()}\n\`\`\`\n\n`,
 });
 
+/** ```plantuml — the fence the read view and the ingestion worker already know, with its layout in the info string (#476). */
+turndown.addRule('knPlantuml', {
+  filter: (node) => (node as HTMLElement).hasAttribute?.(KN.plantuml),
+  replacement: (_content, node) =>
+    `\n\n\`\`\`${diagramInfo('plantuml', diagramLayoutOf(node as HTMLElement))}\n${(node.textContent ?? '').trim()}\n\`\`\`\n\n`,
+});
+
 /** ```drawing — a whiteboard scene as JSON. No prose inside, so a fence loses nothing. */
 turndown.addRule('knDrawing', {
   filter: (node) => (node as HTMLElement).hasAttribute?.(KN.drawing),
@@ -296,6 +303,7 @@ turndown.addRule('knCodeBlock', {
     !!node.firstChild &&
     node.firstChild.nodeName === 'CODE' &&
     !(node.parentNode as HTMLElement)?.hasAttribute?.(KN.mermaid) &&
+    !(node.parentNode as HTMLElement)?.hasAttribute?.(KN.plantuml) &&
     !(node.parentNode as HTMLElement)?.hasAttribute?.(KN.drawing),
   replacement: (_content, node) => {
     const code = node.firstChild as HTMLElement;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ExportRenderRequest } from '@knowledge/contracts'
-import { relativeHref, renderExport } from './export-render'
+import { relativeDir, relativeHref, renderExport } from './export-render'
 
 /**
  * The export renderer (docs/features/45). What is pinned: an HTML bundle
@@ -34,7 +34,10 @@ function request(format: 'html' | 'pdf', over: Partial<ExportRenderRequest> = {}
   }
 }
 
-const deps = { mermaidScript: () => '/* mermaid */' }
+const deps = {
+  mermaidScript: () => '/* mermaid */',
+  plantuml: () => ({ engine: 'var C=1,D=2;export{C as render,D as renderToString};', viz: '/* viz */', c4: '/* c4 */', themes: '/* themes */' }),
+}
 const file = (res: { files: { path: string; content: string }[] }, path: string) => res.files.find((f) => f.path === path)?.content ?? ''
 
 describe('relativeHref', () => {
@@ -44,6 +47,12 @@ describe('relativeHref', () => {
     expect(relativeHref('pages/a/b.html', 'index.html')).toBe('../../index.html')
     expect(relativeHref('pages/a.html', 'pages/a/b.html')).toBe('a/b.html')
     expect(relativeHref('pages/a.html', 'pages/настройка.html')).toBe(`${encodeURIComponent('настройка')}.html`)
+  })
+
+  it('finds a directory from a page, ending with the slash PLANTUML_STDLIB_BASE needs', () => {
+    expect(relativeDir('index.html', '_static/plantuml')).toBe('_static/plantuml/')
+    expect(relativeDir('pages/a.html', '_static/plantuml')).toBe('../_static/plantuml/')
+    expect(relativeDir('pages/a/b.html', '_static/plantuml')).toBe('../../_static/plantuml/')
   })
 })
 
@@ -83,6 +92,27 @@ describe('renderExport: html bundle', () => {
     )
     expect(file(withDiagram, '_static/mermaid.min.js')).toBe('/* mermaid */')
     expect(file(withDiagram, 'pages/flow.html')).toContain('src="../_static/export.js"')
+  })
+
+  it('ships the PlantUML engine, Graphviz and the C4 stdlib only when a page has a fence (#1388)', () => {
+    expect(res.files.some((f) => f.path.includes('plantuml'))).toBe(false)
+    const withDiagram = renderExport(
+      request('html', {
+        pages: [{ documentId: A, title: 'Cases', depth: 0, path: 'pages/cases.html', markdown: '```plantuml\n@startuml\nA -> B\n@enduml\n```' }],
+      }),
+      deps,
+    )
+    expect(file(withDiagram, '_static/plantuml/viz-global.js')).toBe('/* viz */')
+    expect(file(withDiagram, '_static/plantuml/c4.min.js')).toBe('/* c4 */')
+    expect(file(withDiagram, '_static/plantuml/themes.js')).toBe('/* themes */')
+    // The engine ships as a classic script — a module would not load from `file://`.
+    const engine = file(withDiagram, '_static/plantuml/plantuml-global.js')
+    expect(engine).toContain('window.PlantUML={render:C,renderToString:D};')
+    expect(engine).not.toContain('export{C as render')
+    // Each page sets the stdlib base itself: pages live at different depths.
+    expect(file(withDiagram, 'pages/cases.html')).toContain("window.PLANTUML_STDLIB_BASE = '../_static/plantuml/'")
+    expect(file(withDiagram, 'index.html')).toContain("window.PLANTUML_STDLIB_BASE = '_static/plantuml/'")
+    expect(file(withDiagram, '_static/export.js')).toContain('data-kn-plantuml')
   })
 })
 
@@ -130,5 +160,43 @@ describe('renderExport: pdf', () => {
     )
     expect(file(withDiagram, 'mermaid.min.js')).toBe('/* mermaid */')
     expect(file(withDiagram, 'index.html')).toContain('mermaid.render')
+  })
+
+  it('draws PlantUML into the PDF and raises the flag only after every render settles (#1388)', () => {
+    const withDiagram = renderExport(
+      request('pdf', {
+        pages: [{ documentId: A, title: 'Cases', depth: 0, path: 'pages/cases.html', markdown: '```plantuml\n@startuml\nA -> B\n@enduml\n```' }],
+      }),
+      deps,
+    )
+    const index = file(withDiagram, 'index.html')
+    expect(file(withDiagram, 'plantuml/viz-global.js')).toBe('/* viz */')
+    expect(file(withDiagram, 'plantuml/c4.min.js')).toBe('/* c4 */')
+    expect(file(withDiagram, 'plantuml/plantuml-global.js')).toContain('window.PlantUML=')
+    expect(index).toContain("window.PLANTUML_STDLIB_BASE = 'plantuml/'")
+    // One coordinator: the ready flag is set inside finish(), after the tracked step resolves.
+    expect(index).toContain('window.PlantUML.renderToString')
+    expect(index).toContain('left--; finish();')
+  })
+
+  it('waits for both engines on a page that has both kinds of diagram (#1388)', () => {
+    const both = renderExport(
+      request('pdf', {
+        pages: [
+          {
+            documentId: A,
+            title: 'Both',
+            depth: 0,
+            path: 'pages/both.html',
+            markdown: '```mermaid\ngraph TD; a-->b\n```\n\n```plantuml\n@startuml\nA -> B\n@enduml\n```',
+          },
+        ],
+      }),
+      deps,
+    )
+    const index = file(both, 'index.html')
+    expect(index).toContain('mermaid.render')
+    expect(index).toContain('window.PlantUML.renderToString')
+    expect(index.match(/track\(\(async/g)).toHaveLength(2)
   })
 })

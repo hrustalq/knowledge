@@ -65,4 +65,18 @@ describe('SANITIZE_CONFIG', () => {
     expect(figure.getAttribute('style')).toBe('--kn-diagram-width: 480px')
     expect(figure.getAttribute(KN.wrap)).toBe('right')
   })
+
+  it('keeps a PlantUML fence and its layout for the reader (#1388)', () => {
+    const html = sanitize(markdownToHtml('```plantuml width=480 wrap=left\n@startuml\nA -> B : hi\n@enduml\n```'))
+    expect(html).not.toContain('style=')
+    const host = document.createElement('div')
+    host.innerHTML = html
+    const block = host.querySelector(`[${KN.plantuml}]`)!
+    // The source is what the reader hands the engine, escaped but intact.
+    expect(block.textContent).toContain('@startuml\nA -> B : hi\n@enduml')
+    const figure = document.createElement('div')
+    carryDiagramLayout(block, figure)
+    expect(figure.getAttribute('style')).toBe('--kn-diagram-width: 480px')
+    expect(figure.getAttribute(KN.wrap)).toBe('left')
+  })
 })

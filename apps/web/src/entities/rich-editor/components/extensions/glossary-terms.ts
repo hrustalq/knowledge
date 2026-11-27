@@ -33,7 +33,7 @@ import { GLOSSARY_AT_ATTR, GLOSSARY_ATTR, buildMatcher, candidateFor, glossaryHr
  * Checked on the way down, not against a text node's parent: a header cell's
  * text sits in a paragraph inside the cell.
  */
-const SKIP_NODES = new Set(['heading', 'tableHeader', 'codeBlock', 'knMermaid', 'knDrawing', 'knFile', 'knToc'])
+const SKIP_NODES = new Set(['heading', 'tableHeader', 'codeBlock', 'knMermaid', 'knPlantuml', 'knDrawing', 'knFile', 'knToc'])
 
 /** Marks that already claim the text: a link, or inline code. */
 const SKIP_MARKS = new Set(['link', 'code'])

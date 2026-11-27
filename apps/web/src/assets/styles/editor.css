@@ -954,8 +954,8 @@ select.kn-api-method:focus-visible { outline: 2px solid var(--ring); outline-off
 .kn-block-actions-group button:last-child { border-radius: 0 7px 7px 0; }
 .kn-block-actions-group button + button { border-left-width: 0; }
 /* A diagram can be resized down to 160px: its bar wraps rather than being clipped by the card. */
-:is(.kn-mermaid, .kn-drawing) > .kn-block-actions { left: 0.5rem; flex-wrap: wrap; justify-content: flex-end; pointer-events: none; }
-:is(.kn-mermaid, .kn-drawing) > .kn-block-actions > * { pointer-events: auto; }
+:is(.kn-mermaid, .kn-plantuml, .kn-drawing) > .kn-block-actions { left: 0.5rem; flex-wrap: wrap; justify-content: flex-end; pointer-events: none; }
+:is(.kn-mermaid, .kn-plantuml, .kn-drawing) > .kn-block-actions > * { pointer-events: auto; }
 
 /* Diagram size and placement (#476), stored in the fence's info string. The
    editor's node and the read view's rendered figure carry the same attributes,
@@ -963,14 +963,14 @@ select.kn-api-method:focus-visible { outline: 2px solid var(--ring); outline-off
    sits in the middle of its own line. A wrapped one floats with the text beside
    it (half the column unless resized, never more than 70%), and headings start
    below it. Under 40rem there is no room beside it, so it falls back to full width. */
-:is(.kn-mermaid, .kn-drawing, .kn-mermaid-figure, .kn-drawing-canvas) {
+:is(.kn-mermaid, .kn-plantuml, .kn-drawing, .kn-mermaid-figure, .kn-plantuml-figure, .kn-drawing-canvas) {
   width: var(--kn-diagram-width, auto);
   max-width: 100%;
   margin-inline: auto;
 }
 /* Centred means a line of its own: it starts below a floated neighbour instead of squeezing beside it. */
-:is(.kn-mermaid, .kn-drawing, .kn-mermaid-figure, .kn-drawing-canvas):not([data-kn-wrap]) { clear: both; }
-:is(.kn-mermaid, .kn-drawing, .kn-mermaid-figure, .kn-drawing-canvas)[data-kn-wrap] {
+:is(.kn-mermaid, .kn-plantuml, .kn-drawing, .kn-mermaid-figure, .kn-plantuml-figure, .kn-drawing-canvas):not([data-kn-wrap]) { clear: both; }
+:is(.kn-mermaid, .kn-plantuml, .kn-drawing, .kn-mermaid-figure, .kn-plantuml-figure, .kn-drawing-canvas)[data-kn-wrap] {
   width: var(--kn-diagram-width, 50%);
   max-width: 70%;
 }
@@ -979,7 +979,7 @@ select.kn-api-method:focus-visible { outline: 2px solid var(--ring); outline-off
 :is(.markdown-body, .kn-prose, .ProseMirror) :is(h1, h2, h3, h4) { clear: both; }
 @media (max-width: 40rem) {
   [data-kn-wrap] { float: none; margin-inline: 0; }
-  :is(.kn-mermaid, .kn-drawing, .kn-mermaid-figure, .kn-drawing-canvas)[data-kn-wrap] { width: auto; max-width: 100%; }
+  :is(.kn-mermaid, .kn-plantuml, .kn-drawing, .kn-mermaid-figure, .kn-plantuml-figure, .kn-drawing-canvas)[data-kn-wrap] { width: auto; max-width: 100%; }
 }
 
 .kn-mermaid-grid { display: grid; }
@@ -1051,11 +1051,13 @@ select.kn-api-method:focus-visible { outline: 2px solid var(--ring); outline-off
 .kn-mermaid-status[data-state='error'] { color: var(--destructive); }
 .kn-mermaid-status svg { margin-top: 0.15em; }
 .kn-mermaid-preview,
-.kn-mermaid-figure { display: flex; justify-content: center; padding: 1.1rem; overflow-x: auto; }
+.kn-mermaid-figure,
+.kn-plantuml-figure { display: flex; justify-content: center; padding: 1.1rem; overflow-x: auto; }
 .kn-mermaid-preview svg,
-.kn-mermaid-figure svg { max-width: 100%; height: auto; }
-.kn-mermaid-broken { border: 1px solid var(--destructive); border-radius: 8px; }
-.kn-mermaid-broken::before {
+.kn-mermaid-figure svg,
+.kn-plantuml-figure svg { max-width: 100%; height: auto; }
+:is(.kn-mermaid-broken, .kn-plantuml-broken) { border: 1px solid var(--destructive); border-radius: 8px; }
+:is(.kn-mermaid-broken, .kn-plantuml-broken)::before {
   content: 'Diagram could not be parsed — source shown';
   display: block;
   padding: 0.4rem 0.7rem;

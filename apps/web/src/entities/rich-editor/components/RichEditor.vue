@@ -52,6 +52,7 @@ import {
   Workflow,
   LayoutTemplate,
   Boxes,
+  FileCode2,
 } from 'lucide-vue-next'
 import { starterModel } from '@/core/markdown/structurizr-edit'
 import { markdownToHtml } from '@/core/markdown/render'
@@ -430,6 +431,7 @@ const SLASH_ITEMS: (CommandItem & { run: (e: CoreEditor) => void })[] = [
   // `/энд` gets an empty menu.
   { id: 'api', group: t('toolbar.group.structure'), label: t('toolbar.apiContract'), icon: Route, keywords: 'endpoint http rest request response openapi swagger эндпоинт запрос', run: (e) => e.chain().focus().setApiContract().run() },
   { id: 'mermaid', group: t('toolbar.group.media'), label: t('toolbar.mermaid'), icon: Workflow, keywords: 'graph flowchart sequence', run: (e) => e.chain().focus().setMermaid().run() },
+  { id: 'plantuml', group: t('toolbar.group.media'), label: t('toolbar.plantuml'), icon: FileCode2, keywords: 'uml c4 use case class sequence component plantuml', run: (e) => e.chain().focus().setPlantuml().run() },
   { id: 'c4', group: t('toolbar.group.media'), label: t('toolbar.c4'), icon: Boxes, keywords: 'architecture structurizr context container component', run: (e) => e.chain().focus().setC4(starterModel({ user: t('c4.starter.user'), system: t('c4.starter.system'), uses: t('c4.starter.uses') })).run() },
   { id: 'drawing', group: t('toolbar.group.media'), label: t('toolbar.whiteboard'), icon: PenLine, keywords: 'draw sketch excalidraw diagram', run: (e) => e.chain().focus().setDrawing().run() },
   { id: 'image', group: t('toolbar.group.media'), label: t('toolbar.image'), icon: ImageIcon, keywords: 'picture photo upload', run: (e) => pickFiles(e, 'image/*') },

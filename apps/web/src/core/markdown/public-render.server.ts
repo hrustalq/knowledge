@@ -21,10 +21,10 @@
  *   what a reader must not learn. Page-title references resolve only against
  *   the pages the caller hands in (`resolvePage`), the share's or the site's.
  *
- * Mermaid stays a `[data-kn-mermaid]` block for the client to upgrade, and a
- * C4 model (```structurizr, #1244) its code block, which the client explores;
- * an export, which cannot be clicked, asks for its views drawn one after
- * another instead (`staticC4`).
+ * Mermaid and PlantUML stay a `[data-kn-mermaid]` / `[data-kn-plantuml]` block
+ * for the client to upgrade, and a C4 model (```structurizr, #1244) its code
+ * block, which the client explores; an export, which cannot be clicked, asks
+ * for its views drawn one after another instead (`staticC4`).
  *
  * Server-only: imported by entry-public.ts and its spec, never by a component,
  * so jsdom never reaches a browser bundle.
@@ -141,8 +141,9 @@ export function renderPublicMarkdown(markdown: string, options: PublicRenderOpti
   renderFiles(host, doc, options)
   renderDrawings(host, doc)
   if (options.staticC4) renderC4Views(host, doc, options.staticC4)
-  // Mermaid is drawn in the browser; until then its block carries the width the sanitizer stripped (#1098).
-  for (const node of host.querySelectorAll(`[${KN.mermaid}]`)) carryDiagramLayout(node, node)
+  // Mermaid and PlantUML are drawn in the browser; until then their blocks carry
+  // the width the sanitizer stripped (#1098).
+  for (const node of host.querySelectorAll(`[${KN.mermaid}], [${KN.plantuml}]`)) carryDiagramLayout(node, node)
   renderToc(host, doc, headings, options)
 
   return { html: host.innerHTML, headings, description: describe(host) }

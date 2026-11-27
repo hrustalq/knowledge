@@ -68,14 +68,15 @@ const marked = new Marked({ gfm: true, breaks: false });
 
 marked.use({
   renderer: {
-    /** Fenced blocks: `mermaid` and `drawing` become rich nodes, everything else stays code. */
+    /** Fenced blocks: `mermaid`, `plantuml` and `drawing` become rich nodes, everything else stays code. */
     code(token: Tokens.Code): string {
       const lang = (token.lang ?? '').trim().split(/\s+/)[0].toLowerCase();
-      if (lang === 'mermaid' || lang === 'drawing') {
+      if (lang === 'mermaid' || lang === 'plantuml' || lang === 'drawing') {
         const layout = Object.entries(diagramLayoutAttrs(diagramLayoutFromInfo(token.lang ?? '')))
           .map(([name, value]) => ` ${name}="${escapeHtml(value)}"`)
           .join('');
-        return withLines(token, `<div ${lang === 'mermaid' ? KN.mermaid : KN.drawing}="1"${layout}><pre>${escapeHtml(token.text)}</pre></div>`);
+        const attr = lang === 'mermaid' ? KN.mermaid : lang === 'plantuml' ? KN.plantuml : KN.drawing;
+        return withLines(token, `<div ${attr}="1"${layout}><pre>${escapeHtml(token.text)}</pre></div>`);
       }
       const cls = lang ? ` class="language-${escapeHtml(lang)}"` : '';
       return withLines(token, `<pre><code${cls}>${escapeHtml(token.text)}</code></pre>`);
@@ -527,6 +528,7 @@ export const SANITIZE_CONFIG: { ADD_TAGS: string[]; ADD_ATTR: string[]; FORBID_T
   ADD_TAGS: ['details', 'summary', 'time', 'mark', 'u'],
   ADD_ATTR: [
     'data-kn-mermaid',
+    'data-kn-plantuml',
     'data-kn-drawing',
     'data-kn-panel',
     'data-kn-layout',

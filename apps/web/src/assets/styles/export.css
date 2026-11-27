@@ -82,7 +82,7 @@ body {
   .kn-export-page + .kn-export-page { break-before: page; }
   .kn-export-page-title { break-after: avoid; }
   .markdown-body :is(h1, h2, h3, h4) { break-after: avoid; }
-  .markdown-body :is(pre, table, figure, img, .kn-mermaid-figure, .kn-panel) { break-inside: avoid; }
+  .markdown-body :is(pre, table, figure, img, .kn-mermaid-figure, .kn-plantuml-figure, .kn-panel) { break-inside: avoid; }
   .markdown-body a { color: inherit; }
   .kn-table-scroll { overflow: visible !important; }
   details > summary { list-style: none; }

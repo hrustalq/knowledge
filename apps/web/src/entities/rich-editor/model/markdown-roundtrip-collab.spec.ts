@@ -23,6 +23,8 @@ const FIXTURES: Record<string, string> = {
   mermaid: '```mermaid\ngraph TD; A-->B\n```\n',
   // Size and placement ride in the info string (#476).
   mermaidLaidOut: '```mermaid width=480 wrap=right\ngraph TD; A-->B\n```\n',
+  plantuml: '```plantuml\n@startuml\nAlice -> Bob: Hello\n@enduml\n```\n',
+  plantumlLaidOut: '```plantuml width=480 wrap=left\n@startuml\nA -> B : hi\n@enduml\n```\n',
   // A C4 model (#1244) is an ordinary code block in the editor: indentation, blank lines and comments are kept.
   c4: '```structurizr\nworkspace {\n  model {\n    # the people\n    u = person "User" "Buys \\"things\\""\n\n    s = softwareSystem "Shop" {\n      w = container "Web" "Storefront" "Vue"\n    }\n    u -> w "Buys" "HTTPS"\n  }\n}\n```\n',
   drawingLaidOut: '```drawing wrap=left\n{"v":1,"w":720,"h":300,"els":[]}\n```\n',
@@ -88,6 +90,10 @@ describe('markdown through a shared draft', () => {
     expect(md(doc)).toContain('```mermaid width=480 wrap=right\n')
     expect(md(toDoc(FIXTURES.drawingLaidOut!))).toContain('```drawing wrap=left\n')
     expect(md(toDoc(FIXTURES.mermaid!))).toContain('```mermaid\n')
+    // PlantUML is the same block with the same layout, under its own fence lang (#1388).
+    expect(toDoc(FIXTURES.plantumlLaidOut!).firstChild!.attrs).toMatchObject({ width: 480, wrap: 'left' })
+    expect(md(toDoc(FIXTURES.plantumlLaidOut!))).toContain('```plantuml width=480 wrap=left\n')
+    expect(md(toDoc(FIXTURES.plantuml!))).toContain('```plantuml\n')
   })
 
   it('saves a C4 model byte for byte', () => {

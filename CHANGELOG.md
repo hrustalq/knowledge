@@ -17,6 +17,20 @@ in the pull request that introduces them — see
 
 ### Added
 
+- **A `plantuml` fence draws UML and C4 diagrams (#1388).** Use case, component, class, sequence and the rest of
+  PlantUML, plus C4-PlantUML (`!include <C4/C4_Context>`), now render in the read view, the editor, share links and
+  both export formats instead of showing as a code block. The official `@plantuml/core` engine (PlantUML compiled to
+  JavaScript, MIT since 1.2026.6) is vendored under `apps/web/public/plantuml/` and loaded only by a page that has
+  such a fence, so nothing changes for a page without one: no Java, no render server, no request to another origin.
+  Creole links in a label stay links, and a diagram with a syntax error leaves its source in place, flagged, as a
+  broken mermaid block does. A page torn between mermaid and PlantUML is fine: both draw, and an export waits for
+  both before printing.
+
+  Two things an author may notice: the engine is ~3 MB, fetched once per browser on the first diagram (cached
+  afterwards like any other asset), and a diagram that needs a bundled library fetches that bundle from this
+  deployment — `c4.min.js` is the bundled one, while a sprite library (AWS, Kubernetes…) or a `!theme` outside the
+  shipped catalogue draws an error.
+
 - **Gemini CLI and Qwen Code get a committed project file (#1364).** The Connect wizard's `scope=project` now
   writes `.gemini/settings.json` or `.qwen/settings.json` with the key read from `$KNOWLEDGE_API_KEY`, never
   stored. Gemini reads the file only in a trusted folder; Qwen skips MCP in an untrusted one and asks for

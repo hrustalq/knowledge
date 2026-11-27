@@ -23,7 +23,7 @@ const emit = defineEmits<{ link: [] }>()
 const rect = ref<AnchorRect | null>(null)
 const { setFloating, floatingStyles } = useAnchoredFloating(rect, { placement: 'top' })
 
-const SUPPRESS_IN = ['codeBlock', 'knMermaid', 'knDrawing', 'knFile', 'knToc']
+const SUPPRESS_IN = ['codeBlock', 'knMermaid', 'knPlantuml', 'knDrawing', 'knFile', 'knToc']
 
 const streams = editorStreams(props.editor)
 /** Pressed states, from the shared per-frame stream — see `EditorToolbar`. */

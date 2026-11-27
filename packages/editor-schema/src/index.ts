@@ -283,12 +283,22 @@ export const ApiSection = Node.create({
 
 /* ------------------------------------------------------------------- media */
 
-/** Mermaid and drawings are the only nodes stored as an opaque fence: neither carries prose. */
+/** Mermaid, PlantUML and drawings are the only nodes stored as an opaque fence: none carries prose. */
 export const DEFAULT_MERMAID = `graph TD
   A[Request] --> B{Cached?}
   B -- yes --> C[Serve]
   B -- no --> D[Compute]
   D --> C`;
+
+/**
+ * A new PlantUML block starts as a sequence: the smallest diagram that shows
+ * the `@startuml`/`@enduml` pair an author has to keep, and it draws in any
+ * PlantUML renderer.
+ */
+export const DEFAULT_PLANTUML = `@startuml
+Alice -> Bob: Hello
+Bob --> Alice: Hi
+@enduml`;
 
 /** Reads the fence body out of the `<pre>` the markdown renderer emits. */
 function preText(element: HTMLElement): string {
@@ -347,6 +357,38 @@ export const Mermaid = Node.create({
 
   renderHTML({ node }) {
     return ['div', { [KN.mermaid]: '1', ...diagramLayoutAttrs(layoutOf(node)) }, ['pre', {}, node.attrs.code as string]];
+  },
+});
+
+export const Plantuml = Node.create({
+  name: 'knPlantuml',
+  group: 'block',
+  atom: true,
+  selectable: true,
+  draggable: true,
+
+  addAttributes() {
+    return {
+      code: {
+        default: DEFAULT_PLANTUML,
+        parseHTML: (element) => preText(element as HTMLElement) || DEFAULT_PLANTUML,
+        renderHTML: () => ({}),
+      },
+      ...DIAGRAM_LAYOUT_ATTRIBUTES,
+    };
+  },
+
+  parseHTML() {
+    return [
+      { tag: `div[${KN.plantuml}]` },
+      // A plain ```plantuml fence pasted as HTML still lands here rather than
+      // in the generic code block, which would strip the diagram on save.
+      { tag: 'pre > code.language-plantuml', priority: 60, getAttrs: () => ({}) },
+    ];
+  },
+
+  renderHTML({ node }) {
+    return ['div', { [KN.plantuml]: '1', ...diagramLayoutAttrs(layoutOf(node)) }, ['pre', {}, node.attrs.code as string]];
   },
 });
 
@@ -723,6 +765,7 @@ export const editorSchema = getSchema([
   ApiContract,
   ApiSection,
   Mermaid,
+  Plantuml,
   Drawing,
   FileEmbed,
   Embed,

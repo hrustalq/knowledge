@@ -90,6 +90,14 @@ describe('renderPublicMarkdown', () => {
     expect(html).toMatch(/<div data-kn-mermaid="1" data-kn-width="480" style="--kn-diagram-width: 480px">/)
   })
 
+  it('keeps a PlantUML block and its source for the reader to draw (#1388)', () => {
+    const { html } = renderPublicMarkdown('```plantuml width=480 wrap=right\n@startuml\nA -> B : hi\n@enduml\n```', options)
+    // The block and its layout survive sanitizing; the source is still inside the <pre>.
+    expect(html).toMatch(/<div data-kn-plantuml="1" data-kn-width="480" data-kn-wrap="right" style="--kn-diagram-width: 480px">/)
+    expect(html).toContain('@startuml\nA -&gt; B : hi\n@enduml')
+    expect(html).toContain('<pre')
+  })
+
   it('drops style and form markup a page carries (#1098)', () => {
     const { html } = renderPublicMarkdown('x\n\n<style>body{display:none}</style>\n\n<form action="https://evil.example/"><button>Go</button></form>\n\n<div style="position:fixed">y</div>', options)
     expect(html).not.toMatch(/<style|<form|<button|position:fixed/)

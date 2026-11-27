@@ -31,6 +31,7 @@ import { parseAttachmentPath } from '@knowledge/contracts/publishing'
 import { resolveAssetUrl } from '@/shared/api/api'
 import { useTheme } from '@/shared/utils/theme'
 import { mermaidConfig, mermaidSvg } from '@/shared/utils/mermaid'
+import { plantumlProblem, plantumlSvg } from '@/shared/utils/plantuml'
 import { createRevealTracker, wrapRuns } from '@/shared/utils/stream-reveal'
 import { takeC4Blocks, type C4Block } from '../model/c4-blocks'
 // Client-only (the hosts are found after mount), so a page with no C4 block never loads it.
@@ -154,6 +155,7 @@ async function render() {
   renderToc(headings)
   if (host.value) c4.value = takeC4Blocks(host.value)
   await renderMermaid()
+  await renderPlantuml()
   if (!host.value) return
   // Last, once every diagram is drawn: DiagramLightbox reads the marks as "done".
   markDiagrams(host.value, t)
@@ -343,10 +345,41 @@ async function renderMermaid() {
   }
 }
 
+/**
+ * PlantUML (docs/features/87): the same upgrade as mermaid, drawn by the
+ * vendored engine, which is fetched only now — a page without a `plantuml`
+ * fence never loads it. PlantUML reports a syntax error inside an SVG it still
+ * returns; `plantumlSvg` throws for that, so the failure path here is the same
+ * as mermaid's: source visible, block flagged.
+ */
+async function renderPlantuml() {
+  const root = host.value
+  if (!root) return
+  const blocks = [...root.querySelectorAll<HTMLElement>(`[${KN.plantuml}]`)]
+  if (blocks.length === 0) return
+  for (const block of blocks) {
+    try {
+      const svg = await plantumlSvg(block.textContent ?? '', theme.isDark.value)
+      const wrap = document.createElement('div')
+      wrap.className = 'kn-plantuml-figure'
+      wrap.innerHTML = props.untrusted
+        ? sanitizeUntrustedSvg(svg)
+        : DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } })
+      carryDiagramLayout(block, wrap)
+      block.replaceWith(wrap)
+    } catch (error) {
+      block.classList.add('kn-plantuml-broken')
+      const message = plantumlProblem(error).message
+      if (message) block.title = message
+      carryDiagramLayout(block, block)
+    }
+  }
+}
+
 onMounted(render)
 // `streaming` is watched too: when a turn finishes the same text needs one
 // more pass to pick up headings and diagrams that were deferred. Theme is
-// watched because mermaid bakes its colors into the SVG it emits.
+// watched because mermaid and PlantUML bake their colors into the SVG they emit.
 watch([() => props.markdown, () => props.streaming, theme.isDark], () => void render())
 </script>
 

@@ -7,7 +7,7 @@ import { markdownToHtml } from '@/core/markdown/render'
 import { ApiContract, ApiSection } from './api'
 import { Expand, Layout, LayoutColumn, Panel, TableOfContents } from './blocks'
 import { AgentMention, DocMention, StatusMark, UserMention } from './inline'
-import { Drawing, Embed, FileEmbed, Mermaid, ResizableImage } from './media'
+import { Drawing, Embed, FileEmbed, Mermaid, Plantuml, ResizableImage } from './media'
 
 // The schema-bearing half of RichEditor's extension list, with the web's
 // view-bearing copies. The API seeds shared drafts from @knowledge/editor-schema
@@ -23,6 +23,7 @@ const webSchema = getSchema([
   ApiContract,
   ApiSection,
   Mermaid,
+  Plantuml,
   Drawing,
   FileEmbed,
   Embed,

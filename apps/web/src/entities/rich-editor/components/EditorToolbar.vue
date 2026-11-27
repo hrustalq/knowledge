@@ -55,6 +55,7 @@ import {
   Undo2,
   Workflow,
   Boxes,
+  FileCode2,
 } from 'lucide-vue-next'
 import { starterModel } from '@/core/markdown/structurizr-edit'
 import {
@@ -552,6 +553,9 @@ const ALIGNMENTS = [
         <DropdownMenuSeparator />
         <DropdownMenuItem @select="editor.chain().focus().setMermaid().run()">
           <Workflow class="size-4" /> {{ t('toolbar.mermaid') }}
+        </DropdownMenuItem>
+        <DropdownMenuItem @select="editor.chain().focus().setPlantuml().run()">
+          <FileCode2 class="size-4" /> {{ t('toolbar.plantuml') }}
         </DropdownMenuItem>
         <DropdownMenuItem @select="editor.chain().focus().setC4(c4Starter()).run()">
           <Boxes class="size-4" /> {{ t('toolbar.c4') }}

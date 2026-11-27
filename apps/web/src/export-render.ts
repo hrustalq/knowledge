@@ -3,6 +3,7 @@ import { EXPORT_PRINT_READY_FLAG } from '@knowledge/contracts/publishing'
 import { formatBytes, formatDate, pluralCategory } from './shared/utils/format'
 import { escapeHtml, KN } from './core/markdown/nodes'
 import { mermaidConfig } from './shared/utils/mermaid'
+import { plantumlClassicScript } from './shared/utils/plantuml'
 import { renderPublicMarkdown, type PublicRenderOptions } from './core/markdown/public-render.server'
 // The reader's catalog: an export is read by whoever it is handed to, like a share.
 import en from './shared/i18n/reader/en.json'
@@ -25,8 +26,11 @@ import exportCss from './assets/styles/export.css?raw'
  *   with breadcrumbs, subpages and previous/next, every link relative so it
  *   opens from a folder.
  *
- * Mermaid is drawn by the browser that opens the file, as in the reader: the
- * bundle is shipped beside the pages only when a page has a diagram.
+ * Mermaid and PlantUML are drawn by the browser that opens the file, as in the
+ * reader: their bundles ship beside the pages only when a page has a diagram.
+ * The PlantUML engine is an ES module, so it ships as the same source with its
+ * export statement turned into `window.PlantUML` (`plantumlClassicScript`):
+ * a module would not load from `file://`, where the HTML bundle is opened.
  *
  * Server-only (server.js calls it; jsdom must never reach a browser bundle).
  */
@@ -36,6 +40,8 @@ const ru: typeof en = ruCatalog
 export interface ExportRenderDeps {
   /** mermaid.min.js, read once by server.js and only when a page has a diagram. */
   mermaidScript: () => string
+  /** The vendored PlantUML engine, Graphviz, the C4 stdlib and the theme catalogue, read only when a page has a `plantuml` fence. */
+  plantuml: () => { engine: string; viz: string; c4: string; themes: string }
 }
 
 const STYLES = `${tokensCss}\n${editorCss}\n${exportCss}`
@@ -110,32 +116,126 @@ function htmlDocument(locale: Locale, title: string, head: string, body: string)
 /**
  * Draws every diagram, then raises the flag Gotenberg waits for. The flag goes
  * up whatever happens — a diagram that fails stays its source — and after a
- * ceiling, so a hung render cannot hold the conversion until it times out.
+ * ceiling, so a hung render cannot hold the conversion until it times out. A
+ * page carrying both kinds waits for both: the last one to settle raises it.
  */
-const MERMAID_UPGRADE = `(function () {
-  var done = function () { window.${EXPORT_PRINT_READY_FLAG} = true; };
-  setTimeout(done, 20000);
-  var blocks = Array.prototype.slice.call(document.querySelectorAll('[${KN.mermaid}]'));
-  if (!blocks.length || !window.mermaid) return done();
-  window.mermaid.initialize(${JSON.stringify(mermaidConfig(false))});
-  var i = 0;
-  blocks.reduce(function (prev, block) {
-    return prev.then(function () {
-      return window.mermaid.render('kn-mmd-' + i++, block.textContent || '').then(function (out) {
+function diagramUpgrade({ mermaid, plantuml }: { mermaid: boolean; plantuml: boolean }): string {
+  const steps = [mermaid ? MERMAID_STEP : '', plantuml ? PLANTUML_STEP : ''].filter(Boolean)
+  return `(function () {
+  var left = 0, up = false;
+  function finish() {
+    if (up || left > 0) return;
+    up = true;
+    window.${EXPORT_PRINT_READY_FLAG} = true;
+  }
+  function track(p) {
+    left++;
+    p.then(function () { left--; finish(); }, function () { left--; finish(); });
+  }
+  setTimeout(function () { up = true; window.${EXPORT_PRINT_READY_FLAG} = true; }, 30000);
+${steps.map((step) => `  track(${step});`).join('\n')}
+  finish();
+})();
+`
+}
+
+/** Mermaid, as the reader draws it; an async IIFE the coordinator above tracks. */
+const MERMAID_STEP = `(async function () {
+    var blocks = Array.prototype.slice.call(document.querySelectorAll('[${KN.mermaid}]'));
+    if (!blocks.length || !window.mermaid) return;
+    window.mermaid.initialize(${JSON.stringify(mermaidConfig(false))});
+    for (var i = 0; i < blocks.length; i++) {
+      try {
+        var out = await window.mermaid.render('kn-mmd-' + i, blocks[i].textContent || '');
         var figure = document.createElement('div');
         figure.className = 'kn-mermaid-figure';
         figure.innerHTML = out.svg;
         ['${KN.width}', '${KN.wrap}', 'style'].forEach(function (name) {
-          if (block.hasAttribute(name)) figure.setAttribute(name, block.getAttribute(name));
+          if (blocks[i].hasAttribute(name)) figure.setAttribute(name, blocks[i].getAttribute(name));
         });
-        block.replaceWith(figure);
-      }, function () { block.classList.add('kn-mermaid-broken'); });
-    });
-  }, Promise.resolve()).then(done, done);
-})();
-`
+        blocks[i].replaceWith(figure);
+      } catch (e) {
+        blocks[i].classList.add('kn-mermaid-broken');
+      }
+    }
+  })()`
+
+/**
+ * PlantUML, from the classic engine shipped beside the page. Graphviz loads
+ * first (a layout needs it), then the engine; each block renders in turn. An
+ * error drawing — the engine returns one for bad syntax — is recognised by its
+ * text colour and left as source, as the app leaves it.
+ */
+const PLANTUML_STEP = `(async function () {
+    var blocks = Array.prototype.slice.call(document.querySelectorAll('[${KN.plantuml}]'));
+    if (!blocks.length) return;
+    var base = window.PLANTUML_STDLIB_BASE || '';
+    if (!window.Viz) {
+      await new Promise(function (resolve, reject) {
+        var viz = document.createElement('script');
+        viz.src = base + 'viz-global.js';
+        viz.onload = resolve;
+        viz.onerror = function () { reject(new Error('viz-global.js')); };
+        document.head.appendChild(viz);
+      });
+    }
+    if (!window.PlantUML) {
+      await new Promise(function (resolve, reject) {
+        var engine = document.createElement('script');
+        engine.src = base + 'plantuml-global.js';
+        engine.onload = resolve;
+        engine.onerror = function () { reject(new Error('plantuml-global.js')); };
+        document.head.appendChild(engine);
+      });
+    }
+    if (!window.PlantUML) return;
+    var wantsTheme = blocks.some(function (b) { return /^\\s*!theme\\b/m.test(b.textContent || ''); });
+    if (wantsTheme && !window.PLANTUML_THEMES) {
+      await new Promise(function (resolve, reject) {
+        var themes = document.createElement('script');
+        themes.src = base + 'themes.js';
+        themes.onload = resolve;
+        themes.onerror = function () { reject(new Error('themes.js')); };
+        document.head.appendChild(themes);
+      });
+    }
+    for (var i = 0; i < blocks.length; i++) {
+      await new Promise(function (resolve) {
+        window.PlantUML.renderToString(String(blocks[i].textContent || '').split(/\\r\\n|\\r|\\n/), function (svg) {
+          if (svg.indexOf('fill="#33FF02"') >= 0) {
+            blocks[i].classList.add('kn-plantuml-broken');
+            resolve();
+            return;
+          }
+          var figure = document.createElement('div');
+          figure.className = 'kn-plantuml-figure';
+          figure.innerHTML = svg;
+          ['${KN.width}', '${KN.wrap}', 'style'].forEach(function (name) {
+            if (blocks[i].hasAttribute(name)) figure.setAttribute(name, blocks[i].getAttribute(name));
+          });
+          blocks[i].replaceWith(figure);
+          resolve();
+        }, function () {
+          blocks[i].classList.add('kn-plantuml-broken');
+          resolve();
+        }, { dark: false });
+      });
+    }
+  })()`
+
+/** The PlantUML files an export ships, under `dir`, from the vendored engine. */
+function plantumlBundle(deps: ExportRenderDeps, dir: string) {
+  const { engine, viz, c4, themes } = deps.plantuml()
+  return [
+    { path: `${dir}plantuml-global.js`, content: plantumlClassicScript(engine) },
+    { path: `${dir}viz-global.js`, content: viz },
+    { path: `${dir}c4.min.js`, content: c4 },
+    { path: `${dir}themes.js`, content: themes },
+  ]
+}
 
 const hasMermaid = (html: string) => html.includes(KN.mermaid)
+const hasPlantuml = (html: string) => html.includes(KN.plantuml)
 
 // ------------------------------------------------------------------ PDF
 
@@ -163,6 +263,7 @@ function renderPdf(req: ExportRenderRequest, deps: ExportRenderDeps): ExportRend
   })
   const html = articles.join('\n')
   const mermaid = hasMermaid(html)
+  const plantuml = hasPlantuml(html)
 
   const body = [
     '<main class="kn-export-shell">',
@@ -172,7 +273,8 @@ function renderPdf(req: ExportRenderRequest, deps: ExportRenderDeps): ExportRend
     html,
     '</main>',
     mermaid ? '<script src="mermaid.min.js"></script>' : '',
-    `<script>${mermaid ? MERMAID_UPGRADE : `window.${EXPORT_PRINT_READY_FLAG} = true;`}</script>`,
+    plantuml ? `<script>window.PLANTUML_STDLIB_BASE = 'plantuml/';</script>` : '',
+    `<script>${diagramUpgrade({ mermaid, plantuml })}</script>`,
   ].join('\n')
 
   const files = [
@@ -187,6 +289,7 @@ function renderPdf(req: ExportRenderRequest, deps: ExportRenderDeps): ExportRend
     },
   ]
   if (mermaid) files.push({ path: 'mermaid.min.js', content: deps.mermaidScript() })
+  if (plantuml) files.push(...plantumlBundle(deps, 'plantuml/'))
   return { files }
 }
 
@@ -204,6 +307,14 @@ export function relativeHref(from: string, to: string): string {
   while (common < fromDirs.length && common < toParts.length - 1 && fromDirs[common] === toParts[common]) common++
   const up = '../'.repeat(fromDirs.length - common)
   return up + toParts.slice(common).map(encodeURIComponent).join('/')
+}
+
+/**
+ * The href from one file of the bundle to a directory, ending with `/` — the
+ * shape `PLANTUML_STDLIB_BASE` wants (it is a plain URL prefix).
+ */
+export function relativeDir(from: string, to: string): string {
+  return `${relativeHref(from, `${to}/x`).split('/').slice(0, -1).join('/')}/`
 }
 
 function renderBundle(req: ExportRenderRequest, deps: ExportRenderDeps): ExportRenderResponse {
@@ -238,12 +349,15 @@ function renderBundle(req: ExportRenderRequest, deps: ExportRenderDeps): ExportR
     }),
   )
   const mermaid = rendered.some((r) => hasMermaid(r.html))
+  const plantuml = rendered.some((r) => hasPlantuml(r.html))
 
   const headFor = (from: string) =>
     [
       `<link rel="stylesheet" href="${relativeHref(from, `${STATIC}/export.css`)}">`,
+      // Inline and before the deferred scripts: the engine reads the base when it resolves a stdlib.
+      plantuml ? `<script>window.PLANTUML_STDLIB_BASE = '${relativeDir(from, `${STATIC}/plantuml`)}';</script>` : '',
       mermaid ? `<script defer src="${relativeHref(from, `${STATIC}/mermaid.min.js`)}"></script>` : '',
-      mermaid ? `<script defer src="${relativeHref(from, `${STATIC}/export.js`)}"></script>` : '',
+      mermaid || plantuml ? `<script defer src="${relativeHref(from, `${STATIC}/export.js`)}"></script>` : '',
     ]
       .filter(Boolean)
       .join('\n    ')
@@ -290,9 +404,8 @@ function renderBundle(req: ExportRenderRequest, deps: ExportRenderDeps): ExportR
     }),
     { path: `${STATIC}/export.css`, content: STYLES },
   ]
-  if (mermaid) {
-    files.push({ path: `${STATIC}/mermaid.min.js`, content: deps.mermaidScript() })
-    files.push({ path: `${STATIC}/export.js`, content: MERMAID_UPGRADE })
-  }
+  if (mermaid) files.push({ path: `${STATIC}/mermaid.min.js`, content: deps.mermaidScript() })
+  if (mermaid || plantuml) files.push({ path: `${STATIC}/export.js`, content: diagramUpgrade({ mermaid, plantuml }) })
+  if (plantuml) files.push(...plantumlBundle(deps, `${STATIC}/plantuml/`))
   return { files }
 }
